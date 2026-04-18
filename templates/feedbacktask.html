@@ -108,7 +108,6 @@
 
     .progress-text { font-size: 13px; color: var(--muted); text-align: right; }
 
-    /* Filter Section */
     .filter-section {
       background: #fff;
       border: 1px solid var(--line);
@@ -120,11 +119,7 @@
       gap: 12px;
     }
 
-    .filter-label {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-    }
+    .filter-label { font-size: 14px; font-weight: 600; color: var(--text); }
 
     .filter-select {
       flex: 1;
@@ -138,10 +133,7 @@
       cursor: pointer;
     }
 
-    .filter-select:focus {
-      outline: none;
-      border-color: var(--primary1);
-    }
+    .filter-select:focus { outline: none; border-color: var(--primary1); }
 
     .article-accordion {
       background: #fff;
@@ -176,6 +168,7 @@
     }
 
     .accordion-badge.reviewed { background: #d1fae5; color: var(--success); }
+    .accordion-badge.agreed { background: #dbeafe; color: #1d4ed8; }
     .accordion-badge.pending { background: #fef3c7; color: var(--warning); }
     .accordion-badge.human { background: var(--human-bg); border: 1px solid var(--human-border); color: var(--success); }
     .accordion-badge.ai { background: var(--ai-bg); border: 1px solid var(--ai-border); color: var(--warning); }
@@ -233,6 +226,107 @@
     .chunk-bar-fill.ai { background: var(--warning); }
     .chunk-bar-value { min-width: 40px; text-align: right; font-weight: 600; }
 
+    /* ────────────────────────────────────────────────
+       AGREE-WITH-MODEL TOGGLE  (new)
+    ──────────────────────────────────────────────── */
+    .agree-toggle-section {
+      background: #f0f9ff;
+      border: 1.5px solid #bae6fd;
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .agree-toggle-info { flex: 1; }
+
+    .agree-toggle-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0369a1;
+      margin-bottom: 4px;
+    }
+
+    .agree-toggle-desc {
+      font-size: 13px;
+      color: #0284c7;
+    }
+
+    /* Custom toggle switch */
+    .toggle-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle-track {
+      width: 52px;
+      height: 28px;
+      background: #e2e8f0;
+      border-radius: 99px;
+      position: relative;
+      transition: background 0.25s;
+      flex-shrink: 0;
+    }
+
+    .toggle-track.on { background: #0ea5e9; }
+
+    .toggle-thumb {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.25s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .toggle-track.on .toggle-thumb { transform: translateX(24px); }
+
+    .toggle-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #0369a1;
+    }
+
+    /* Feedback form collapsible via agree */
+    .feedback-form-wrapper {
+      transition: max-height 0.3s ease, opacity 0.3s ease;
+      overflow: hidden;
+      max-height: 800px;
+      opacity: 1;
+    }
+    .feedback-form-wrapper.hidden {
+      max-height: 0;
+      opacity: 0;
+    }
+
+    /* Agree confirmed banner */
+    .agree-confirmed {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: #dbeafe;
+      border: 1px solid #93c5fd;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1d4ed8;
+    }
+    .agree-confirmed.visible { display: flex; }
+
+    /* ────────────────────────────────────────────────
+       Existing feedback display
+    ──────────────────────────────────────────────── */
     .feedback-exists {
       background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05));
       border: 2px solid var(--ai-border);
@@ -264,6 +358,7 @@
     }
     .feedback-label.human { background: var(--human-bg); border: 1px solid var(--human-border); color: var(--success); }
     .feedback-label.ai { background: var(--ai-bg); border: 1px solid var(--ai-border); color: var(--warning); }
+    .feedback-label.agreed { background: #dbeafe; border: 1px solid #93c5fd; color: #1d4ed8; }
     .feedback-text { font-size: 14px; line-height: 1.6; color: var(--text); }
 
     .form-section { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
@@ -309,6 +404,12 @@
     .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,184,219,0.3); }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
+    .btn-agree {
+      background: #0ea5e9;
+      color: #fff;
+    }
+    .btn-agree:hover { background: #0284c7; transform: translateY(-2px); }
+
     .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
 
     .spinner {
@@ -342,6 +443,7 @@
       .chunks-grid { grid-template-columns: 1fr; }
       .filter-section { flex-direction: column; align-items: stretch; }
       .filter-select { max-width: 100%; }
+      .agree-toggle-section { flex-direction: column; align-items: flex-start; }
     }
   </style>
 </head>
@@ -374,7 +476,6 @@
       <div class="progress-text" id="progressText">0 / 0 articles reviewed</div>
     </div>
 
-    <!-- Filter Section -->
     <div class="filter-section" id="filterSection" style="display: none;">
       <span class="filter-label">📊 Sort by Confidence:</span>
       <select class="filter-select" id="confidenceFilter" onchange="applySorting()">
@@ -384,66 +485,61 @@
       </select>
     </div>
 
-    <div class="toast" id="toast">✅ Feedback submitted successfully!</div>
+    <div class="toast" id="toast"></div>
 
     <div class="loading" id="loadingState">
       <div class="spinner"></div>
       <p>Loading articles...</p>
     </div>
 
-    <div class="empty-state" id="emptyState" style="display:none;">
-      <p>📭 No articles available</p>
-    </div>
+    <div class="empty-state" id="emptyState" style="display:none;"></div>
 
     <div id="articlesList"></div>
 
   </div>
 
   <script>
-    const taskId = "{{ task_id }}";
+    const taskId    = "{{ task_id }}";
     const projectId = "{{ project_id }}";
     const datasetId = "{{ dataset_id }}";
 
-    let articles = [];
+    let articles         = [];
     let originalArticles = [];
-    let reviewedCount = 0;
+    let reviewedCount    = 0;
 
+    /* ─── load ─── */
     async function loadArticles() {
       try {
-        const res = await fetch('/api/task/' + taskId + '/articles');
+        const res  = await fetch('/api/task/' + taskId + '/articles');
         const data = await res.json();
 
         if (data.waiting) {
           document.getElementById('loadingState').style.display = 'none';
           document.getElementById('emptyState').innerHTML =
             '<p>⏳ Waiting for model selection task to be completed</p>' +
-            '<p style="font-size:14px; color: var(--muted);">Please complete the Model Selection task first</p>';
+            '<p style="font-size:14px;color:var(--muted)">Please complete the Model Selection task first</p>';
           document.getElementById('emptyState').style.display = 'block';
           return;
         }
+        if (data.error) { alert('Error: ' + data.error); return; }
 
-        if (data.error) {
-          alert('Error: ' + data.error);
-          return;
-        }
-
-        articles = data.articles || [];
+        articles         = data.articles || [];
         originalArticles = JSON.parse(JSON.stringify(articles));
 
         if (articles.length === 0) {
           document.getElementById('loadingState').style.display = 'none';
+          document.getElementById('emptyState').innerHTML = '<p>📭 No articles available</p>';
           document.getElementById('emptyState').style.display = 'block';
           return;
         }
 
-        reviewedCount = articles.filter(function(a) { return a.has_feedback; }).length;
+        reviewedCount = articles.filter(function(a){ return a.has_feedback; }).length;
         updateProgress();
-        
-        // Show filter if articles have confidence
-        if (articles.some(a => a.confidence !== undefined)) {
+
+        if (articles.some(function(a){ return a.detection && a.detection.human_percentage !== undefined; })) {
           document.getElementById('filterSection').style.display = 'flex';
         }
-        
+
         renderArticles();
         document.getElementById('loadingState').style.display = 'none';
 
@@ -451,83 +547,103 @@
         alert('Failed to load articles: ' + err.message);
       }
     }
-    
+
+    /* ─── sorting ─── */
+    function getConfidence(article) {
+      if (!article.detection) return 0;
+      return Math.max(article.detection.human_percentage || 0, article.detection.ai_percentage || 0);
+    }
+
     function applySorting() {
-      const filterValue = document.getElementById('confidenceFilter').value;
-      
-      if (filterValue === 'low-first') {
-        // Sort by confidence ascending (low to high)
-        articles.sort(function(a, b) {
-          const confA = a.confidence !== undefined ? a.confidence : 100;
-          const confB = b.confidence !== undefined ? b.confidence : 100;
-          return confA - confB;
-        });
-      } else if (filterValue === 'high-first') {
-        // Sort by confidence descending (high to low)
-        articles.sort(function(a, b) {
-          const confA = a.confidence !== undefined ? a.confidence : 0;
-          const confB = b.confidence !== undefined ? b.confidence : 0;
-          return confB - confA;
-        });
+      const v = document.getElementById('confidenceFilter').value;
+      if (v === 'low-first') {
+        articles.sort(function(a, b){ return getConfidence(a) - getConfidence(b); });
+      } else if (v === 'high-first') {
+        articles.sort(function(a, b){ return getConfidence(b) - getConfidence(a); });
       } else {
-        // Restore default order
         articles = JSON.parse(JSON.stringify(originalArticles));
       }
-      
       renderArticles();
     }
 
+    /* ─── progress ─── */
     function updateProgress() {
-      var total = articles.length;
-      var percentage = total > 0 ? (reviewedCount / total) * 100 : 0;
-      document.getElementById('progressFill').style.width = percentage + '%';
+      const total  = articles.length;
+      const pct    = total > 0 ? (reviewedCount / total) * 100 : 0;
+      document.getElementById('progressFill').style.width = pct + '%';
       document.getElementById('progressText').textContent = reviewedCount + ' / ' + total + ' articles reviewed';
     }
 
+    /* ─── render list ─── */
     function renderArticles() {
-      var container = document.getElementById('articlesList');
+      const container = document.getElementById('articlesList');
       container.innerHTML = '';
-      articles.forEach(function(article, index) {
-        var accordion = createAccordion(article, index);
-        container.appendChild(accordion);
+      articles.forEach(function(article, index){
+        container.appendChild(createAccordion(article, index));
       });
     }
 
+    /* ─── accordion ─── */
     function createAccordion(article, index) {
-      var div = document.createElement('div');
+      const div = document.createElement('div');
       div.className = 'article-accordion';
 
-      var reviewBadge = article.has_feedback
-        ? '<span class="accordion-badge reviewed">✅ Reviewed</span>'
-        : '<span class="accordion-badge pending">⏳ Pending</span>';
+      /* status badge */
+      let statusBadge;
+      if (article.has_feedback) {
+        if (article.feedback && article.feedback.agreed_with_model) {
+          statusBadge = '<span class="accordion-badge agreed">✔ Agreed with Model</span>';
+        } else {
+          statusBadge = '<span class="accordion-badge reviewed">✅ Reviewed</span>';
+        }
+      } else {
+        statusBadge = '<span class="accordion-badge pending">⏳ Pending</span>';
+      }
 
-      var detectionBadge = '';
+      /* detection badge */
+      let detectionBadge = '';
       if (article.prediction) {
-        var det = article;
-        var predictionClass = det.prediction === 'Human' ? 'human' : 'ai';
-        var predIcon = det.prediction === 'Human' ? '✍️' : '🤖';
-        var percentage = det.prediction === 'Human' ? det.human_percentage : det.ai_percentage;
-        
-        detectionBadge = '<span class="accordion-badge ' + predictionClass + '">' + predIcon + ' ' + det.prediction + ' ' + percentage + '%</span>';
-        
-        // Add confidence badge if available
-        if (article.confidence !== undefined) {
-          detectionBadge += '<span class="accordion-badge confidence">📊 Confidence: ' + article.confidence + '%</span>';
+        const predClass  = article.prediction === 'Human' ? 'human' : 'ai';
+        const predIcon   = article.prediction === 'Human' ? '✍️' : '🤖';
+        const percentage = article.prediction === 'Human' ? article.human_percentage : article.ai_percentage;
+        detectionBadge   = '<span class="accordion-badge ' + predClass + '">' + predIcon + ' ' + article.prediction + ' ' + percentage + '%</span>';
+
+        const conf = getConfidence(article);
+        if (conf > 0) {
+          detectionBadge += '<span class="accordion-badge confidence">📊 Confidence: ' + conf + '%</span>';
         }
       }
 
-      var detectionHTML = renderDetectionDetails(article);
-      var feedbackHTML = article.has_feedback ? renderExistingFeedback(article.feedback) : renderFeedbackForm(article, index);
+      function highlightChunks(content, chunks) {
+  if (!content || !chunks || chunks.length === 0) return content || 'No content available';
+  const words = content.split(' ');
+  const chunkSize = Math.ceil(words.length / chunks.length);
+  let result = '';
+  chunks.forEach(function(chunk, i) {
+    const start = i * chunkSize;
+    const end = Math.min(start + chunkSize, words.length);
+    const chunkWords = words.slice(start, end).join(' ');
+    const isHuman = chunk.human > chunk.ai;
+    const bg = isHuman ? 'rgba(10,122,57,0.12)' : 'rgba(245,158,11,0.12)';
+    const border = isHuman ? '#84fab0' : '#fbbf24';
+    result += '<span style="background:' + bg + ';border-bottom:2px solid ' + border + ';border-radius:3px;padding:1px 2px;" title="Chunk ' + (i+1) + ': ' + (isHuman ? 'Human' : 'AI') + ' — ' + chunk.human + '% Human / ' + chunk.ai + '% AI">' + chunkWords + '</span> ';
+  });
+  return result;
+}
+      const detectionHTML = renderDetectionDetails(article);
+      const feedbackHTML  = article.has_feedback
+        ? renderExistingFeedback(article.feedback)
+        : renderFeedbackForm(article, index);
 
       div.innerHTML =
         '<div class="accordion-header" onclick="toggleAccordion(' + index + ')">' +
           '<div class="accordion-title">' + (article.title || 'Untitled') + '</div>' +
-          '<div class="accordion-badges">' + detectionBadge + reviewBadge + '</div>' +
+          '<div class="accordion-badges">' + detectionBadge + statusBadge + '</div>' +
           '<div class="accordion-icon">▼</div>' +
         '</div>' +
         '<div class="accordion-body" id="body-' + index + '">' +
           '<div class="accordion-content">' +
-            '<div class="article-content">' + (article.content || 'No content available') + '</div>' +
+        '<div class="article-content" id="articleContent-' + index + '">' + highlightChunks(article.content, article.chunks) + '</div>' +
             detectionHTML +
             feedbackHTML +
           '</div>' +
@@ -536,56 +652,82 @@
       return div;
     }
 
+    /* ─── detection details ─── */
     function renderDetectionDetails(article) {
       if (!article.prediction) {
-        return '<div style="color: var(--muted); font-size: 14px; margin-bottom: 24px;">ℹ️ No detection results available</div>';
+        return '<div style="color:var(--muted);font-size:14px;margin-bottom:24px;">ℹ️ No detection results available</div>';
       }
 
-      var predIcon = article.prediction === 'Human' ? '✍️' : '🤖';
-      var predClass = article.prediction === 'Human' ? 'human' : 'ai';
-      var percentage = article.prediction === 'Human' ? article.human_percentage : article.ai_percentage;
+      const predIcon  = article.prediction === 'Human' ? '✍️' : '🤖';
+      const predClass = article.prediction === 'Human' ? 'human' : 'ai';
+      const percentage = article.prediction === 'Human' ? article.human_percentage : article.ai_percentage;
 
-      var summaryHTML =
-        '<div style="margin-bottom: 16px; padding: 12px; background: #fff; border-radius: 8px; display: flex; align-items: center; gap: 12px;">' +
-          '<span class="accordion-badge ' + predClass + '" style="font-size: 14px; padding: 8px 16px;">' + predIcon + ' ' + article.prediction + ' — ' + percentage + '%</span>' +
+      const summaryHTML =
+        '<div style="margin-bottom:16px;padding:12px;background:#fff;border-radius:8px;display:flex;align-items:center;gap:12px;">' +
+          '<span class="accordion-badge ' + predClass + '" style="font-size:14px;padding:8px 16px;">' +
+            predIcon + ' ' + article.prediction + ' — ' + percentage + '%' +
+          '</span>' +
         '</div>';
 
-      var chunksHTML = '';
-      if (article.chunks && article.chunks.length > 0) {
-        var cardsHTML = '';
-        article.chunks.forEach(function(chunk) {
-          cardsHTML +=
-            '<div class="chunk-card">' +
-              '<div class="chunk-label">' + chunk.label + '</div>' +
-              '<div class="chunk-bars">' +
-                '<div class="chunk-bar">' +
-                  '<span class="chunk-bar-label">Human:</span>' +
-                  '<div class="chunk-bar-track"><div class="chunk-bar-fill human" style="width: ' + chunk.human + '%"></div></div>' +
-                  '<span class="chunk-bar-value">' + chunk.human + '%</span>' +
-                '</div>' +
-                '<div class="chunk-bar">' +
-                  '<span class="chunk-bar-label">AI:</span>' +
-                  '<div class="chunk-bar-track"><div class="chunk-bar-fill ai" style="width: ' + chunk.ai + '%"></div></div>' +
-                  '<span class="chunk-bar-value">' + chunk.ai + '%</span>' +
-                '</div>' +
+      if (!article.chunks || article.chunks.length === 0) return '';
+
+      let cardsHTML = '';
+      article.chunks.forEach(function(chunk, i){
+        const chunkNumber = i + 1;
+        const confidence = Math.max(chunk.human, chunk.ai).toFixed(1);
+        cardsHTML +=
+          '<div class="chunk-card">' +
+            '<div class="chunk-label">Chunk ' + chunkNumber + '</div>' +
+            '<div class="chunk-bars">' +
+              '<div class="chunk-bar">' +
+                '<span class="chunk-bar-label">Human:</span>' +
+                '<div class="chunk-bar-track"><div class="chunk-bar-fill human" style="width:' + chunk.human + '%"></div></div>' +
+                '<span class="chunk-bar-value">' + chunk.human + '%</span>' +
               '</div>' +
-            '</div>';
-        });
-
-        chunksHTML =
-          '<div class="detection-results">' +
-            '<div class="detection-title">🔍 Detection Details</div>' +
-            summaryHTML +
-            '<div class="chunks-grid">' + cardsHTML + '</div>' +
+              '<div class="chunk-bar">' +
+                '<span class="chunk-bar-label">AI:</span>' +
+                '<div class="chunk-bar-track"><div class="chunk-bar-fill ai" style="width:' + chunk.ai + '%"></div></div>' +
+                '<span class="chunk-bar-value">' + chunk.ai + '%</span>' +
+              '</div>' +
+            '</div>' +
           '</div>';
-      }
+      });
 
-      return chunksHTML;
+      return (
+        '<div class="detection-results">' +
+          '<div class="detection-title">🔍 Detection Details</div>' +
+          summaryHTML +
+          '<div class="chunks-grid">' + cardsHTML + '</div>' +
+        '</div>'
+      );
     }
 
+    /* ─── existing feedback ─── */
     function renderExistingFeedback(feedback) {
-      var icon = feedback.label === 'Human' ? '✍️' : '🤖';
-      var labelClass = feedback.label.toLowerCase();
+      if (!feedback) return '';
+
+      /* Agreed-with-model case */
+      if (feedback.agreed_with_model) {
+        return (
+          '<div style="background:#eff6ff;border:2px solid #93c5fd;border-radius:var(--radius);padding:24px;">' +
+            '<div style="display:flex;align-items:center;gap:12px;font-size:16px;font-weight:600;color:#1d4ed8;margin-bottom:12px;">' +
+              '✔ Agreed with Model\'s Prediction' +
+            '</div>' +
+            '<div style="background:#fff;border-radius:8px;padding:16px;">' +
+              '<div class="feedback-meta">' +
+                '<span class="feedback-author">' + (feedback.examiner_name || 'Unknown') + '</span>' +
+                '<span class="feedback-date">' + new Date(feedback.submitted_at).toLocaleString() + '</span>' +
+              '</div>' +
+              '<div><span class="feedback-label agreed">✔ Model Agreement</span></div>' +
+              '<div class="feedback-text" style="color:var(--muted);font-style:italic;">The examiner confirmed they agree with the model\'s detection result.</div>' +
+            '</div>' +
+          '</div>'
+        );
+      }
+
+      /* Standard feedback case */
+      const icon       = feedback.label === 'Human' ? '✍️' : '🤖';
+      const labelClass = feedback.label ? feedback.label.toLowerCase() : 'ai';
       return (
         '<div class="feedback-exists">' +
           '<div class="feedback-warning">⚠️ This article already has feedback</div>' +
@@ -601,77 +743,133 @@
       );
     }
 
+    /* ─── feedback form (NEW: with agree toggle) ─── */
     function renderFeedbackForm(article, index) {
+      /* We render the agree section + the full form section.
+         The form hides when the toggle is ON. */
       return (
-        '<div class="form-section">' +
-          '<h3 class="form-title">Your Feedback</h3>' +
-          '<div class="form-group">' +
-            '<label class="form-label">Select Label</label>' +
-            '<div class="radio-group">' +
-              '<div class="radio-option">' +
-                '<input type="radio" name="label-' + index + '" id="labelHuman-' + index + '" value="Human">' +
-                '<label for="labelHuman-' + index + '" class="radio-label human">✍️ Human</label>' +
-              '</div>' +
-              '<div class="radio-option">' +
-                '<input type="radio" name="label-' + index + '" id="labelAI-' + index + '" value="AI">' +
-                '<label for="labelAI-' + index + '" class="radio-label ai">🤖 AI</label>' +
+        /* ── Agree-with-model toggle ── */
+        '<div class="agree-toggle-section" id="agreeSection-' + index + '">' +
+          '<div class="agree-toggle-info">' +
+            '<div class="agree-toggle-title">✔ Agree with Model</div>' +
+            '<div class="agree-toggle-desc">Turn this on if you think the model\'s prediction is correct no written feedback needed.</div>' +
+          '</div>' +
+          '<div class="toggle-wrapper" onclick="toggleAgree(' + index + ')" id="toggleWrapper-' + index + '">' +
+            '<div class="toggle-track" id="toggleTrack-' + index + '">' +
+              '<div class="toggle-thumb" id="toggleThumb-' + index + '"></div>' +
+            '</div>' +
+            '<span class="toggle-label" id="toggleLabel-' + index + '">Off</span>' +
+          '</div>' +
+        '</div>' +
+
+        /* ── Agree-confirmed info bar (hidden by default) ── */
+        '<div class="agree-confirmed" id="agreeConfirmed-' + index + '">' +
+          '✔ You\'re agreeing with the model. Click "Confirm Agreement" below to save.' +
+        '</div>' +
+
+        /* ── Standard feedback form (visible by default) ── */
+        '<div class="feedback-form-wrapper" id="feedbackFormWrapper-' + index + '">' +
+          '<div class="form-section">' +
+            '<h3 class="form-title">Your Feedback</h3>' +
+            '<div class="form-group">' +
+              '<label class="form-label">Select Label</label>' +
+              '<div class="radio-group">' +
+                '<div class="radio-option">' +
+                  '<input type="radio" name="label-' + index + '" id="labelHuman-' + index + '" value="Human">' +
+                  '<label for="labelHuman-' + index + '" class="radio-label human">✍️ Human</label>' +
+                '</div>' +
+                '<div class="radio-option">' +
+                  '<input type="radio" name="label-' + index + '" id="labelAI-' + index + '" value="AI">' +
+                  '<label for="labelAI-' + index + '" class="radio-label ai">🤖 AI</label>' +
+                '</div>' +
               '</div>' +
             '</div>' +
+            '<div class="form-group">' +
+              '<label class="form-label">Explanation</label>' +
+              '<textarea id="explanation-' + index + '" placeholder="Explain why you chose this label..." maxlength="500" oninput="updateCharCount(' + index + ')"></textarea>' +
+              '<div class="char-count"><span id="charCount-' + index + '">0</span> / 500</div>' +
+            '</div>' +
+            '<div class="form-actions">' +
+              '<button class="btn btn-primary" onclick="submitFeedback(\'' + article.article_id + '\', ' + index + ')">💾 Submit Feedback</button>' +
+            '</div>' +
           '</div>' +
-          '<div class="form-group">' +
-            '<label class="form-label">Explanation</label>' +
-            '<textarea id="explanation-' + index + '" placeholder="Explain why you chose this label..." maxlength="500" oninput="updateCharCount(' + index + ')"></textarea>' +
-            '<div class="char-count"><span id="charCount-' + index + '">0</span> / 500</div>' +
-          '</div>' +
+        '</div>' +
+
+        /* ── Agree submit button (hidden by default) ── */
+        '<div id="agreeSubmitArea-' + index + '" style="display:none;margin-top:12px;">' +
           '<div class="form-actions">' +
-            '<button class="btn btn-primary" onclick="submitFeedback(\'' + article.article_id + '\', ' + index + ')">💾 Submit Feedback</button>' +
+            '<button class="btn btn-agree" onclick="submitAgreement(\'' + article.article_id + '\', ' + index + ')">✔ Confirm Agreement</button>' +
           '</div>' +
         '</div>'
       );
     }
 
-    function toggleAccordion(index) {
-      var header = document.querySelectorAll('.accordion-header')[index];
-      var body = document.getElementById('body-' + index);
-      header.classList.toggle('active');
-      body.classList.toggle('active');
+    /* ─── toggle agree switch ─── */
+    function toggleAgree(index) {
+      const track      = document.getElementById('toggleTrack-'       + index);
+      const label      = document.getElementById('toggleLabel-'       + index);
+      const confirmed  = document.getElementById('agreeConfirmed-'    + index);
+      const formWrap   = document.getElementById('feedbackFormWrapper-'+ index);
+      const submitArea = document.getElementById('agreeSubmitArea-'   + index);
+
+      const isOn = track.classList.toggle('on');
+
+      label.textContent = isOn ? 'On' : 'Off';
+
+      if (isOn) {
+        formWrap.classList.add('hidden');
+        confirmed.classList.add('visible');
+        submitArea.style.display = 'block';
+      } else {
+        formWrap.classList.remove('hidden');
+        confirmed.classList.remove('visible');
+        submitArea.style.display = 'none';
+      }
     }
 
-    function updateCharCount(index) {
-      var textarea = document.getElementById('explanation-' + index);
-      var counter = document.getElementById('charCount-' + index);
-      counter.textContent = textarea.value.length;
-    }
-
-    async function submitFeedback(articleId, index) {
-      var labelEl = document.querySelector('input[name="label-' + index + '"]:checked');
-      var label = labelEl ? labelEl.value : null;
-      var explanation = document.getElementById('explanation-' + index).value.trim();
-
-      if (!label) {
-        alert('Please select a label');
-        return;
-      }
-      if (!explanation) {
-        alert('Please provide an explanation');
-        return;
-      }
-
+    /* ─── submit: agree with model ─── */
+    async function submitAgreement(articleId, index) {
       try {
-        var res = await fetch('/api/article/' + articleId + '/submit_feedback', {
+        const res  = await fetch('/api/article/' + articleId + '/submit_feedback', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ label: label, explanation: explanation, dataset_id: datasetId })
+          body: JSON.stringify({
+            agreed_with_model: true,
+            dataset_id: datasetId
+          })
         });
+        const data = await res.json();
+        if (data.error) { alert('Error: ' + data.error); return; }
 
-        var data = await res.json();
+        showToast('✔ Agreement saved successfully!', '#dbeafe', '#1d4ed8');
+        reviewedCount++;
+        updateProgress();
+        await loadArticles();
 
-        if (data.error) {
-          alert('Error: ' + data.error);
-          return;
-        }
+      } catch (err) {
+        alert('Failed to submit: ' + err.message);
+      }
+    }
 
-        showToast();
+    /* ─── submit: written feedback ─── */
+    async function submitFeedback(articleId, index) {
+      const labelEl   = document.querySelector('input[name="label-' + index + '"]:checked');
+      const label     = labelEl ? labelEl.value : null;
+      const explanation = document.getElementById('explanation-' + index).value.trim();
+
+      if (!label)       { alert('Please select a label');          return; }
+      if (!explanation) { alert('Please provide an explanation');  return; }
+
+      try {
+        const res  = await fetch('/api/article/' + articleId + '/submit_feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label, explanation, dataset_id: datasetId })
+        });
+        const data = await res.json();
+        if (data.error) { alert('Error: ' + data.error); return; }
+
+        showToast('✅ Feedback submitted successfully!', '#d1fae5', '#0A7A39');
         reviewedCount++;
         updateProgress();
         await loadArticles();
@@ -681,12 +879,27 @@
       }
     }
 
-    function showToast() {
-      var toast = document.getElementById('toast');
+    /* ─── helpers ─── */
+    function toggleAccordion(index) {
+      const header = document.querySelectorAll('.accordion-header')[index];
+      const body   = document.getElementById('body-' + index);
+      header.classList.toggle('active');
+      body.classList.toggle('active');
+    }
+
+    function updateCharCount(index) {
+      const textarea = document.getElementById('explanation-' + index);
+      document.getElementById('charCount-' + index).textContent = textarea.value.length;
+    }
+
+    function showToast(msg, bg, color) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.style.background = bg;
+      toast.style.borderColor = color;
+      toast.style.color = color;
       toast.classList.add('show');
-      setTimeout(function() {
-        toast.classList.remove('show');
-      }, 3000);
+      setTimeout(function(){ toast.classList.remove('show'); }, 3000);
     }
 
     loadArticles();

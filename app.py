@@ -55,6 +55,9 @@ CONV_LOGREG_MODEL_PATH = "Model-Gen-Con/conversation_logistic_regression.joblib"
 CONV_RNN_MODEL_PATH = "Model-Gen-Con/rnn_v2_model.keras"
 CONV_RNN_TOKENIZER_PATH = "Model-Gen-Con/rnn_v2_tokenizer.pkl"
 
+import __main__
+__main__.ItemSelector = ItemSelector
+
 # تحميل موديلات المحادثات
 conv_logreg_model = joblib.load(CONV_LOGREG_MODEL_PATH)
 conv_rnn_model = tf.keras.models.load_model(CONV_RNN_MODEL_PATH)
@@ -3371,6 +3374,10 @@ def api_select_model(task_id):
     if selected_model not in ["logistic", "rnn"]:
         return jsonify({"error": "Invalid model"}), 400
 
+    # منع الاختيار مرة ثانية
+    if task_data.get("selected_model"):
+        return jsonify({"error": "Model already selected for this task"}), 400
+
     # نحفظ الاختيار في Firestore
     task_ref.update({
         "selected_model": selected_model,
@@ -3760,53 +3767,57 @@ def api_get_task_articles(task_id):
 
 @app.route("/api/article/<article_id>/submit_feedback", methods=["POST"])
 def api_submit_article_feedback(article_id):
-    """يحفظ Feedback من Examiner"""
     if not session.get("idToken"):
         return jsonify({"error": "Unauthorized"}), 401
-
     uid = session.get("uid")
-    
+
     data = request.get_json() or {}
-    label = data.get("label")
-    explanation = data.get("explanation", "").strip()
+    agreed_with_model = bool(data.get("agreed_with_model", False))
     dataset_id = data.get("dataset_id")
-    
-    if not label or label not in ["Human", "AI"]:
-        return jsonify({"error": "Invalid label"}), 400
-    
-    if not explanation:
-        return jsonify({"error": "Explanation is required"}), 400
-    
+
     if not dataset_id:
         return jsonify({"error": "Dataset ID is required"}), 400
-    
+
+    if not agreed_with_model:
+        label = data.get("label")
+        explanation = data.get("explanation", "").strip()
+        if not label or label not in ["Human", "AI"]:
+            return jsonify({"error": "Invalid label"}), 400
+        if not explanation:
+            return jsonify({"error": "Explanation is required"}), 400
+
     try:
-        # نشيك لو فيه feedback قبل
-        feedback_ref = rtdb.reference(f"datasets/uploaded_news/{dataset_id}/{article_id}/feedback")
-        existing = feedback_ref.get()
-        
-        if existing:
+        feedback_ref = rtdb.reference(
+            f"datasets/uploaded_news/{dataset_id}/{article_id}/feedback"
+        )
+        if feedback_ref.get():
             return jsonify({"error": "Feedback already exists for this article"}), 400
-        
-        # نجيب اسم الـ Examiner
+
         user_doc = db.collection("users").document(uid).get()
         first_name = user_doc.to_dict().get("profile", {}).get("firstName", "")
-        last_name = user_doc.to_dict().get("profile", {}).get("lastName", "")
+        last_name  = user_doc.to_dict().get("profile", {}).get("lastName", "")
         examiner_name = f"{first_name} {last_name}".strip() or "Examiner"
-        
-        # نحفظ الـ Feedback
-        feedback_data = {
-            "examiner_uid": uid,
-            "examiner_name": examiner_name,
-            "label": label,
-            "explanation": explanation,
-            "submitted_at": datetime.utcnow().isoformat() + "Z"
-        }
-        
+
+        if agreed_with_model:
+            feedback_data = {
+                "examiner_uid":      uid,
+                "examiner_name":     examiner_name,
+                "agreed_with_model": True,
+                "submitted_at":      datetime.utcnow().isoformat() + "Z"
+            }
+        else:
+            feedback_data = {
+                "examiner_uid":      uid,
+                "examiner_name":     examiner_name,
+                "agreed_with_model": False,
+                "label":             data.get("label"),
+                "explanation":       data.get("explanation", "").strip(),
+                "submitted_at":      datetime.utcnow().isoformat() + "Z"
+            }
+
         feedback_ref.set(feedback_data)
-        
         return jsonify({"message": "Feedback submitted successfully"}), 200
-        
+
     except Exception as e:
         app.logger.exception("Failed to submit feedback: %s", e)
         return jsonify({"error": "Failed to submit feedback"}), 500
@@ -4550,13 +4561,160 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
         return jsonify({"error": "Server error while saving turn feedback"}), 500
 
 
-# ✅ هذا route للرابط القديم اللي الزر يطلبه
+
 @app.route("/project/<project_id>/analysis/examiner")
 def analysis_examiner_redirect(project_id):
     return redirect(url_for("results_con", projectId=project_id))
 
+@app.route("/api/project/<project_id>/examiner_progress", methods=["GET"])
+def api_examiner_progress(project_id):
+    if not session.get("idToken"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    proj_doc = db.collection("projects").document(project_id).get()
+    if not proj_doc.exists:
+        return jsonify({"error": "Project not found"}), 404
+
+    proj_data = proj_doc.to_dict()
+    dataset_id = proj_data.get("dataset_id")
+    if not dataset_id:
+        return jsonify({"progress": [], "total_articles": 0}), 200
+
+    # نجيب كل المقالات ونحسب كم feedback لكل examiner
+    try:
+        ref = rtdb.reference(f"datasets/uploaded_news/{dataset_id}")
+        snapshot = ref.get() or {}
+        total = len(snapshot)
+
+        # نجمع كل الـ examiner_uid اللي حطوا feedback
+        examiner_counts = {}
+        for push_id, article_data in snapshot.items():
+            if not isinstance(article_data, dict):
+                continue
+            feedback = article_data.get("feedback")
+            if not feedback or not isinstance(feedback, dict):
+                continue
+            uid = feedback.get("examiner_uid")
+            if uid:
+                examiner_counts[uid] = examiner_counts.get(uid, 0) + 1
+
+        return jsonify({
+            "total_articles": total,
+            "examiner_counts": examiner_counts
+        }), 200
+
+    except Exception as e:
+        app.logger.exception("examiner_progress failed: %s", e)
+        return jsonify({"error": "Failed"}), 500
+@app.route("/api/project/<project_id>/rate_examiner", methods=["POST"])
+def api_rate_examiner(project_id):
+    if not session.get("idToken"):
+        return jsonify({"error": "Unauthorized"}), 401
+    uid = session.get("uid")
+    proj_doc = db.collection("projects").document(project_id).get()
+    if not proj_doc.exists or proj_doc.to_dict().get("owner_id") != uid:
+        return jsonify({"error": "Forbidden"}), 403
+    data = request.get_json() or {}
+    examiner_id = data.get("examiner_id")
+    stars = int(data.get("stars", 0))
+    comment = (data.get("comment") or "").strip()
+    if not examiner_id or not (1 <= stars <= 5):
+        return jsonify({"error": "Invalid data"}), 400
+    db.collection("projects").document(project_id)\
+    .collection("assigned_examiners").document(examiner_id).set({
+        "examiner_id": examiner_id,
+        "stars": stars,
+        "comment": comment,
+        "rated_by": uid,
+        "rated_at": datetime.utcnow().isoformat() + "Z"
+    })
+    return jsonify({"message": "Rating saved"}), 200
 
 
-
+@app.route("/api/project/<project_id>/examiner_feedback_count", methods=["GET"])
+def api_examiner_feedback_count(project_id):
+    if not session.get("idToken"):
+        return jsonify({"error": "Unauthorized"}), 401
+    proj_doc = db.collection("projects").document(project_id).get()
+    if not proj_doc.exists:
+        return jsonify({"error": "Not found"}), 404
+    proj_data = proj_doc.to_dict()
+    category = (proj_data.get("category") or "").lower()
+    is_generated = bool(proj_data.get("generated_from_scratch", False))
+    counts = {}
+    try:
+        # Article
+        if "article" in category or "news" in category:
+            dataset_id = proj_data.get("dataset_id")
+            if dataset_id:
+                ref = rtdb.reference(f"datasets/uploaded_news/{dataset_id}")
+                snapshot = ref.get() or {}
+                total = len(snapshot)
+                for push_id, article_data in snapshot.items():
+                    if not isinstance(article_data, dict):
+                        continue
+                    feedback = article_data.get("feedback")
+                    if feedback and isinstance(feedback, dict):
+                        eid = feedback.get("examiner_uid")
+                        if eid:
+                            counts[eid] = counts.get(eid, 0) + 1
+        # Conversation
+        else:
+            tasks = db.collection("tasks").where("project_ID", "==", project_id).stream()
+            for t in tasks:
+                td = t.to_dict() or {}
+                task_type = (td.get("task_type") or "").lower()
+                task_id = td.get("task_ID") or t.id
+                # labeling feedback
+                if task_type == "labeling":
+                    if is_generated:
+                        safe_pid = project_id.replace(".", "_").replace("#", "_").replace("$", "_").replace("[", "_").replace("]", "_")
+                        for model_key in ["tfidf_logreg", "rnn"]:
+                            ref = rtdb.reference(f"analysis_results/conversation_gen/{model_key}/{safe_pid}")
+                            raw = ref.get() or {}
+                            for conv_id, node in raw.items():
+                                if not isinstance(node, dict):
+                                    continue
+                                tf_root = node.get("turn_feedbacks") or {}
+                                if isinstance(tf_root, dict):
+                                    for turn_idx, tf in tf_root.items():
+                                        if isinstance(tf, dict):
+                                            for eid in tf.keys():
+                                                counts[eid] = counts.get(eid, 0) + 1
+        # ratings
+        ratings = {}
+        rating_docs = db.collection("projects").document(project_id)\
+        .collection("assigned_examiners").stream()
+        for r in rating_docs:
+            rd = r.to_dict() or {}
+            if rd.get("stars"):
+              ratings[r.id] = {
+                "stars": rd.get("stars", 0),
+                "comment": rd.get("comment", "")
+            }
+        return jsonify({
+            "counts": counts,
+            "ratings": ratings
+        }), 200
+    except Exception as e:
+        app.logger.exception("examiner_feedback_count failed: %s", e)
+        return jsonify({"error": "Failed"}), 500
+    
+    
+@app.route("/api/project/<project_id>/my_rating", methods=["GET"])
+def api_my_rating(project_id):
+    if not session.get("idToken"):
+        return jsonify({"error": "Unauthorized"}), 401
+    uid = session.get("uid")
+    doc = db.collection("projects").document(project_id)\
+        .collection("assigned_examiners").document(uid).get()
+    if not doc.exists:
+        return jsonify({"rated": False}), 200
+    rd = doc.to_dict() or {}
+    return jsonify({
+        "rated": True,
+        "stars": rd.get("stars", 0),
+        "comment": rd.get("comment", "")
+    }), 200
 if __name__ == "__main__":
  app.run(debug=True)

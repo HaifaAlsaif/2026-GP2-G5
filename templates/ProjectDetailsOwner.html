@@ -1624,35 +1624,35 @@ body{ top:0 !important; }
       console.error("Volunteer load failed:", err);
     }
   }
-  loadVolunteersList();
-  
+ loadVolunteersList();
+
   // ============= Search inside modal =============
-  document.getElementById("examinerSearch").addEventListener("input", () => {
-    const q = examinerSearch.value.toLowerCase().trim();
-    const box = document.getElementById("examinerResults");
-    box.innerHTML = "";
-  
-    if (!q) return box.style.display = "none";
-  
-    const results = volunteers.filter(v =>
-      v.name.toLowerCase().includes(q) ||
-      v.email.toLowerCase().includes(q)
-    );
-  
-    if (results.length === 0) {
-      box.innerHTML = `<div style="padding:10px;color:#777;">No results</div>`;
-    } else {
-      results.forEach(v => {
-        box.innerHTML += `
-          <div onclick="selectExaminer('${v.name}','${v.email}')" 
-               style="padding:10px;border-radius:8px;cursor:pointer;">
-            <b>${v.name}</b><br>
-            <small>${v.email}</small>
-          </div>`;
-      });
-    }
-  
-    box.style.display = "block";
+document.addEventListener("DOMContentLoaded", () => {
+    const examinerSearchEl = document.getElementById("examinerSearch");
+    if (!examinerSearchEl) return;
+    examinerSearchEl.addEventListener("input", () => {
+      const q = examinerSearchEl.value.toLowerCase().trim();
+      const box = document.getElementById("examinerResults");
+      box.innerHTML = "";
+      if (!q) return box.style.display = "none";
+      const results = volunteers.filter(v =>
+        v.name.toLowerCase().includes(q) ||
+        v.email.toLowerCase().includes(q)
+      );
+      if (results.length === 0) {
+        box.innerHTML = `<div style="padding:10px;color:#777;">No results</div>`;
+      } else {
+        results.forEach(v => {
+          box.innerHTML += `
+            <div onclick="selectExaminer('${v.name}','${v.email}')"
+                 style="padding:10px;border-radius:8px;cursor:pointer;">
+              <b>${v.name}</b><br>
+              <small>${v.email}</small>
+            </div>`;
+        });
+      }
+      box.style.display = "block";
+    });
   });
   
   let selectedExaminer = null;
@@ -1740,30 +1740,111 @@ body{ top:0 !important; }
     }
   }
 
-  // === Fetch assigned examiners list ===
-  async function loadExaminers() {
-    const res = await fetch(`/api/project_examiners_owner/${projectId}`);
-    const data = await res.json();
-  
-    const container = document.querySelector(".team-members-row");
-    container.innerHTML = "";
-  
-    data.examiners.forEach(ex => {
-      container.innerHTML += `
-        <div class="team-member">
-          <div class="team-member-left">
+  let pendingRatings = {};
+
+async function loadExaminers() {
+  const [resEx, resProg] = await Promise.all([
+    fetch(`/api/project_examiners_owner/${projectId}`),
+    fetch(`/api/project/${projectId}/examiner_feedback_count`)
+  ]);
+
+  const dataEx   = await resEx.json();
+  const dataProg = await resProg.json();
+
+  const counts  = dataProg.counts  || {};
+  const ratings = dataProg.ratings || {};
+
+  const container = document.querySelector(".team-members-row");
+  container.innerHTML = "";
+
+  dataEx.examiners.forEach(ex => {
+    const done    = counts[ex.id] || 0;
+    const rating  = ratings[ex.id] || {};
+    const stars   = rating.stars   || 0;
+    const comment = rating.comment || "";
+
+    const badge = stars === 5
+      ? '<span style="font-size:11px;background:#fef9c3;color:#92400e;padding:2px 8px;border-radius:999px;border:1px solid #fde68a;margin-left:6px;">🏆 Top Reviewer</span>'
+      : "";
+
+    let starsHTML = "";
+    for (let i = 1; i <= 5; i++) {
+      starsHTML += `<span
+        onclick="setStars('${ex.id}', ${i})"
+        id="star_${ex.id}_${i}"
+        style="cursor:pointer;font-size:22px;color:${i <= stars ? '#F59E0B' : '#d1d5db'};">★</span>`;
+    }
+
+    container.innerHTML += `
+      <div class="team-member" id="examiner_card_${ex.id}" style="flex-direction:column;align-items:stretch;gap:12px;">
+
+        <!-- الصف الأول: أفاتار + إيميل + عداد + حذف -->
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;align-items:center;gap:12px;">
             <div class="member-avatar">${ex.name.charAt(0).toUpperCase()}</div>
-            <div class="member-info">
-              <h4 class="team-member-email">${ex.email}</h4>
+            <div>
+              <div style="font-size:14px;font-weight:600;" class="team-member-email">${ex.email}</div>
+              <div style="font-size:12px;color:#717182;margin-top:2px;">
+                📝 ${done} feedback submitted ${badge}
+              </div>
             </div>
           </div>
-  
           <button class="examiner-delete-btn" onclick="removeExaminer(this)">
-            <img src="../static/images/img_button_black_900_32x36.svg" alt="Delete examiner">
+            <img src="../static/images/img_button_black_900_32x36.svg" alt="Delete">
           </button>
-        </div>`;
-    });
+        </div>
+
+        <!-- الصف الثاني: Rating -->
+        <div style="background:#f9fafb;border-radius:10px;padding:12px;">
+          <div style="font-size:12px;color:#717182;margin-bottom:6px;">Rate this examiner:</div>
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:8px;">
+            ${starsHTML}
+            <span id="stars_label_${ex.id}"
+                  style="font-size:12px;color:#717182;margin-left:8px;">
+              ${stars > 0 ? stars + ' / 5' : 'Not rated yet'}
+            </span>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <input type="text"
+                   id="comment_${ex.id}"
+                   value="${comment}"
+                   placeholder="Add a comment (optional)..."
+                   style="flex:1;height:34px;padding:0 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:inherit;">
+            <button onclick="saveRating('${ex.id}')"
+                    style="height:34px;padding:0 14px;border-radius:8px;border:none;background:linear-gradient(90deg,#00b8ff,#155cfb);color:#fff;font-size:13px;cursor:pointer;font-family:inherit;">
+              Save
+            </button>
+          </div>
+        </div>
+
+      </div>`;
+  });
+}
+
+function setStars(examinerId, value) {
+  pendingRatings[examinerId] = value;
+  for (let i = 1; i <= 5; i++) {
+    const star = document.getElementById(`star_${examinerId}_${i}`);
+    if (star) star.style.color = i <= value ? '#F59E0B' : '#d1d5db';
   }
+  const label = document.getElementById(`stars_label_${examinerId}`);
+  if (label) label.textContent = value + ' / 5';
+}
+
+async function saveRating(examinerId) {
+  const stars   = pendingRatings[examinerId] || 0;
+  const comment = (document.getElementById(`comment_${examinerId}`)?.value || "").trim();
+  if (!stars) { alert("Please select a star rating first"); return; }
+
+  const res = await fetch(`/api/project/${projectId}/rate_examiner`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ examiner_id: examinerId, stars, comment })
+  });
+  const data = await res.json();
+  if (data.error) { alert(data.error); return; }
+  loadExaminers();
+}
   
   // === Start loading when page opens ===
   loadProjectDetails();

@@ -379,8 +379,8 @@
             <tr>
               <th>Article Title</th>
               <th>Prediction</th>
-              <th>Human %</th>
-              <th>AI %</th>
+             <th>P(Human)</th>
+            <th>P(AI)</th>
               <th>Details</th>
             </tr>
           </thead>
@@ -420,6 +420,22 @@
     let allDetails = [];
     let modelsRan = { logistic: false, rnn: false };
 
+async function checkIfAlreadySelected() {
+  const res = await fetch(`/api/tasks/${taskId}`);
+  const data = await res.json();
+  if (data.selected_model) {
+    document.getElementById('runAnalysisBtn').disabled = true;
+    document.getElementById('modelSelect').disabled = true;
+    document.getElementById('selectModelBtn').style.display = 'inline-flex';
+    document.getElementById('selectModelBtn').disabled = true;
+    document.getElementById('selectModelBtn').textContent =
+      '✅ Selected: ' + (data.selected_model === 'rnn' ? 'RNN' : 'Logistic Regression');
+    document.getElementById('datasetInfo').textContent =
+      'This task is completed. Model selection is locked.';
+  }
+}
+
+checkIfAlreadySelected();
    async function loadAnalysisResults() {
   try {
     const modelType = document.getElementById('modelSelect').value;
@@ -434,8 +450,12 @@
       displayResults(data);
       modelsRan[modelType] = true;
       
-      // ✅ نظهر الزر من أول Run
-      document.getElementById('selectModelBtn').style.display = 'inline-flex';
+     // نظهر الزر فقط إذا المهمة ما اختارت موديل بعد
+      const taskCheck = await fetch(`/api/tasks/${taskId}`);
+      const taskData = await taskCheck.json();
+      if (!taskData.selected_model) {
+        document.getElementById('selectModelBtn').style.display = 'inline-flex';
+      }
     } else {
       showEmptyState();
     }
@@ -540,8 +560,13 @@
           return;
         }
         
-        alert('✅ Model selected successfully!');
-        window.location.href = `/projectdetailsexaminer/${projectId}`;
+        btn.textContent = '✅ Model Already Selected';
+        btn.disabled = true;
+        document.getElementById('runAnalysisBtn').disabled = true;
+        document.getElementById('modelSelect').disabled = true;
+        setTimeout(() => {
+          window.location.href = `/projectdetailsexaminer/${projectId}`;
+        }, 1500);
         
       } catch (err) {
         console.error(err);
@@ -563,7 +588,28 @@
 
     function showDetails(article) {
   document.getElementById('modalTitle').textContent = article.title || 'Untitled';
-  document.getElementById('modalContent').textContent = article.content || 'No content available';
+  const contentEl = document.getElementById('modalContent');
+if (article.content && article.chunks && article.chunks.length > 0) {
+  const words = article.content.split(' ');
+  const chunkSize = Math.ceil(words.length / article.chunks.length);
+  const chunkColors = article.chunks.map(chunk => chunk.human > chunk.ai ? 'human' : 'ai');
+  
+  let highlighted = '';
+  article.chunks.forEach((chunk, i) => {
+    const start = i * chunkSize;
+    const end = Math.min(start + chunkSize, words.length);
+    const chunkWords = words.slice(start, end).join(' ');
+    const isHuman = chunk.human > chunk.ai;
+    const bgColor = isHuman ? 'rgba(10,122,57,0.12)' : 'rgba(245,158,11,0.12)';
+    const borderColor = isHuman ? '#84fab0' : '#fbbf24';
+    const label = `Chunk ${i + 1}`;
+    highlighted += `<span style="background:${bgColor};border-bottom:2px solid ${borderColor};border-radius:3px;padding:1px 0;" title="${label}: ${isHuman ? '✍️ Human' : '🤖 AI'} — Human ${chunk.human}% / AI ${chunk.ai}%">${chunkWords}</span> `;
+  });
+  
+  contentEl.innerHTML = highlighted;
+} else {
+  contentEl.textContent = article.content || 'No content available';
+}
 
   const chunksDiv = document.getElementById('modalChunks');
   chunksDiv.innerHTML = '';
@@ -573,7 +619,7 @@
       const isHumanChunk = chunk.human > chunk.ai;
       chunksDiv.innerHTML += `
         <div class="chunk-row">
-          <span class="chunk-label">${chunk.label}</span>
+         <span class="chunk-label">Chunk ${chunk.label.replace('F','')}</span>
           <div class="chunk-bar">
             <div class="chunk-bar-fill ${isHumanChunk ? 'human' : 'ai'}"
                  style="width:${isHumanChunk ? chunk.human : chunk.ai}%"></div>

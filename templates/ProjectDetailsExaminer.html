@@ -853,6 +853,9 @@ body{ top:0 !important; }
           </div>
         </div>
 
+<div id="myRatingBox"></div>
+
+
         <div class="team-section">
           <div class="team-header">
             <img src="../static/images/img_container.png" alt="Team icon" class="team-icon">
@@ -952,6 +955,7 @@ body{ top:0 !important; }
         tag.className = "tag tag-purple";
         tag.textContent = d;
         domainContainer.appendChild(tag);
+        loadMyRating();
       });
     
       
@@ -1283,6 +1287,38 @@ loadProjectDetails().then(() => {
     loadGoogleTranslateOnce();
     applyGoogleLang(next);
   });
+  async function loadMyRating() {
+  const pathParts = window.location.pathname.split('/');
+  const projectId = pathParts[pathParts.length - 1];
+
+  const res = await fetch(`/api/project/${projectId}/my_rating`);
+  const data = await res.json();
+  if (!data.rated) return;
+
+  const stars = data.stars || 0;
+  const comment = data.comment || "";
+  const badge = stars === 5
+    ? '<span style="background:#fef9c3;color:#92400e;padding:2px 8px;border-radius:999px;border:1px solid #fde68a;font-size:11px;margin-left:6px;">🏆 Top Reviewer</span>'
+    : "";
+
+  let starsHTML = "";
+  for (let i = 1; i <= 5; i++) {
+    starsHTML += `<span style="font-size:20px;color:${i <= stars ? '#F59E0B' : '#d1d5db'};">★</span>`;
+  }
+
+  const box = document.getElementById("myRatingBox");
+  if (!box) return;
+  box.innerHTML = `
+    <div style="background:#f9fafb;border-radius:12px;padding:14px 16px;margin:16px 0;border:1px solid #e5e7eb;">
+      <div style="font-size:13px;color:#717182;margin-bottom:6px;">Your rating from the project owner:</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        ${starsHTML}
+        <span style="font-size:13px;color:#374151;margin-left:4px;">${stars} / 5</span>
+        ${badge}
+      </div>
+      ${comment ? `<div style="font-size:13px;color:#374151;margin-top:8px;font-style:italic;">"${comment}"</div>` : ""}
+    </div>`;
+}
 </script>
 <div id="google_translate_element" style="display:none"></div>
 
