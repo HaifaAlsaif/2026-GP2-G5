@@ -4390,6 +4390,7 @@ def api_conversation_feedback_list(task_id):
                     "examiner_name": f.get("examiner_name") or _name_for(f_uid),
                     "label": f.get("label"),
                     "explanation": f.get("explanation", ""),
+                    "agreed_with_model": bool(f.get("agreed_with_model", False)),  # ✅ جديد
                     "submitted_at": f.get("submitted_at")
                 }
                 turn_feedback_users.append(user_item)
@@ -4466,7 +4467,6 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
 
         uid = session.get("uid")
 
-        # payload آمن (dict فقط)
         raw_payload = request.get_json(silent=True) or {}
         if isinstance(raw_payload, list):
             data = raw_payload[0] if raw_payload and isinstance(raw_payload[0], dict) else {}
@@ -4475,13 +4475,10 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
         else:
             data = {}
 
+        agree_with_model = bool(data.get("agree_with_model", False))
         label = (data.get("label") or "").strip()
         explanation = (data.get("explanation") or "").strip()
 
-        if label not in ["Human", "AI"]:
-            return jsonify({"error": "Invalid label"}), 400
-        if not explanation:
-            return jsonify({"error": "Explanation is required"}), 400
         if turn_index <= 0:
             return jsonify({"error": "Invalid turn_index"}), 400
 
@@ -4509,11 +4506,30 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
 
         turns_raw = conv_node.get("turns", {}) or {}
         turns = list(turns_raw.values()) if isinstance(turns_raw, dict) else (turns_raw if isinstance(turns_raw, list) else [])
-        exists_turn = any(int((t or {}).get("turn_index", 0) or 0) == turn_index for t in turns)
-        if not exists_turn:
+
+        target_turn = None
+        for t in turns:
+            if int((t or {}).get("turn_index", 0) or 0) == turn_index:
+                target_turn = t
+                break
+
+        if not target_turn:
             return jsonify({"error": "Turn not found"}), 404
 
-        # turn_feedbacks قد يرجع dict أو list من RTDB
+        # إذا Agree with Model = ON -> نأخذ نفس prediction تلقائيًا
+        if agree_with_model:
+            model_prediction = str(target_turn.get("prediction", "")).strip()
+            if model_prediction not in ["Human", "AI"]:
+                return jsonify({"error": "Model prediction is missing for this turn"}), 400
+            label = model_prediction
+            if not explanation:
+                explanation = "Agreed with model prediction."
+        else:
+            if label not in ["Human", "AI"]:
+                return jsonify({"error": "Invalid label"}), 400
+            if not explanation:
+                return jsonify({"error": "Explanation is required"}), 400
+
         turn_feedbacks_root = conv_node.get("turn_feedbacks") or {}
         existing_turn_feedbacks = {}
 
@@ -4526,8 +4542,7 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
             if isinstance(candidate, dict):
                 existing_turn_feedbacks = candidate
 
-
-        # 🔒 قفل نهائي: أول من يرسل فقط
+        # قفل نهائي: أول فيدباك فقط لكل turn
         if isinstance(existing_turn_feedbacks, dict) and len(existing_turn_feedbacks) > 0:
             return jsonify({"error": "Feedback already submitted for this turn"}), 409
 
@@ -4542,6 +4557,7 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
         payload = {
             "examiner_uid": uid,
             "examiner_name": examiner_name,
+            "agreed_with_model": agree_with_model,  # ✅ جديد
             "label": label,
             "explanation": explanation,
             "submitted_at": datetime.utcnow().isoformat() + "Z"
@@ -4658,29 +4674,50 @@ def api_examiner_feedback_count(project_id):
                         eid = feedback.get("examiner_uid")
                         if eid:
                             counts[eid] = counts.get(eid, 0) + 1
-        # Conversation
+               # Conversation (Generated only)
         else:
-            tasks = db.collection("tasks").where("project_ID", "==", project_id).stream()
-            for t in tasks:
-                td = t.to_dict() or {}
-                task_type = (td.get("task_type") or "").lower()
-                task_id = td.get("task_ID") or t.id
-                # labeling feedback
-                if task_type == "labeling":
-                    if is_generated:
-                        safe_pid = project_id.replace(".", "_").replace("#", "_").replace("$", "_").replace("[", "_").replace("]", "_")
-                        for model_key in ["tfidf_logreg", "rnn"]:
-                            ref = rtdb.reference(f"analysis_results/conversation_gen/{model_key}/{safe_pid}")
-                            raw = ref.get() or {}
-                            for conv_id, node in raw.items():
-                                if not isinstance(node, dict):
-                                    continue
-                                tf_root = node.get("turn_feedbacks") or {}
-                                if isinstance(tf_root, dict):
-                                    for turn_idx, tf in tf_root.items():
-                                        if isinstance(tf, dict):
-                                            for eid in tf.keys():
-                                                counts[eid] = counts.get(eid, 0) + 1
+            if is_generated:
+                has_labeling_task = False
+
+                tasks = db.collection("tasks").where("project_ID", "==", project_id).stream()
+                for t in tasks:
+                    td = t.to_dict() or {}
+                    task_type = (td.get("task_type") or "").lower()
+                    if task_type == "labeling":
+                        has_labeling_task = True
+                        break
+
+                if has_labeling_task:
+                    _, model_key, _ = _pick_conversation_model_for_project(project_id)
+
+                    model_keys_to_try = [model_key] if model_key else [CONV_LOGREG_KEY, CONV_RNN_KEY]
+
+                    for mk in model_keys_to_try:
+                        ref = rtdb.reference(f"{ANALYSIS_ROOT}/{mk}/{project_id}")
+                        raw = ref.get() or {}
+
+                        if not isinstance(raw, dict) or not raw:
+                            continue
+
+                        for _, node in raw.items():
+                            if not isinstance(node, dict):
+                                continue
+
+                            tf_root = node.get("turn_feedbacks") or {}
+
+                            if isinstance(tf_root, dict):
+                                turn_feedback_items = tf_root.values()
+                            elif isinstance(tf_root, list):
+                                turn_feedback_items = [x for x in tf_root if isinstance(x, dict)]
+                            else:
+                                turn_feedback_items = []
+
+                            for tf in turn_feedback_items:
+                                for eid in tf.keys():
+                                    counts[eid] = counts.get(eid, 0) + 1
+
+                        break
+
         # ratings
         ratings = {}
         rating_docs = db.collection("projects").document(project_id)\

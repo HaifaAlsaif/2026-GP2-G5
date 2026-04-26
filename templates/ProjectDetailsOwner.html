@@ -1758,7 +1758,12 @@ async function loadExaminers() {
   container.innerHTML = "";
 
   dataEx.examiners.forEach(ex => {
-    const done    = counts[ex.id] || 0;
+    const done = Number(
+  counts[ex.id] ??
+  counts[ex.uid] ??
+  counts[ex.email] ??
+  0
+);
     const rating  = ratings[ex.id] || {};
     const stars   = rating.stars   || 0;
     const comment = rating.comment || "";

@@ -951,12 +951,12 @@ body{ top:0 !important; }
       const domainContainer = document.getElementById("domainTags");
       domainContainer.innerHTML = "";
       data.domain.forEach(d => {
-        const tag = document.createElement("span");
-        tag.className = "tag tag-purple";
-        tag.textContent = d;
-        domainContainer.appendChild(tag);
-        loadMyRating();
-      });
+  const tag = document.createElement("span");
+  tag.className = "tag tag-purple";
+  tag.textContent = d;
+  domainContainer.appendChild(tag);
+});
+
     
       
     // category tag
@@ -1170,6 +1170,7 @@ async function loadExaminerTasks() {
 }
 
 loadProjectDetails().then(() => {
+  loadMyRating();      // <-- هذا كان ناقص
   loadExaminers();
   loadExaminerTasks();
 });

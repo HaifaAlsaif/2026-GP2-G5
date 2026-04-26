@@ -852,12 +852,13 @@ body.dark #saveModelBtn.is-locked{
 }
 .fb-turn-head,.fb-turn-main{
   display:grid;
-  grid-template-columns:44px 110px minmax(260px,1fr) 110px 90px 100px;
+  grid-template-columns:44px 110px minmax(260px,1fr) 110px 100px;
   gap:8px;
   align-items:center;
   padding:8px 10px;
-  min-width:860px;
+  min-width:760px;
 }
+
 .fb-turn-head{
   background:#f1f5f9;
   font-size:12px;
@@ -1251,6 +1252,223 @@ body.dark .fb-turn-lock{
 #feedbackModeRoot .fb-my-box { 
   display: none !important; 
 }
+.agree-model-bar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border:1px solid #9fd7fb;
+  background:#eaf6ff;
+  border-radius:14px;
+  padding:12px 16px;
+  margin-bottom:10px;
+}
+.agree-model-title{
+  font-size:16px;
+  font-weight:700;
+  color:#0b6db3;
+}
+.agree-model-sub{
+  font-size:12px;
+  color:#1f8ad1;
+}
+.agree-switch{
+  position:relative;
+  width:52px;
+  height:30px;
+  display:inline-block;
+}
+.agree-switch input{display:none;}
+.agree-slider{
+  position:absolute; inset:0;
+  border-radius:999px;
+  background:#d1d5db;
+  transition:.2s;
+}
+.agree-slider::before{
+  content:"";
+  position:absolute;
+  width:24px; height:24px;
+  left:3px; top:3px;
+  border-radius:50%;
+  background:#fff;
+  transition:.2s;
+}
+.agree-switch input:checked + .agree-slider{
+  background:#22c55e;
+}
+.agree-switch input:checked + .agree-slider::before{
+  transform:translateX(22px);
+}
+.agree-state{
+  min-width:30px;
+  font-weight:700;
+  color:#0b6db3;
+}
+/* ===== Agree Mode Final (conversation feedback only) ===== */
+#feedbackModeRoot .fb-turn-feedback-wrap{
+  border:1px solid #d8e3f3 !important;
+  background:#f8fbff !important;
+  border-radius:14px !important;
+  padding:12px !important;
+}
+
+#feedbackModeRoot .agree-model-bar{
+  display:grid !important;
+  grid-template-columns:1fr auto auto !important;
+  align-items:center !important;
+  gap:14px !important;
+  padding:14px 18px !important;
+  margin-bottom:12px !important;
+  border:2px solid #9fd7fb !important;
+  background:#dfeef9 !important;
+  border-radius:22px !important;
+}
+#feedbackModeRoot .agree-model-title{
+  font-size:40px !important;
+  font-weight:700 !important;
+  color:#0b6db3 !important;
+  line-height:1.15 !important;
+}
+#feedbackModeRoot .agree-model-sub{
+  font-size:28px !important;
+  color:#1f7fc3 !important;
+  margin-top:4px !important;
+  line-height:1.25 !important;
+}
+#feedbackModeRoot .agree-switch{ width:86px !important; height:46px !important; }
+#feedbackModeRoot .agree-slider{ background:#c7ced9 !important; }
+#feedbackModeRoot .agree-slider::before{
+  width:36px !important; height:36px !important; left:5px !important; top:5px !important;
+}
+#feedbackModeRoot .agree-switch input:checked + .agree-slider{ background:#1fa5e6 !important; }
+#feedbackModeRoot .agree-switch input:checked + .agree-slider::before{ transform:translateX(40px) !important; }
+#feedbackModeRoot .agree-state{
+  min-width:42px !important;
+  text-align:right !important;
+  font-size:40px !important;
+  font-weight:700 !important;
+  color:#0b6db3 !important;
+}
+
+#feedbackModeRoot .agree-confirm-note{
+  border:2px solid #7eb3ff;
+  background:#dbe8ff;
+  color:#1e4fcf;
+  border-radius:14px;
+  padding:14px 18px;
+  font-size:40px;
+  font-weight:700;
+  line-height:1.2;
+  margin-bottom:12px;
+}
+#feedbackModeRoot .agree-confirm-actions{
+  display:flex;
+  justify-content:flex-end;
+}
+#feedbackModeRoot .agree-confirm-btn{
+  height:58px !important;
+  border-radius:16px !important;
+  padding:0 24px !important;
+  font-size:31px !important;
+  font-weight:700 !important;
+  background:#1fa5e6 !important;
+  border-color:#1fa5e6 !important;
+  color:#fff !important;
+}
+
+/* بعد الحفظ (agree) نخفي سطر التيرن */
+#feedbackModeRoot .fb-turn-item.is-agreed .fb-turn-main{
+  display:none !important;
+}
+#feedbackModeRoot .fb-turn-agreed-pill{
+  border:2px solid #2f66ff;
+  background:#dbe8ff;
+  color:#2451d3;
+  border-radius:14px;
+  padding:12px 16px;
+  font-size:34px;
+  font-weight:700;
+  margin-bottom:8px;
+}
+
+/* toast يمين */
+.fb-toast{
+  position:fixed;
+  top:110px;
+  right:36px;
+  z-index:9999;
+  padding:14px 22px;
+  border-radius:14px;
+  border:2px solid #2f66ff;
+  background:#dbe8ff;
+  color:#2451d3;
+  font-size:30px;
+  font-weight:700;
+  box-shadow:0 12px 30px rgba(36,81,211,.18);
+  opacity:0;
+  transform:translateY(-8px);
+  pointer-events:none;
+  transition:all .22s ease;
+}
+.fb-toast.show{
+  opacity:1;
+  transform:translateY(0);
+}
+/* ===== Fix oversized agree font ===== */
+#feedbackModeRoot .agree-model-title{
+  font-size:16px !important;
+  line-height:1.25 !important;
+}
+
+#feedbackModeRoot .agree-model-sub{
+  font-size:11px !important;
+  line-height:1.35 !important;
+}
+
+#feedbackModeRoot .agree-state{
+  font-size:16px !important;
+  min-width:28px !important;
+}
+
+#feedbackModeRoot .agree-switch{
+  width:56px !important;
+  height:32px !important;
+}
+
+#feedbackModeRoot .agree-slider::before{
+  width:24px !important;
+  height:24px !important;
+  left:4px !important;
+  top:4px !important;
+}
+
+#feedbackModeRoot .agree-switch input:checked + .agree-slider::before{
+  transform:translateX(24px) !important;
+}
+
+#feedbackModeRoot .agree-confirm-note{
+  font-size:14px !important;
+  line-height:1.35 !important;
+  padding:10px 14px !important;
+}
+
+#feedbackModeRoot .agree-confirm-btn{
+  height:42px !important;
+  font-size:14px !important;
+  padding:0 16px !important;
+}
+
+#feedbackModeRoot .fb-turn-agreed-pill{
+  font-size:14px !important;
+  padding:10px 14px !important;
+}
+
+.fb-toast{
+  font-size:16px !important;
+  padding:10px 14px !important;
+}
+
 
   </style>
 </head>
@@ -1796,6 +2014,23 @@ function updateSummaryMeta() {
       "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
     }[c]));
   }
+  function normalizeBool(v) {
+  return v === true || v === 1 || v === "1" || String(v).toLowerCase() === "true";
+}
+
+function showToast(message) {
+  let el = document.getElementById("fbToast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "fbToast";
+    el.className = "fb-toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove("show"), 2200);
+}
 
   function labelFor(d){
     if (d.machinePct >= 60) return "ai";
@@ -2089,13 +2324,18 @@ function getTurnSharedFeedback(t) {
       examiner_name: x.examiner_name || x.name || "Examiner",
       label: x.label || "",
       explanation: x.explanation || "",
-      submitted_at: x.submitted_at || ""
+      submitted_at: x.submitted_at || "",
+      agreed_with_model: normalizeBool(x.agreed_with_model ?? x.agree_with_model)
     };
   }
 
-  if (fb && typeof fb === "object") return fb;
+  if (fb && typeof fb === "object") {
+    fb.agreed_with_model = normalizeBool(fb.agreed_with_model ?? fb.agree_with_model);
+    return fb;
+  }
   return null;
 }
+
 
 
 function isTurnOwner(t) {
@@ -2110,6 +2350,15 @@ function renderTurnSubmittedBox(t) {
 
   const label = (fb.label || "Human").toUpperCase() === "AI" ? "AI" : "Human";
   const cls = label === "AI" ? "ai" : "human";
+
+  if (fb.agreed_with_model) {
+    return `
+      <div class="fb-turn-submitted fb-turn-submitted-agree">
+        <div class="fb-sub-title">✔ Agreement saved successfully!</div>
+        <div class="fb-sub-note">You agreed with model prediction (${label}).</div>
+      </div>
+    `;
+  }
 
   return `
     <div class="fb-turn-submitted">
@@ -2223,11 +2472,10 @@ const statusText = isLocked ? "Reviewed" : "Pending";
   const turnsRows = turnsForView.map((t, idx) => {
   const turnIdx = Number(t.turn_index || (idx + 1));
   const pred = (t.prediction || "Human").toUpperCase() === "AI" ? "AI" : "Human";
-  const gt = (t.gt || "Human").toUpperCase() === "AI" ? "AI" : "Human";
-  const predCls = pred === "AI" ? "ai" : "human";
-  const gtCls = gt === "AI" ? "ai" : "human";
-  const sender = t.sender || (pred === "AI" ? "Machine" : "Human");
-  const conf = (t.confidence === 0 || t.confidence) ? `${Number(t.confidence).toFixed(2)}%` : "—";
+const predCls = pred === "AI" ? "ai" : "human";
+const sender = t.sender || (pred === "AI" ? "Machine" : "Human");
+const conf = (t.confidence === 0 || t.confidence) ? `${Number(t.confidence).toFixed(2)}%` : "—";
+
 
   const key = `${id}::${turnIdx}`;
 const sharedFb = getTurnSharedFeedback(t);
@@ -2236,47 +2484,84 @@ const mine = t.my_feedback || {};
 if (!feedbackDraft[key]) {
   feedbackDraft[key] = {
     label: mine.label || sharedFb?.label || "",
-    explanation: mine.explanation || sharedFb?.explanation || ""
+    explanation: mine.explanation || sharedFb?.explanation || "",
+    agree: Boolean(mine.agreed_with_model || sharedFb?.agreed_with_model || false)
   };
 }
 const draft = feedbackDraft[key];
-const canEdit = !sharedFb; // إذا فيه فيدباك سابق -> مقفول على الجميع
+const canEdit =
+  !sharedFb ||
+  String(sharedFb?.examiner_uid || "") === String(currentExaminerUid || "");
+const predictedLabel = ((pred || "").toUpperCase() === "AI") ? "AI" : "Human";
+
+const agreeBar = `
+  <div class="agree-model-bar">
+    <div>
+      <div class="agree-model-title">✔ Agree with Model</div>
+      <div class="agree-model-sub">Turn this on if you think the model's prediction is correct no written feedback needed.</div>
+    </div>
+    <label class="agree-switch">
+      <input type="checkbox" data-ft-agree="${esc(id)}" data-ft-turn="${turnIdx}" ${draft.agree ? "checked" : ""}>
+      <span class="agree-slider"></span>
+    </label>
+    <span class="agree-state">${draft.agree ? "On" : "Off"}</span>
+  </div>
+`;
+
+const manualEditor = `
+  <div class="fb-turn-feedback">
+    <div class="fb-turn-labels">
+      <button class="fb-turn-mini-btn ${draft.label === "Human" ? "active human" : ""}" data-ft-label="Human" data-ft-id="${esc(id)}" data-ft-turn="${turnIdx}">Human</button>
+      <button class="fb-turn-mini-btn ${draft.label === "AI" ? "active ai" : ""}" data-ft-label="AI" data-ft-id="${esc(id)}" data-ft-turn="${turnIdx}">AI</button>
+    </div>
+    <textarea class="fb-turn-note" data-ft-text="${esc(id)}" data-ft-turn="${turnIdx}" placeholder="Turn explanation...">${esc(draft.explanation || "")}</textarea>
+    <button class="btn primary fb-save-btn" data-ft-submit="${esc(id)}" data-ft-turn="${turnIdx}">
+      Save Feedback
+    </button>
+  </div>
+`;
+
+const agreeConfirm = `
+  <div class="agree-confirm-note">✔ You're agreeing with the model. Click "Confirm Agreement" below to save.</div>
+  <div class="agree-confirm-actions">
+    <button class="btn primary agree-confirm-btn" data-ft-submit="${esc(id)}" data-ft-turn="${turnIdx}">
+      ✔ Confirm Agreement
+    </button>
+  </div>
+`;
+
+const lockText = sharedFb?.agreed_with_model
+  ? `✔ Agreed with model and saved by ${esc(sharedFb?.examiner_name || "Examiner")}.`
+  : `Feedback already submitted by ${esc(sharedFb?.examiner_name || "Examiner")}.`;
 
 const feedbackCell = canEdit
-  ? `
-    <div class="fb-turn-feedback">
-      <div class="fb-turn-labels">
-        <button class="fb-turn-mini-btn ${draft.label === "Human" ? "active human" : ""}" data-ft-label="Human" data-ft-id="${esc(id)}" data-ft-turn="${turnIdx}">Human</button>
-        <button class="fb-turn-mini-btn ${draft.label === "AI" ? "active ai" : ""}" data-ft-label="AI" data-ft-id="${esc(id)}" data-ft-turn="${turnIdx}">AI</button>
-      </div>
-      <textarea class="fb-turn-note" data-ft-text="${esc(id)}" data-ft-turn="${turnIdx}" placeholder="Turn explanation...">${esc(draft.explanation || "")}</textarea>
-      <button class="btn primary fb-save-btn" data-ft-submit="${esc(id)}" data-ft-turn="${turnIdx}">
-        ${sharedFb ? "Update Feedback" : "Save Feedback"}
-      </button>
-    </div>
-  `
-  : `<div class="fb-turn-lock">Feedback already submitted by ${esc(sharedFb?.examiner_name || "Examiner")}.</div>`;
+  ? `${agreeBar}${draft.agree ? agreeConfirm : manualEditor}`
+  : `<div class="fb-turn-lock">${lockText}</div>`;
 
 const submittedBox = renderTurnSubmittedBox(t);
 
 
-    return `
+
+const isAgreedSaved = Boolean(sharedFb?.agreed_with_model);
+
+return `
   <div class="fb-turn-item">
     <div class="fb-turn-main">
-      <div>${turnIdx}</div>
-      <div>${esc(sender)}</div>
-      <div>${esc(t.text || "")}</div>
-      <div><span class="fb-pred ${predCls}">${pred}</span></div>
-      <div><span class="fb-pred ${gtCls}">${gt}</span></div>
-      <div>${esc(conf)}</div>
-    </div>
-    <div class="fb-turn-feedback-wrap">
-  ${feedbackCell}
-  ${submittedBox}
+  <div>${turnIdx}</div>
+  <div>${esc(sender)}</div>
+  <div>${esc(t.text || "")}</div>
+  <div><span class="fb-pred ${predCls}">${pred}</span></div>
+  <div>${esc(conf)}</div>
 </div>
 
+    <div class="fb-turn-feedback-wrap">
+      ${feedbackCell}
+      ${submittedBox}
+    </div>
   </div>
 `;
+
+
 
 }).join("");
 
@@ -2332,14 +2617,14 @@ const myBox = isLocked ? `
 
 
             <div class="fb-turn-table">
-              <div class="fb-turn-head">
+  <div class="fb-turn-head">
   <div>#</div>
   <div>Sender</div>
   <div>Message</div>
-  <div>Prediction</div>
-  <div>GT</div>
+  <div>Label</div>
   <div>Confidence</div>
 </div>
+
 
 
 
@@ -2452,6 +2737,29 @@ fbCardsEl?.addEventListener("change", (e) => {
   renderFeedbackCards();
 });
 
+fbCardsEl?.addEventListener("change", (e) => {
+  const agreeEl = e.target.closest("[data-ft-agree]");
+  if (!agreeEl) return;
+
+  const cid = agreeEl.getAttribute("data-ft-agree");
+  const turn = agreeEl.getAttribute("data-ft-turn");
+  const key = `${cid}::${turn}`;
+
+  if (!feedbackDraft[key]) feedbackDraft[key] = { label: "", explanation: "", agree: false };
+  feedbackDraft[key].agree = agreeEl.checked;
+
+  if (agreeEl.checked) {
+    const item = feedbackItems.find(x => String(x.conversation_id) === String(cid));
+    const t = (item?.turns || []).find(tt => Number(tt.turn_index) === Number(turn));
+    const predicted = ((t?.prediction || "").toUpperCase() === "AI") ? "AI" : "Human";
+    feedbackDraft[key].label = predicted;
+    if (!feedbackDraft[key].explanation) {
+      feedbackDraft[key].explanation = "Agreed with model prediction.";
+    }
+  }
+
+  renderFeedbackCards();
+});
 
 
 fbCardsEl?.addEventListener("click", async (e) => {
@@ -2469,8 +2777,10 @@ if (turnLabelBtn) {
   const turn = turnLabelBtn.getAttribute("data-ft-turn");
   const label = turnLabelBtn.getAttribute("data-ft-label");
   const key = `${cid}::${turn}`;
-  if (!feedbackDraft[key]) feedbackDraft[key] = { label: "", explanation: "" };
-  feedbackDraft[key].label = label;
+  if (!feedbackDraft[key]) feedbackDraft[key] = { label: "", explanation: "", agree: false };
+feedbackDraft[key].label = label;
+feedbackDraft[key].agree = false; // إذا اختارت يدويًا نطفي agree
+
   renderFeedbackCards();
   return;
 }
@@ -2491,8 +2801,9 @@ if (!ta) return;
 const cid = ta.getAttribute("data-ft-text");
 const turn = ta.getAttribute("data-ft-turn");
 const key = `${cid}::${turn}`;
-if (!feedbackDraft[key]) feedbackDraft[key] = { label: "", explanation: "" };
+if (!feedbackDraft[key]) feedbackDraft[key] = { label: "", explanation: "", agree: false };
 feedbackDraft[key].explanation = ta.value;
+
 
 });
 
@@ -2904,26 +3215,34 @@ runAnalysisBtn?.addEventListener("click", handleRunAnalysis);
 async function submitTurnFeedback(conversationId, turnIndex) {
   const key = `${conversationId}::${turnIndex}`;
   const draft = feedbackDraft[key] || {};
-  const label = (draft.label || "").trim();
-  const explanation = (draft.explanation || "").trim();
+  const agreeWithModel = Boolean(draft.agree);
 
-  if (!label) return alert("Select turn label first.");
-  if (!explanation) return alert("Write turn explanation first.");
-
-  // حماية فرونت: إذا الفيدباك لشخص آخر لا ترسل
   const item = feedbackItems.find(x => String(x.conversation_id) === String(conversationId));
   const turn = (item?.turns || []).find(tt => Number(tt.turn_index) === Number(turnIndex));
   const sharedFb = turn ? getTurnSharedFeedback(turn) : null;
 
   if (sharedFb) {
-  alert("تم إرسال فيدباك لهذا التيرن مسبقًا.");
-  return;
-}
+    alert("تم إرسال فيدباك لهذا التيرن مسبقًا.");
+    return;
+  }
 
+  const predictedLabel = ((turn?.prediction || "").toUpperCase() === "AI") ? "AI" : "Human";
+
+  let label = (draft.label || "").trim();
+  let explanation = (draft.explanation || "").trim();
+
+  if (agreeWithModel) {
+    label = predictedLabel;
+    if (!explanation) explanation = "Agreed with model prediction.";
+  }
+
+  if (!label) return alert("Select turn label first.");
+  if (!agreeWithModel && !explanation) return alert("Write turn explanation first.");
 
   const payload = {
     label,
     explanation,
+    agree_with_model: agreeWithModel,
     examiner_uid: currentExaminerUid,
     examiner_name: currentExaminerName
   };
@@ -2942,13 +3261,11 @@ async function submitTurnFeedback(conversationId, turnIndex) {
   try { data = raw ? JSON.parse(raw) : {}; } catch (_) {}
 
   if (!res.ok) {
-  alert(data.error || data.message || raw || "Failed to submit turn feedback.");
-  return;
-}
+    alert(data.error || data.message || raw || "Failed to submit turn feedback.");
+    return;
+  }
 
-alert("Feedback submitted successfully.");
-
-
+  showToast(agreeWithModel ? "✔ Agreement saved successfully!" : "✔ Feedback submitted successfully!");
   await loadConversationFeedbackList();
 }
 
