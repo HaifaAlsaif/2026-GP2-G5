@@ -1477,6 +1477,8 @@ This appears to be an older/generated index page that links to static page names
 | GET | `/myprojectowner` | Owner project list |
 | GET | `/myprojectexaminer` | Examiner accepted projects |
 | GET | `/projectdetailsowner/{project_id}` | Owner project details |
+| GET | `/owner/results` | Owner results project selector |
+| GET | `/owner/results/{project_id}` | Owner tab-based results dashboard |
 | GET | `/projectdetailsexaminer/{project_id}` | Examiner project details |
 | GET | `/projectdetailsexaminer/{project_id}/conversation-analysis` | Uploaded conversation dataset analysis page |
 | GET | `/invitation` | Examiner invitation page |
@@ -1570,6 +1572,8 @@ This appears to be an older/generated index page that links to static page names
 | GET | `/api/project/{project_id}/conversation_dialogue/{dialogue_id}` | Get one dialogue with turn-level predictions |
 | GET | `/api/project/{project_id}/conversation_export` | Export enriched uploaded conversation rows after detection |
 | GET | `/api/project/{project_id}/active_learning_export` | Export reviewed Active Learning samples for offline Logistic Regression retraining |
+| GET | `/api/project/{project_id}/results_summary` | Owner-only normalized results summary for Owner Results |
+| GET | `/api/project/{project_id}/final_dataset_export` | Owner-only CSV/JSON export for detection or feedback-enriched datasets |
 
 ### Examiner progress and rating APIs
 
@@ -1658,6 +1662,55 @@ Owner uses `/projectdetailsowner/{project_id}` to:
 - Delete tasks.
 - View feedback counts.
 - Rate examiners.
+
+### Flow E: Owner reviews project results
+
+Owner Results is a read-only owner module reached from the owner dashboard through the `View Results` navigation entry.
+
+The owner first opens:
+
+```text
+GET /owner/results
+```
+
+This page loads owned projects from:
+
+```text
+GET /api/my_projects
+```
+
+It then loads each project's result summary from:
+
+```text
+GET /api/project/{project_id}/results_summary
+```
+
+The project selector supports filtering by project type, dataset source, and result availability. Each project card links to:
+
+```text
+GET /owner/results/{project_id}
+```
+
+The project results page is tab based and uses the existing result summary endpoint as its main data source. The tabs are:
+
+- Overview.
+- Detection Results.
+- Examiner Participation.
+- Performance Evaluation.
+- Downloads & Report.
+- Reopen / Iterations, shown only for Logistic Regression based models.
+
+Active Learning, reopen/iteration comparison, and retraining-related controls are shown only for Logistic Regression model keys such as:
+
+```text
+logistic
+logreg
+tfidf_logreg
+```
+
+For RNN and other models, the page shows standard detection and feedback results only.
+
+The Owner Results module does not perform retraining, does not create a new evaluation cycle, and does not write new Firebase data.
 
 ---
 
@@ -2257,7 +2310,236 @@ This folder is for development and handoff only. It should not be treated as a p
 
 ---
 
-## 18. Known Technical Risks and Follow-Up Items
+## 18. Owner Results and Final Dataset Export
+
+The project now includes a read-only Owner Results module for reviewing completed or in-progress detection outputs across all supported project types.
+
+### Owner Results pages
+
+```text
+GET /owner/results
+GET /owner/results/{project_id}
+```
+
+`/owner/results` shows all projects owned by the current owner and lets the owner filter/search before opening a specific project's results.
+
+`/owner/results/{project_id}` shows a tab-based dashboard for one project. It is owner-only and verifies that the current session user owns the project.
+
+The detail page is based mainly on:
+
+```text
+GET /api/project/{project_id}/results_summary
+```
+
+The summary endpoint returns normalized owner-facing data:
+
+```text
+project
+result_type
+selected_model
+summary
+counts
+metrics
+examiners
+tasks
+most_uncertain_samples
+warnings
+```
+
+Supported `result_type` values are:
+
+```text
+news
+uploaded_conversation
+generated_conversation
+```
+
+The Owner Results UI displays Active Learning, reopen/iteration, and retraining-related panels only when the selected model is Logistic Regression based. RNN and other models show standard detection and feedback results without reopen/retraining controls.
+
+### Final dataset export endpoint
+
+Owners can export detection-stage and feedback-enriched datasets with:
+
+```text
+GET /api/project/{project_id}/final_dataset_export?format=csv&stage=detection
+GET /api/project/{project_id}/final_dataset_export?format=json&stage=detection
+GET /api/project/{project_id}/final_dataset_export?format=csv&stage=feedback
+GET /api/project/{project_id}/final_dataset_export?format=json&stage=feedback
+```
+
+Security behavior:
+
+- The endpoint requires a logged-in session.
+- The current user must be the owner of the project.
+- Examiner users cannot access this endpoint.
+- If no detection results are available, the endpoint returns:
+
+```json
+{
+  "ok": false,
+  "error": "No detection results found"
+}
+```
+
+### Export stages
+
+`stage=detection` returns source dataset rows merged with stored model detection fields.
+
+`stage=feedback` returns the same detection rows plus examiner feedback/corrected label fields. If a row or turn has no feedback, feedback fields remain empty/null and `used_for_retraining` remains `false`.
+
+The endpoint does not write to Firebase, does not retrain any model, and does not create a new Active Learning iteration.
+
+### Export formats and filenames
+
+CSV exports use a download response with `Content-Disposition`.
+
+Filename format:
+
+```text
+trustlens_{project_name}_{stage}.csv
+trustlens_{project_name}_{stage}.json
+```
+
+For JSON, the response shape is:
+
+```json
+{
+  "ok": true,
+  "project_id": "...",
+  "stage": "detection",
+  "format": "json",
+  "row_count": 0,
+  "rows": []
+}
+```
+
+### Final export data sources
+
+News projects read:
+
+```text
+datasets/uploaded_news/{dataset_id}
+analysis_results/{project_id}/{selected_model}
+analysis_results/{safe_project_id}/{selected_model}
+datasets/uploaded_news/{dataset_id}/{article_id}/feedback
+datasets/uploaded_news/{dataset_id}/{article_id}/examiner_feedbacks/{uid}
+```
+
+Uploaded conversation projects read:
+
+```text
+datasets/uploaded_conversations/{dataset_id}
+analysis_results/conversations/{model_key}/{project_id}/latest_run_id
+analysis_results/conversations/{model_key}/{project_id}/runs/{run_id}
+analysis_results/conversations/{model_key}/{project_id}/runs/{run_id}/turn_feedbacks
+```
+
+Generated conversation projects read:
+
+```text
+analysis_results/conversation_gen/{model_key}/{project_id}/{task_id}
+analysis_results/conversation_gen/{model_key}/{project_id}/{task_id}/turn_feedbacks
+llm_conversations/{task_id}/messages
+hh_conversations/{task_id}/messages
+```
+
+The generated conversation export uses stored analysis turns as the main source and uses raw message paths only to enrich previous-turn context when available.
+
+### Normalized export columns
+
+News detection exports include:
+
+```text
+project_id
+dataset_id
+article_id
+title
+text
+prediction
+prediction_int
+human_probability
+ai_probability
+confidence
+uncertainty
+selected_model
+model_version
+active_learning_selected
+original_ground_truth
+source_type
+```
+
+News feedback exports add:
+
+```text
+examiner_uid
+examiner_name
+agreed_with_model
+corrected_label
+corrected_MachineGen
+feedback_explanation
+submitted_at
+used_for_retraining
+```
+
+Uploaded conversation detection exports include:
+
+```text
+project_id
+dataset_id
+run_id
+dialogue_id
+turn_index
+sender
+text
+previous_text
+prediction
+prediction_int
+p_machine
+confidence
+uncertainty
+selected_model
+model_version
+active_learning_selected
+ground_truth
+source_row_id
+```
+
+Uploaded conversation feedback exports add the same feedback fields used by news feedback exports.
+
+Generated conversation detection exports include:
+
+```text
+project_id
+task_id
+conversation_id
+conversation_type
+turn_index
+sender
+text
+previous_text
+prediction
+prediction_int
+p_machine
+confidence
+uncertainty
+selected_model
+model_version
+active_learning_selected
+```
+
+Generated conversation feedback exports add the same feedback fields used by news feedback exports.
+
+### Current limitations
+
+- PDF report generation is not implemented yet.
+- Reopen Evaluation Cycle is still UI-only.
+- Automatic retraining is not implemented.
+- Exported feedback rows are marked with `used_for_retraining=false` for now.
+- Original dataset direct download is still a placeholder in the UI.
+
+---
+
+## 19. Known Technical Risks and Follow-Up Items
 
 These are not changes made to the project; they are notes for the next team.
 
@@ -2300,7 +2582,7 @@ Some templates contain links like `Settings.html`, `Ownerdashboard.html`, `Exami
 
 ---
 
-## 19. Quick Handover Checklist
+## 20. Quick Handover Checklist
 
 Before a new team runs or continues development, confirm:
 
@@ -2327,11 +2609,18 @@ Before a new team runs or continues development, confirm:
 - Test Active Learning target selection in generated conversation feedback tasks.
 - Test Active Learning target selection in uploaded conversation feedback tasks.
 - Test `/api/project/{project_id}/active_learning_export` after examiner feedback is submitted.
+- Test `/owner/results` project filtering, search, and loading state.
+- Test `/owner/results/{project_id}` for news, uploaded conversation, and generated conversation projects.
+- Test `/api/project/{project_id}/results_summary` as the project owner.
+- Test `/api/project/{project_id}/final_dataset_export?format=csv&stage=detection`.
+- Test `/api/project/{project_id}/final_dataset_export?format=json&stage=detection`.
+- Test `/api/project/{project_id}/final_dataset_export?format=csv&stage=feedback`.
+- Test `/api/project/{project_id}/final_dataset_export?format=json&stage=feedback`.
 - Retrain Logistic Regression offline only after exported feedback rows are validated.
 
 ---
 
-## 20. Project Team
+## 21. Project Team
 
 TrustLens was developed for the King Saud University graduation project.
 
@@ -2348,7 +2637,7 @@ Supervisor:
 
 ---
 
-## 21. Repository Reference
+## 22. Repository Reference
 
 GitHub repository:
 

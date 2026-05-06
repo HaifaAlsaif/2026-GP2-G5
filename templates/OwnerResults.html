@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Results | TrustLens</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#f8f9fb 0%,#eef5fe 50%,#ebfdfe 100%);color:#0a0a0a;line-height:1.5;min-height:100vh}
+    .main-container{display:flex;flex-direction:column;align-items:center;width:100%;min-height:100vh;gap:24px;padding:16px}
+    .header{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:1440px;background:#ffffffcc;border:1px solid #e4ebf5;border-radius:16px;padding:14px 18px;box-shadow:0 8px 24px rgba(15,23,42,.08);backdrop-filter:blur(12px)}
+    .header-left{display:flex;gap:8px;align-items:center}.logo{width:32px;height:32px}
+    .brand-text{font-size:20px;font-weight:400;background:linear-gradient(90deg,#00b8da 0%,#155cfb 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .header-right{display:flex;gap:12px;align-items:center}.language-selector{padding:6px;font-size:14px;color:#0a0a0a}
+    .theme-toggle{width:36px;height:36px;border:1px solid #dbe2ea;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .user-profile{display:flex;gap:8px;align-items:center;position:relative;cursor:pointer}.user-avatar{width:40px;height:40px;border-radius:20px;background:linear-gradient(135deg,#00b8da 0%,#155cfb 100%)}
+    .user-info h3{font-size:14px;font-weight:400;color:#0a0a0a}.user-info p{font-size:12px;color:#717182}
+    .user-dropdown{position:absolute;top:100%;right:0;background:#fff;border-radius:8px;box-shadow:0 2px 12px #00000026;padding:4px 0;margin-top:4px;width:190px;display:none;z-index:20}
+    .user-dropdown.show{display:block}.dropdown-item{display:flex;align-items:center;gap:16px;padding:8px 12px;font-size:14px;color:#0a0a0a;text-decoration:none}.dropdown-item:hover{background:#f3f4f6}
+    .dropdown-icon{width:16px;height:16px}.dropdown-divider{height:1px;background:#00000019;margin:4px 0}
+    .page-layout{width:100%;max-width:1440px}
+    .content-wrapper{width:100%;display:flex;flex-direction:column;gap:20px}
+    .back-link{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:#0a0a0a;font-size:14px;width:max-content;background:#fff;border:1px solid #e4ebf5;border-radius:10px;padding:9px 12px;box-shadow:0 4px 12px rgba(15,23,42,.06)}
+    .project-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#ecfdff 0%,#eef5ff 46%,#f7f1ff 100%);border:1px solid #cfe8ff;border-radius:18px;padding:26px;box-shadow:0 14px 34px rgba(21,92,251,.12)}
+    .project-hero::before{content:"";position:absolute;right:-80px;top:-120px;width:280px;height:280px;background:radial-gradient(circle,#00b8da33 0%,transparent 68%)}
+    .hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}.hero-title{font-size:28px;font-weight:700;color:#0e162b;margin-bottom:8px}
+    .hero-subtitle{font-size:14px;color:#717182}.hero-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .badge{display:inline-flex;align-items:center;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;text-transform:capitalize}
+    .badge-blue{background:#2b7fff19;color:#1347e5}.badge-green{background:#00c95019;color:#008235}.badge-gray{background:#f2f4f7;color:#475467}.badge-orange{background:#fff7ec;color:#b54708}.badge-red{background:#fef3f2;color:#b42318}.badge-cyan{background:#ecfdff;color:#0e7490}
+    .meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:20px;position:relative}.meta-card{background:#ffffffbf;border:1px solid #dbeafe;border-radius:14px;padding:13px;box-shadow:0 8px 18px rgba(15,23,42,.06)}
+    .meta-label{font-size:12px;color:#717182;margin-bottom:4px}.meta-value{font-size:14px;color:#0a0a0a;font-weight:700}
+    .tabs-shell{background:#fff;border:1px solid #e4ebf5;border-radius:16px;box-shadow:0 8px 24px rgba(15,23,42,.08);overflow:hidden}
+    .tabs-nav{display:flex;gap:4px;overflow-x:auto;padding:12px;background:#f8fbff;border-bottom:1px solid #e4ebf5}
+    .tab-btn{white-space:nowrap;border:1px solid transparent;background:transparent;color:#475467;border-radius:10px;padding:10px 12px;font-size:14px;cursor:pointer}
+    .tab-btn.active{background:linear-gradient(90deg,#00b8da 0%,#155cfb 100%);color:#fff}.tab-btn.disabled{opacity:.45;cursor:not-allowed}
+    .tab-panel{display:none;padding:22px}.tab-panel.active{display:block}
+    .cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}.summary-card{background:linear-gradient(135deg,#f8fbff 0%,#fff 100%);border:1px solid #e4ebf5;border-radius:12px;padding:16px;box-shadow:0 8px 18px rgba(15,23,42,.05)}
+    .summary-card:nth-child(3n+1){border-top:3px solid #00b8da}.summary-card:nth-child(3n+2){border-top:3px solid #155cfb}.summary-card:nth-child(3n+3){border-top:3px solid #00c950}
+    .summary-number{font-size:24px;font-weight:700;color:#0e162b}.summary-label{font-size:13px;color:#717182;margin-top:4px}
+    .notice{border-radius:12px;padding:14px;margin-bottom:16px;font-size:14px}.notice-info{background:#eef5ff;border:1px solid #bfd7ff;color:#1347e5}.notice-warn{background:#fff7ec;border:1px solid #fedf89;color:#b54708}
+    .table-wrap{overflow:auto;border:1px solid #e4ebf5;border-radius:12px;background:#fff}table{width:100%;border-collapse:collapse;min-width:760px}th,td{padding:12px;text-align:left;border-bottom:1px solid #eef2f7;font-size:14px;vertical-align:top}th{background:#f8fbff;color:#0e162b}td{color:#344054}.highlight-row{background:#ebfdfe80}
+    .text-preview{max-width:420px;color:#475467;line-height:1.45}.id-chip{display:inline-flex;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#f2f4f7;border:1px solid #e4ebf5;border-radius:8px;padding:4px 7px;font-size:12px;color:#344054}.button-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.action-btn{border:none;border-radius:9px;padding:10px 14px;font-size:14px;cursor:pointer}.action-primary{background:linear-gradient(90deg,#00b8da 0%,#155cfb 100%);color:#fff}.action-secondary{background:#fff;border:1px solid #d0d5dd;color:#344054}.action-disabled{opacity:.55;cursor:not-allowed}
+    .empty-state{border:1px dashed #cbd5e1;border-radius:12px;padding:28px;text-align:center;color:#717182;background:#fff}
+    .matrix{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:10px;max-width:420px}.matrix-cell{border-radius:12px;padding:14px;border:1px solid #e4ebf5;background:#f8fbff}.matrix-label{font-size:12px;color:#717182}.matrix-value{font-size:22px;font-weight:700;color:#0e162b}
+    .two-col{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.65fr);gap:18px}.metric-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+    .examiner-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}.examiner-card{background:#fff;border:1px solid #e4ebf5;border-radius:14px;padding:16px;box-shadow:0 8px 18px rgba(15,23,42,.05)}.examiner-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:12px}.examiner-name{font-size:16px;font-weight:700;color:#0e162b}.examiner-email{font-size:13px;color:#717182;margin-top:2px}.examiner-id{font-size:12px;color:#717182;margin-top:6px}.examiner-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}.examiner-stat{background:#f8fbff;border:1px solid #e4ebf5;border-radius:10px;padding:9px}.examiner-stat strong{display:block;color:#0e162b;font-size:16px}.examiner-stat span{font-size:12px;color:#717182}
+    .task-list{display:flex;flex-direction:column;gap:6px}.task-pill{display:inline-flex;width:max-content;max-width:260px;border-radius:8px;background:#f2f4f7;color:#344054;padding:4px 8px;font-size:12px}
+    .download-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}.download-card{background:#f8fbff;border:1px solid #e4ebf5;border-radius:12px;padding:16px}.download-card h3{font-size:15px;color:#0e162b;margin-bottom:8px}.download-card p{font-size:13px;color:#717182;margin-bottom:12px}
+    .loading{background:#fff;border:1px solid #e4ebf5;border-radius:16px;padding:30px;color:#717182;text-align:center}
+    body.dark{background:radial-gradient(1200px 500px at 50% -20%,#163a78 0%,transparent 60%),linear-gradient(135deg,#071225 0%,#0b1b37 55%,#0d2747 100%);color:#eaf2ff}
+    body.dark .header,body.dark .project-hero,body.dark .tabs-shell,body.dark .loading,body.dark .user-dropdown,body.dark .table-wrap,body.dark .empty-state,body.dark .examiner-card{background:linear-gradient(180deg,#0f1f3b 0%,#122547 100%)!important;border-color:#2a4168;box-shadow:0 14px 28px rgba(0,0,0,.35)}
+    body.dark .tabs-nav,body.dark th,body.dark .summary-card,body.dark .meta-card,body.dark .matrix-cell,body.dark .download-card,body.dark .examiner-stat{background:#10213f;border-color:#2a4168}
+    body.dark .hero-title,body.dark .meta-value,body.dark .summary-number,body.dark .matrix-value,body.dark .download-card h3,body.dark .user-info h3,body.dark .dropdown-item,body.dark .back-link,body.dark .examiner-name,body.dark .examiner-stat strong{color:#eaf2ff}
+    body.dark .hero-subtitle,body.dark .meta-label,body.dark .summary-label,body.dark td,body.dark .text-preview,body.dark .download-card p,body.dark .user-info p,body.dark .examiner-email,body.dark .examiner-id,body.dark .examiner-stat span{color:#a9bdd8}body.dark th{color:#eaf2ff}body.dark .tab-btn{color:#a9bdd8}
+    @media(max-width:860px){.two-col{grid-template-columns:1fr}.hero-title{font-size:24px}.tab-panel{padding:16px}.main-container{padding:12px}.header{flex-wrap:wrap}.examiner-stats{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="main-container">
+  <header class="header">
+    <div class="header-left">
+      <img src="{{ url_for('static', filename='images/img_header.svg') }}" alt="TrustLens Logo" class="logo">
+      <div class="brand-text notranslate" translate="no">TrustLens</div>
+    </div>
+    <div class="header-right">
+      <span class="language-selector notranslate" translate="no" dir="ltr">AR</span>
+      <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle theme"><span id="themeIcon">Moon</span></button>
+      <div class="user-profile" onclick="toggleUserDropdown()">
+        <img src="{{ url_for('static', filename='images/user-profile.png') }}" alt="Avatar" class="user-avatar">
+        <div class="user-info"><h3>{{ user_name }}</h3><p>Project Owner</p></div>
+        <div class="user-dropdown" id="userDropdown">
+          <a href="/" class="dropdown-item"><img src="{{ url_for('static', filename='images/img_iconhome.svg') }}" class="dropdown-icon"> Home</a>
+          <div class="dropdown-divider"></div>
+          <a href="/profile" class="dropdown-item"><img src="{{ url_for('static', filename='images/img_profile.svg') }}" class="dropdown-icon"> Profile</a>
+          <a href="/" class="dropdown-item"><img src="{{ url_for('static', filename='images/img_logout.png') }}" class="dropdown-icon"> Logout</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-layout">
+    <main class="content-wrapper">
+      <a href="/owner/results" class="back-link">Back to Results</a>
+      <div id="pageState" class="loading">Loading project results...</div>
+      <section id="resultsPage" style="display:none">
+        <div class="project-hero">
+        <div class="hero-top">
+          <div>
+            <h1 id="projectName" class="hero-title">Project Results</h1>
+            <p id="projectSubtitle" class="hero-subtitle"></p>
+            <div id="heroBadges" class="hero-badges"></div>
+          </div>
+        </div>
+        <div id="metaGrid" class="meta-grid"></div>
+      </div>
+
+        <div class="tabs-shell" style="margin-top:20px">
+        <nav id="tabsNav" class="tabs-nav"></nav>
+        <section id="overview" class="tab-panel active"></section>
+        <section id="detection" class="tab-panel"></section>
+        <section id="examiners" class="tab-panel"></section>
+        <section id="performance" class="tab-panel"></section>
+        <section id="downloads" class="tab-panel"></section>
+        <section id="iterations" class="tab-panel"></section>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+  const PROJECT_ID = "{{ project_id }}";
+  let pageData = null;
+
+  function toggleUserDropdown(){ document.getElementById('userDropdown').classList.toggle('show'); }
+  document.addEventListener('click', function(event){
+    const profile = document.querySelector('.user-profile');
+    if (profile && !profile.contains(event.target)) document.getElementById('userDropdown').classList.remove('show');
+  });
+  const themeToggle = document.getElementById('themeToggle');
+  const themeIcon = document.getElementById('themeIcon');
+  function applyTheme(theme){
+    document.body.classList.toggle('dark', theme === 'dark');
+    themeIcon.textContent = theme === 'dark' ? 'Sun' : 'Moon';
+    localStorage.setItem('theme', theme);
+  }
+  applyTheme(localStorage.getItem('theme') || 'light');
+  themeToggle.addEventListener('click', () => applyTheme(document.body.classList.contains('dark') ? 'light' : 'dark'));
+
+  function value(v, fallback='-'){ return v === null || v === undefined || v === '' ? fallback : v; }
+  function pct(v){
+    if (v === null || v === undefined || v === '') return '-';
+    const n = Number(v);
+    if (Number.isNaN(n)) return '-';
+    return `${(n * 100).toFixed(1)}%`;
+  }
+  function intValue(v){ return Number(v || 0).toLocaleString(); }
+  function labelize(text){ return String(text || '').replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase()); }
+  function datasetSource(project){
+    if (project.generated_from_scratch) return 'Generated from scratch';
+    if (project.dataset_id) return 'Uploaded dataset';
+    return 'No dataset';
+  }
+  function shortId(id){
+    const text = String(id || '-');
+    return text.length > 14 ? `${text.slice(0, 6)}...${text.slice(-5)}` : text;
+  }
+  function statusBadge(status){
+    const normalized = String(status || 'pending').toLowerCase();
+    const cls = normalized === 'completed' ? 'badge-green' : normalized === 'progress' || normalized === 'active' ? 'badge-blue' : normalized === 'pending' ? 'badge-orange' : 'badge-gray';
+    return badge(value(status, 'pending'), cls);
+  }
+  function modelKey(){
+    const selected = pageData && pageData.selected_model ? pageData.selected_model : {};
+    return String(selected.key || selected.name || '').toLowerCase();
+  }
+  function isLogistic(){
+    const key = modelKey();
+    return ['logistic','logreg','tfidf_logreg','logistic regression'].some(token => key.includes(token));
+  }
+  function badge(text, cls='badge-gray'){ return `<span class="badge ${cls}">${text}</span>`; }
+  function metricCard(label, number){ return `<div class="summary-card"><div class="summary-number">${number}</div><div class="summary-label">${label}</div></div>`; }
+  function placeholder(message){ alert(message); }
+  function exportUrl(format, stage){
+    return `/api/project/${encodeURIComponent(PROJECT_ID)}/final_dataset_export?format=${format}&stage=${stage}`;
+  }
+  function downloadExport(format, stage){
+    window.location.href = exportUrl(format, stage);
+  }
+  function openJsonExport(stage){
+    window.open(exportUrl('json', stage), '_blank');
+  }
+  function empty(message){ return `<div class="empty-state">${message}</div>`; }
+
+  function setupTabs(){
+    const tabs = [
+      ['overview','Overview',true],
+      ['detection','Detection Results',true],
+      ['examiners','Examiner Participation',true],
+      ['performance','Performance Evaluation',true],
+      ['downloads','Downloads & Report',true],
+      ['iterations','Reopen / Iterations',isLogistic()]
+    ];
+    const nav = document.getElementById('tabsNav');
+    nav.innerHTML = tabs.map(([id,label,enabled]) => `<button class="tab-btn ${id === 'overview' ? 'active' : ''} ${enabled ? '' : 'disabled'}" data-tab="${id}" ${enabled ? '' : 'disabled'}>${label}</button>`).join('');
+    nav.querySelectorAll('.tab-btn:not(.disabled)').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(item => item.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+      });
+    });
+    document.getElementById('iterations').style.display = isLogistic() ? '' : 'none';
+  }
+
+  function renderHero(){
+    const project = pageData.project || {};
+    const selected = pageData.selected_model || {};
+    document.getElementById('projectName').textContent = value(project.project_name, 'Project Results');
+    document.getElementById('projectSubtitle').textContent = 'A consolidated owner dashboard for model outputs, review targets, examiner participation, and exports.';
+    document.getElementById('heroBadges').innerHTML = [
+      badge(isLogistic() ? 'Active Learning Enabled' : 'Standard Results', isLogistic() ? 'badge-green' : 'badge-gray'),
+      statusBadge(project.status)
+    ].join('');
+    const meta = [
+      ['Project Name', value(project.project_name)],
+      ['Category', badge(value(project.category), String(project.category || '').toLowerCase().includes('conversation') ? 'badge-green' : 'badge-blue')],
+      ['Result Type', badge(labelize(pageData.result_type), 'badge-cyan')],
+      ['Dataset Source', badge(datasetSource(project), project.generated_from_scratch ? 'badge-orange' : project.dataset_id ? 'badge-green' : 'badge-gray')],
+      ['Selected Model', badge(value(selected.name, 'No model selected'), isLogistic() ? 'badge-green' : 'badge-gray')],
+      ['Model Version', badge(value(selected.version, 'v1'), 'badge-blue')],
+      ['Project Status', statusBadge(project.status)]
+    ];
+    document.getElementById('metaGrid').innerHTML = meta.map(([label, val]) => `<div class="meta-card"><div class="meta-label">${label}</div><div class="meta-value">${val}</div></div>`).join('');
+  }
+
+  function renderOverview(){
+    const s = pageData.summary || {};
+    const c = pageData.counts || {};
+    const selected = pageData.selected_model || {};
+    const resultCards = [];
+    if (pageData.result_type === 'news') resultCards.push(metricCard('Total Articles', intValue(c.total_articles)));
+    if (pageData.result_type === 'uploaded_conversation') {
+      resultCards.push(metricCard('Total Dialogues', intValue(c.total_dialogues)));
+      resultCards.push(metricCard('Total Turns Analyzed', intValue(c.total_turns_analyzed)));
+    }
+    if (pageData.result_type === 'generated_conversation') {
+      resultCards.push(metricCard('Total Conversation Tasks', intValue(c.total_conversation_tasks)));
+      resultCards.push(metricCard('Total Turns Analyzed', intValue(c.total_turns_analyzed)));
+    }
+    resultCards.push(
+      metricCard('Human Count', intValue(s.human_count)),
+      metricCard('AI Count', intValue(s.ai_count)),
+      metricCard('Average Confidence', pct(s.avg_confidence)),
+      metricCard('Average Uncertainty', pct(s.avg_uncertainty)),
+      metricCard('Feedback Targets', intValue(c.feedback_targets)),
+      metricCard('Reviewed Feedback Targets', intValue(c.reviewed_feedback_targets)),
+      metricCard('Corrected Labels', intValue(s.corrected_labels)),
+      metricCard('Selected Model', value(selected.name, '-'))
+    );
+    const warnings = (pageData.warnings || []).map(w => `<div class="notice notice-warn">${w}</div>`).join('');
+    document.getElementById('overview').innerHTML = `
+      <div class="notice notice-info">
+        This overview summarizes how the selected model classified the project data and how much feedback is still needed.
+        Confidence means how sure the model is about its prediction. Uncertainty is based on distance from 0.5; lower uncertainty means the model is less certain and the sample is more useful for feedback.
+        Percentages shown here are converted from the stored detection values, not recalculated separately.
+      </div>
+      ${warnings}
+      <div class="cards-grid">${resultCards.join('')}</div>
+    `;
+  }
+
+  function renderDetection(){
+    const samples = pageData.most_uncertain_samples || [];
+    const rows = samples.map(sample => `
+      <tr class="${sample.review_target ? 'highlight-row' : ''}">
+        <td><span class="id-chip" title="${value(sample.id)}">${shortId(sample.id)}</span></td>
+        <td>${value(sample.title, value(sample.dialogue_id, '-'))}</td>
+        <td class="text-preview">${value(sample.text)}</td>
+        <td>${badge(value(sample.prediction), sample.prediction && String(sample.prediction).toLowerCase().includes('ai') ? 'badge-orange' : 'badge-green')}</td>
+        <td>${pct(sample.confidence)}</td>
+        <td>${pct(sample.uncertainty)}</td>
+        <td>${sample.review_target ? badge('Review Target','badge-blue') : badge('Context','badge-gray')}</td>
+      </tr>
+    `).join('');
+    document.getElementById('detection').innerHTML = `
+      <div class="notice notice-info">Detection values come from the stored model outputs used by results_summary. Confidence and uncertainty are displayed as percentages for readability; uncertainty is calculated using distance from 0.5, so lower values indicate samples that are better candidates for examiner feedback.</div>
+      ${samples.length ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Title / Dialogue</th><th>Text Preview</th><th>Prediction</th><th>Confidence %</th><th>Uncertainty %</th><th>Review Target</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('No detection samples are available yet.')}
+      <div class="button-row">
+        <button class="action-btn action-secondary" onclick="downloadExport('csv','detection')">Download Detection CSV</button>
+        <button class="action-btn action-secondary" onclick="openJsonExport('detection')">Download Detection JSON</button>
+      </div>
+    `;
+  }
+
+  function renderExaminers(){
+    const examiners = pageData.examiners || [];
+    const cards = examiners.map(ex => {
+      const tasks = (ex.assigned_tasks || []).slice(0, 4).map(task => `<span class="task-pill">${value(task.task_name, task.task_id)} (${labelize(task.task_type)})</span>`).join('');
+      const rating = ex.rating && ex.rating.stars ? `${ex.rating.stars} / 5` : '-';
+      return `
+        <article class="examiner-card">
+          <div class="examiner-head">
+            <div>
+              <div class="examiner-name">${value(ex.examiner_name, 'Examiner')}</div>
+              <div class="examiner-email">${value(ex.email, 'No email available')}</div>
+              <div class="examiner-id">Examiner ID: <span title="${value(ex.examiner_id)}">${shortId(ex.examiner_id)}</span></div>
+            </div>
+            ${badge(labelize(ex.participation_status), ex.participation_status === 'completed' ? 'badge-green' : ex.participation_status === 'not_started' ? 'badge-orange' : ex.participation_status === 'no_feedback_required' ? 'badge-gray' : 'badge-blue')}
+          </div>
+          <div class="hero-badges">
+            ${badge(value(ex.invitation_status, 'unknown'), ex.invitation_status === 'accepted' ? 'badge-green' : 'badge-gray')}
+            ${badge(`Rating: ${rating}`, 'badge-blue')}
+          </div>
+          <div class="examiner-stats">
+            <div class="examiner-stat"><strong>${intValue(ex.assigned_task_count)}</strong><span>Assigned Tasks</span></div>
+            <div class="examiner-stat"><strong>${intValue(ex.feedback_submitted)}</strong><span>Feedback Submitted</span></div>
+            <div class="examiner-stat"><strong>${intValue(ex.corrected_labels)}</strong><span>Corrected Labels</span></div>
+            <div class="examiner-stat"><strong>${intValue(ex.pending_feedback_estimate)}</strong><span>Pending Estimate</span></div>
+          </div>
+          <div class="task-list">${tasks || '<span class="meta-label">No assigned tasks</span>'}</div>
+          <div class="hero-badges" style="margin-top:12px">
+            ${badge(`Model Selection: ${intValue(ex.model_selection_assigned)}`, 'badge-cyan')}
+            ${badge(`Labeling: ${intValue(ex.labeling_assigned)}`, 'badge-orange')}
+            ${badge(`Conversation: ${intValue(ex.conversation_assigned)}`, 'badge-green')}
+          </div>
+        </article>
+      `;
+    }).join('');
+    const note = (pageData.warnings || []).some(w => String(w).includes('pending count is an estimate'))
+      ? '<div class="notice notice-warn">Feedback targets are shared across assigned labeling examiners; pending count is an estimate.</div>' : '';
+    document.getElementById('examiners').innerHTML = `${note}${examiners.length ? `<div class="examiner-grid">${cards}</div>` : empty('No examiners are available for this project yet.')}`;
+  }
+
+  function matrixValues(matrix){
+    if (!matrix) return null;
+    if (Array.isArray(matrix) && matrix.length === 2) return {tn:Number(matrix[0][0]||0), fp:Number(matrix[0][1]||0), fn:Number(matrix[1][0]||0), tp:Number(matrix[1][1]||0)};
+    return {tn:Number(matrix.true_negative||0), fp:Number(matrix.false_positive||0), fn:Number(matrix.false_negative||0), tp:Number(matrix.true_positive||0)};
+  }
+  function recommendation(){
+    const s = pageData.summary || {};
+    const metrics = pageData.metrics || {};
+    const reviewed = Number(s.reviewed_targets || 0);
+    const targets = Number(s.review_targets || 0);
+    const f1 = Number(metrics.f1_macro || 0);
+    if (reviewed < targets) return 'Continue feedback collection.';
+    if (f1 >= 0.75) return 'Performance is satisfactory. The owner may stop feedback.';
+    return 'Consider reopening the evaluation cycle for another Active Learning iteration.';
+  }
+  function renderPerformance(){
+    const metrics = pageData.metrics || {};
+    const hasMetrics = ['accuracy','precision_macro','recall_macro','f1_macro'].some(key => metrics[key] !== null && metrics[key] !== undefined);
+    const matrix = matrixValues(metrics.confusion_matrix);
+    const fpr = matrix && (matrix.fp + matrix.tn) ? matrix.fp / (matrix.fp + matrix.tn) : null;
+    const fnr = matrix && (matrix.fn + matrix.tp) ? matrix.fn / (matrix.fn + matrix.tp) : null;
+    const metricContent = hasMetrics ? `
+      <div class="metric-list">
+        ${metricCard('Accuracy', pct(metrics.accuracy))}
+        ${metricCard('Precision Macro', pct(metrics.precision_macro))}
+        ${metricCard('Recall Macro', pct(metrics.recall_macro))}
+        ${metricCard('F1 Macro', pct(metrics.f1_macro))}
+        ${metricCard('False Positive Rate', pct(fpr))}
+        ${metricCard('False Negative Rate', pct(fnr))}
+      </div>
+      ${matrix ? `<h3 style="margin:20px 0 10px">Confusion Matrix</h3><div class="matrix">
+        <div class="matrix-cell"><div class="matrix-label">True Negatives</div><div class="matrix-value">${matrix.tn}</div></div>
+        <div class="matrix-cell"><div class="matrix-label">False Positives</div><div class="matrix-value">${matrix.fp}</div></div>
+        <div class="matrix-cell"><div class="matrix-label">False Negatives</div><div class="matrix-value">${matrix.fn}</div></div>
+        <div class="matrix-cell"><div class="matrix-label">True Positives</div><div class="matrix-value">${matrix.tp}</div></div>
+      </div>
+      <h3 style="margin:20px 0 10px">Error Analysis</h3>
+      <div class="cards-grid">
+        ${metricCard('True Positives', matrix.tp)}
+        ${metricCard('True Negatives', matrix.tn)}
+        ${metricCard('False Positives', matrix.fp)}
+        ${metricCard('False Negatives', matrix.fn)}
+        ${metricCard('Total Errors', matrix.fp + matrix.fn)}
+      </div>` : ''}` : empty('Performance metrics are not available yet.');
+    const s = pageData.summary || {};
+    const learningPanel = isLogistic() ? `
+      <div class="notice notice-info" style="margin-top:18px">
+        <strong>Active Learning Evaluation</strong><br>
+        Current Version: v1<br>
+        Feedback targets: ${intValue(s.review_targets)} | Reviewed targets: ${intValue(s.reviewed_targets)} | Corrected labels: ${intValue(s.corrected_labels)}<br>
+        Average uncertainty: ${pct(s.avg_uncertainty)} | F1 score: ${pct(metrics.f1_macro)}<br>
+        Recommendation: ${recommendation()}
+      </div>` : `<div class="notice notice-info" style="margin-top:18px">Active Learning retraining and iteration comparison are currently available only for Logistic Regression. This model shows standard detection and feedback results.</div>`;
+    document.getElementById('performance').innerHTML = metricContent + learningPanel;
+  }
+
+  function renderDownloads(){
+    const buttons = [
+      ['Download Original Dataset','Original dataset download will be connected next.'],
+      ['Download PDF Report','PDF report generation will be implemented next.']
+    ];
+    document.getElementById('downloads').innerHTML = `
+      <div class="button-row" style="margin-bottom:16px">
+        <button class="action-btn action-secondary" onclick="downloadExport('csv','detection')">Download Detection Dataset CSV</button>
+        <button class="action-btn action-secondary" onclick="openJsonExport('detection')">Download Detection Dataset JSON</button>
+        <button class="action-btn action-primary" onclick="downloadExport('csv','feedback')">Download Final Enriched Dataset CSV</button>
+        <button class="action-btn action-primary" onclick="openJsonExport('feedback')">Download Final Enriched Dataset JSON</button>
+      </div>
+      <div class="download-grid">
+        ${buttons.map(([label,msg]) => `<div class="download-card"><h3>${label}</h3><p>This action is reserved for the next export/report phase.</p><button class="action-btn action-secondary action-disabled" onclick="placeholder('${msg}')">${label}</button></div>`).join('')}
+      </div>
+    `;
+  }
+
+  function renderIterations(){
+    if (!isLogistic()) return;
+    const s = pageData.summary || {};
+    document.getElementById('iterations').innerHTML = `
+      <div class="notice notice-info">Reopening will create a new evaluation cycle using examiner-corrected labels and uncertain samples to improve Logistic Regression.</div>
+      <div class="cards-grid">
+        ${metricCard('Current Iteration', 'Version 1')}
+        ${metricCard('Active Learning Strategy', 'Least Confident')}
+        ${metricCard('Selected Feedback Targets', intValue(s.review_targets))}
+        ${metricCard('Reviewed Targets', intValue(s.reviewed_targets))}
+        ${metricCard('Corrected Labels', intValue(s.corrected_labels))}
+      </div>
+      <h3 style="margin:20px 0 10px">Version Comparison</h3>
+      <div class="table-wrap"><table><thead><tr><th>Version</th><th>Model</th><th>Feedback Targets</th><th>Reviewed</th><th>Corrected</th><th>Status</th></tr></thead><tbody><tr><td>Version 1</td><td>Logistic Regression</td><td>${intValue(s.review_targets)}</td><td>${intValue(s.reviewed_targets)}</td><td>${intValue(s.corrected_labels)}</td><td>${badge('Current','badge-blue')}</td></tr></tbody></table></div>
+      <div class="button-row"><button class="action-btn action-primary action-disabled" onclick="placeholder('Reopen workflow will be implemented after final export and feedback normalization.')">Reopen Evaluation Cycle</button></div>
+    `;
+  }
+
+  function renderAll(){
+    renderHero();
+    setupTabs();
+    renderOverview();
+    renderDetection();
+    renderExaminers();
+    renderPerformance();
+    renderDownloads();
+    renderIterations();
+  }
+
+  async function loadResults(){
+    const state = document.getElementById('pageState');
+    try{
+      const response = await fetch(`/api/project/${encodeURIComponent(PROJECT_ID)}/results_summary`);
+      if (!response.ok) throw new Error('Failed to load project results.');
+      pageData = await response.json();
+      state.style.display = 'none';
+      document.getElementById('resultsPage').style.display = 'block';
+      renderAll();
+    }catch(error){
+      state.innerHTML = 'Unable to load project results. Please return to the results list and try again.';
+    }
+  }
+  loadResults();
+</script>
+</body>
+</html>
