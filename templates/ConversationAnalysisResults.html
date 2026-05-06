@@ -1,0 +1,1886 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"/>
+  <title>TrustLens | Conversation Analysis</title>
+
+  <style>
+    /* ---------- Tokens ---------- */
+:root{
+  --bg:#f6f7fb;
+  --text:#0e162b;
+  --muted:#6f7483;
+  --line:#e7e9f0;
+  --radius:18px;
+
+  --primary1:#00b8db;
+  --primary2:#155dfc;
+
+  --card:#ffffff;
+  --shadow:0 14px 40px rgba(20,22,35,.08);
+
+  --btnBlue:#155dfc;
+
+  --statA:#eef2ff;
+  --statB:#e8f7ef;
+  --statC:#fff4df;
+  --statD:#eef2ff;
+  --statE:#e8f7ef;
+  --statF:#f3efff;
+}
+
+[data-theme="dark"]{
+  --bg:#0b1020;
+  --text:#eef2ff;
+  --muted:#a6b0c2;
+  --line:#1f2a44;
+
+  --card:#111827;
+  --shadow:0 18px 55px rgba(0,0,0,.45);
+
+  --statA:rgba(21,93,252,.16);
+  --statB:rgba(0,184,219,.14);
+  --statC:rgba(0,188,125,.18);
+  --statD:rgba(21,93,252,.18);
+  --statE:rgba(0,188,125,.14);
+  --statF:rgba(21,93,252,.14);
+}
+
+/* ---------- Base ---------- */
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:"Space Grotesk",system-ui,sans-serif;
+  color:var(--text);
+  background:var(--bg);
+}
+.page{
+  min-height:100vh;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #e8f0ff 0%, transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, #fff0db 0%, transparent 60%),
+    var(--bg);
+  display:flex;
+  flex-direction:column;
+}
+[data-theme="dark"] .page{
+  background:
+    radial-gradient(1200px 500px at 50% -20%, #163a78 0%, transparent 60%),
+    linear-gradient(135deg, #071225 0%, #0b1b37 55%, #0d2747 100%);
+}
+a{color:inherit}
+
+/* ---------- Header ---------- */
+.mast{
+  position:sticky;
+  top:0;left:0;right:0;
+  height:64px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding-inline:clamp(16px,6vw,134.8px);
+  background:rgba(255,255,255,.82);
+  backdrop-filter:saturate(180%) blur(14px);
+  border-bottom:1px solid var(--line);
+  z-index:1000;
+}
+[data-theme="dark"] .mast{background:rgba(11,16,32,.86)}
+.brand{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.brand img{width:32px;height:32px;display:block}
+.brand-name{
+  font-size:20px;font-weight:600;line-height:1;
+  background:linear-gradient(90deg,var(--primary1),var(--primary2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  white-space:nowrap;
+}
+.mast-tools{
+  display:flex;align-items:center;gap:12px;font-size:14px;
+  min-width:260px;justify-content:flex-end;
+}
+.lang-btn,.theme-btn{
+  width:40px;height:40px;border-radius:12px;border:none;
+  background:rgba(0,0,0,.06);color:var(--text);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex:0 0 auto;
+}
+[data-theme="dark"] .lang-btn,
+[data-theme="dark"] .theme-btn{background:rgba(255,255,255,.08)}
+.lang-btn:hover,.theme-btn:hover{background:rgba(0,184,219,.15)}
+.theme-btn svg{width:18px;height:18px;fill:currentColor;pointer-events:none}
+
+.user-profile{position:relative;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.user-avatar{
+  width:40px;height:40px;border-radius:50%;
+  background:linear-gradient(135deg,var(--primary1),var(--primary2));
+  display:flex;align-items:center;justify-content:center;color:#fff;
+  font-size:16px;font-weight:600;flex:0 0 auto;
+}
+.user-info{display:flex;flex-direction:column;gap:2px;line-height:1.1}
+.user-info h3{margin:0;font-size:14px;font-weight:600;color:var(--text);white-space:nowrap}
+.user-info p{margin:0;font-size:12px;color:var(--muted);text-transform:capitalize;white-space:nowrap}
+
+.user-dropdown{
+  position:absolute;top:calc(100% + 10px);right:0;width:220px;
+  background:var(--bg);border:.8px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:0 10px 15px -3px rgba(0,0,0,.08);
+  display:none;flex-direction:column;z-index:1010;overflow:hidden;
+}
+.user-dropdown.show{display:flex}
+.dropdown-item{display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:14px;color:var(--text);text-decoration:none}
+.dropdown-item:hover{background:rgba(0,184,219,.08)}
+.dropdown-divider{height:1px;background:var(--line);margin:4px 0}
+
+/* ---------- Layout ---------- */
+.content-wrapper{flex:1;display:flex;justify-content:center;padding:24px clamp(16px,6vw,134.8px) 40px}
+.card{
+  width:100%;max-width:1200px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.card-inner{padding:24px 24px 28px}
+
+/* ---------- Top bar + Title ---------- */
+.top-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0 18px;border-bottom:.8px solid var(--line);margin-bottom:18px}
+.back-btn{display:inline-flex;align-items:center;gap:8px;color:var(--text);text-decoration:none;padding:6px 10px;border-radius:10px;transition:background .18s ease;font-size:14px}
+.back-btn:hover{background:rgba(0,0,0,.04)}
+[data-theme="dark"] .back-btn:hover{background:rgba(255,255,255,.04)}
+
+.page-title{display:flex;flex-direction:column;gap:10px;margin:10px 0 18px}
+.title-row{display:flex;align-items:center;gap:12px}
+.badge-icon{
+  width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  background:rgba(21,93,252,.08);border:1px solid rgba(21,93,252,.18);
+  box-shadow:0 10px 15px -10px rgba(21,93,252,.35);flex:0 0 auto;
+}
+.page-title h1{margin:0;font-size:34px;letter-spacing:-.4px;color:#0f172b;line-height:1.05}
+[data-theme="dark"] .page-title h1{color:var(--text)}
+.subtitle{margin:0;font-size:14px;color:var(--muted);line-height:1.45}
+.subtitle b{color:var(--primary2)}
+
+/* ---------- States ---------- */
+.state{display:none}
+.state.active{display:block}
+
+/* ---------- Ready Stage ---------- */
+.center-stage{
+  border-radius:18px;background:var(--card);
+  border:1px solid var(--line);box-shadow:var(--shadow);
+  padding:46px 24px;display:flex;align-items:center;justify-content:center;min-height:320px;
+}
+[data-theme="dark"] .center-stage{background:rgba(255,255,255,.03)}
+.center-box{width:min(620px,100%);text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
+.center-box h2{margin:0;font-size:18px;font-weight:800}
+.center-box p{margin:0;color:var(--muted);font-size:12px;line-height:1.6;max-width:560px}
+.stage-steps{width:min(560px,100%);display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px}
+.stage-step{
+  border:1px solid var(--line);
+  background:#f6f8fc;
+  color:var(--muted);
+  border-radius:12px;
+  padding:10px 12px;
+  font-size:12px;
+  font-weight:900;
+  text-align:left;
+}
+.stage-step.active{background:#eef3ff;border-color:#cdd9ff;color:#155dfc}
+[data-theme="dark"] .stage-step{background:#101d36;border-color:#2a3f66;color:#aabbdc}
+[data-theme="dark"] .stage-step.active{background:#18335d;color:#cfe0ff}
+.stage-kicker{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:900}
+
+.ready-controls{width:100%;display:flex;justify-content:center}
+.field{
+  width:min(520px,100%);text-align:left;border:.8px solid var(--line);
+  border-radius:14px;background:rgba(255,255,255,.72);padding:12px 12px;
+}
+[data-theme="dark"] .field{background:rgba(255,255,255,.03)}
+.field-label{display:block;font-weight:900;font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.help-text{margin-top:8px;font-size:12px;color:var(--muted);line-height:1.5}
+
+.notice{
+  width:min(520px,100%);
+  margin-top:6px;border:.8px dashed var(--line);border-radius:14px;
+  padding:10px 12px;font-size:12px;color:var(--muted);text-align:left;
+}
+
+/* ---------- Buttons ---------- */
+.primary-btn{
+  margin-top:8px;border:none;background:var(--btnBlue);color:#fff;border-radius:10px;
+  padding:10px 14px;display:inline-flex;align-items:center;gap:10px;cursor:pointer;
+  font-weight:800;box-shadow:0 10px 15px -8px rgba(21,93,252,.45);
+}
+.primary-btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+.ghost-btn{
+  border:.8px solid var(--line);background:transparent;color:var(--text);
+  padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:900;
+}
+.ghost-btn:hover{background:rgba(0,0,0,.04)}
+[data-theme="dark"] .ghost-btn:hover{background:rgba(255,255,255,.04)}
+
+/* ---------- Processing ---------- */
+.progress-wrap{width:min(520px,100%);margin-top:6px}
+.progress-bar{height:10px;border-radius:999px;background:rgba(21,93,252,.14);overflow:hidden}
+.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#2b7fff,#155dfc);border-radius:999px;transition:width .25s ease}
+.progress-meta{margin-top:10px;display:flex;flex-direction:column;gap:4px;align-items:center;color:var(--muted);font-size:12px}
+
+/* ---------- Results Info Bar ---------- */
+.info-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border:1px solid var(--line);border-radius:18px;background:var(--card);
+  padding:12px 14px;margin:8px 0 14px;
+}
+[data-theme="dark"] .info-bar{background:rgba(255,255,255,.03)}
+.info-title{font-weight:900}
+.info-sub{font-size:12px;color:var(--muted)}
+.info-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+/* ---------- Export Menu ---------- */
+.export-wrap{position:relative}
+.export-main{
+  border:none;background:rgba(21,93,252,.10);color:#155dfc;
+  padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:900;
+  display:inline-flex;gap:8px;align-items:center;
+}
+.export-main:hover{background:rgba(21,93,252,.16)}
+.export-menu{
+  position:absolute;top:calc(100% + 8px);right:0;background:var(--bg);
+  border:.8px solid var(--line);border-radius:12px;box-shadow:0 10px 20px rgba(0,0,0,.12);
+  overflow:hidden;display:none;min-width:140px;z-index:50;
+}
+.export-menu.show{display:block}
+.export-item{width:100%;text-align:left;border:none;background:transparent;padding:10px 12px;cursor:pointer;font-weight:900;color:var(--text)}
+.export-item:hover{background:rgba(0,184,219,.10)}
+
+/* ---------- Select / Inputs ---------- */
+.select{
+  width:100%;border:.8px solid var(--line);border-radius:12px;padding:10px 10px;
+  background:rgba(255,255,255,.55);outline:none;font-weight:800;
+}
+[data-theme="dark"] .select{background:rgba(255,255,255,.03);color:var(--text)}
+.select-sm{min-width:170px}
+
+/* ---------- Advanced Panel ---------- */
+.advanced-panel{
+  border:.8px solid var(--line);
+  border-radius:14px;
+  background:rgba(255,255,255,.70);
+  padding:14px;
+  margin:10px 0 14px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+[data-theme="dark"] .advanced-panel{background:rgba(255,255,255,.03)}
+.panel-block{
+  border:.8px solid var(--line);
+  border-radius:14px;
+  background:rgba(255,255,255,.55);
+  padding:12px;
+}
+[data-theme="dark"] .panel-block{background:rgba(255,255,255,.03)}
+.panel-block-head{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.panel-block-title{font-weight:900}
+.panel-block-sub{font-size:12px;color:var(--muted)}
+
+.insights-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.insight-tile{
+  border:.8px solid var(--line);
+  border-radius:12px;
+  padding:10px;
+  background:rgba(21,93,252,.06);
+}
+[data-theme="dark"] .insight-tile{background:rgba(255,255,255,.06)}
+.insight-tile span{display:block;font-size:12px;color:var(--muted);font-weight:900}
+.insight-tile b{display:block;font-size:18px;margin-top:6px}
+
+.meta-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.meta-chip{
+  display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;
+  border:.8px solid var(--line);background:rgba(255,255,255,.55);
+  font-size:12px;color:var(--muted);
+}
+[data-theme="dark"] .meta-chip{background:rgba(255,255,255,.03)}
+.meta-chip b{color:var(--text);font-weight:900}
+
+/* ---------- Stats Cards ---------- */
+.stats{display:grid;gap:14px;margin-top:8px;margin-bottom:12px}
+.stats-6{grid-template-columns:repeat(3,minmax(0,1fr))}
+.stat{
+  border-radius:14px;border:1px solid #e9ecf5;
+  padding:16px;min-height:98px;display:flex;flex-direction:column;gap:10px;
+  background:rgba(255,255,255,.55);position:relative;overflow:hidden;
+}
+[data-theme="dark"] .stat{background:rgba(255,255,255,.03)}
+.stat:before{
+  content:"";position:absolute;inset:-40% -30% auto auto;width:220px;height:220px;border-radius:999px;opacity:.28;transform:rotate(15deg);
+}
+.stat .label{font-size:12px;letter-spacing:.6px;text-transform:uppercase;font-weight:900;color:var(--muted)}
+.stat .value{font-size:28px;font-weight:900;margin-top:auto}
+
+.stat.stat-a{background:linear-gradient(180deg,var(--statA),rgba(255,255,255,.55));border-left:4px solid rgba(21,93,252,.85)}
+.stat.stat-a:before{background:radial-gradient(circle at 30% 30%, rgba(21,93,252,.55), transparent 60%)}
+
+.stat.stat-b{background:linear-gradient(180deg,var(--statB),rgba(255,255,255,.55));border-left:4px solid rgba(0,184,219,.85)}
+.stat.stat-b:before{background:radial-gradient(circle at 30% 30%, rgba(0,184,219,.55), transparent 60%)}
+
+.stat.stat-c{background:linear-gradient(180deg,var(--statC),rgba(255,255,255,.55));border-left:4px solid rgba(0,188,125,.95)}
+.stat.stat-c:before{background:radial-gradient(circle at 30% 30%, rgba(0,188,125,.55), transparent 60%)}
+
+.stat.stat-d{background:linear-gradient(180deg,var(--statD),rgba(255,255,255,.55));border-left:4px solid rgba(21,93,252,.95)}
+.stat.stat-d:before{background:radial-gradient(circle at 30% 30%, rgba(21,93,252,.55), transparent 60%)}
+
+.stat.stat-e{background:linear-gradient(180deg,var(--statE),rgba(255,255,255,.55));border-left:4px solid rgba(0,188,125,.70)}
+.stat.stat-e:before{background:radial-gradient(circle at 30% 30%, rgba(0,188,125,.45), transparent 60%)}
+
+.stat.stat-f{background:linear-gradient(180deg,var(--statF),rgba(255,255,255,.55));border-left:4px solid rgba(21,93,252,.70)}
+.stat.stat-f:before{background:radial-gradient(circle at 30% 30%, rgba(21,93,252,.45), transparent 60%)}
+
+/* ✅ Avg line outside cards */
+.sub-metrics{
+  margin:0 0 14px;
+  padding:10px 12px;
+  border:.8px solid var(--line);
+  border-radius:12px;
+  background:rgba(255,255,255,.70);
+  font-size:12px;
+  color:var(--muted);
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+}
+[data-theme="dark"] .sub-metrics{background:rgba(255,255,255,.03)}
+.sub-metrics b{color:var(--text)}
+.sub-metrics .dot{opacity:.6}
+
+/* ---------- Evaluation ---------- */
+.eval-card{
+  border:.8px solid var(--line);border-radius:14px;background:rgba(255,255,255,.70);
+  padding:12px 14px;margin:10px 0 14px;
+}
+[data-theme="dark"] .eval-card{background:rgba(255,255,255,.03)}
+.eval-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.eval-title{font-weight:900}
+.eval-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.eval-item{border:.8px solid var(--line);border-radius:12px;padding:10px 10px;background:rgba(255,255,255,.55)}
+[data-theme="dark"] .eval-item{background:rgba(255,255,255,.03)}
+.eval-item span{display:block;font-size:12px;color:var(--muted);font-weight:900}
+.eval-item b{font-size:16px}
+
+.eval-empty{padding:10px 12px;color:var(--muted);border:.8px dashed var(--line);border-radius:14px;margin-bottom:14px}
+
+/* ---------- Grid Panels ---------- */
+.grid{display:grid;grid-template-columns:360px 1fr;gap:18px;align-items:start}
+.panel{border-radius:18px;background:var(--card);border:1px solid var(--line);overflow:hidden;box-shadow:var(--shadow)}
+[data-theme="dark"] .panel{background:rgba(255,255,255,.03)}
+.panel-header{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 14px;border-bottom:.8px solid var(--line);background:rgba(236,236,240,.20);
+}
+[data-theme="dark"] .panel-header{background:rgba(255,255,255,.02)}
+.panel-title{margin:0;font-size:14px;font-weight:900}
+
+/* Distribution switch */
+.dist-switch{display:flex;gap:8px;align-items:center}
+.switch-btn{
+  border:.8px solid var(--line);background:transparent;color:var(--text);
+  padding:7px 10px;border-radius:999px;cursor:pointer;font-weight:900;font-size:12px;
+}
+.switch-btn.active{background:rgba(21,93,252,.12);border-color:rgba(21,93,252,.25);color:#155dfc}
+
+/* Mini chart */
+.chart-box{padding:14px;height:320px;display:flex;align-items:center;justify-content:center}
+.mini-chart{
+  width:100%;height:100%;border-radius:12px;background:rgba(0,0,0,.04);
+  padding:14px 12px;display:flex;flex-direction:column;justify-content:space-between;gap:10px;
+}
+[data-theme="dark"] .mini-chart{background:rgba(255,255,255,.06)}
+.bars{height:190px;display:flex;align-items:flex-end;justify-content:center;gap:14px}
+.bar{width:70px;border-radius:14px;position:relative;display:flex;align-items:flex-start;justify-content:center;padding-top:8px;box-shadow:0 10px 18px rgba(0,0,0,.08);min-height:28px;height:var(--h,0%)}
+.bar.human{background:linear-gradient(180deg,rgba(0,188,125,.95),rgba(0,188,125,.55))}
+.bar.ai{background:linear-gradient(180deg,rgba(21,93,252,.95),rgba(21,93,252,.55))}
+.bar.mixed{background:linear-gradient(180deg,rgba(173,70,255,.95),rgba(173,70,255,.55))}
+.bar .val{font-size:12px;font-weight:900;color:#fff;background:rgba(0,0,0,.18);padding:2px 10px;border-radius:999px}
+
+.bar-labels{display:flex;justify-content:center;gap:58px;color:var(--muted);font-size:12px;font-weight:900}
+.mini-meta{text-align:center;color:var(--muted);font-size:12px}
+.mini-hint{margin-left:8px;opacity:.9}
+
+.insight{
+  text-align:center;font-size:12px;color:var(--text);
+  background:rgba(21,93,252,.08);border:.8px solid rgba(21,93,252,.20);
+  padding:8px 10px;border-radius:12px;
+}
+[data-theme="dark"] .insight{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.10)}
+
+.insight-mini{
+  text-align:center;
+  font-size:12px;
+  color:var(--muted);
+  border:.8px dashed var(--line);
+  padding:8px 10px;
+  border-radius:12px;
+  background:transparent;
+}
+
+/* ---------- Table tools ---------- */
+/* ✅ Row for Search + Filter + Sort */
+.table-tools{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:flex-end;
+  flex-wrap:nowrap;
+}
+
+.table-tools .search{
+  flex: 1 1 260px;
+  min-width: 240px;
+}
+
+.table-tools .select{
+  width:auto !important;   /* مهم: يلغي width:100% */
+  min-width: 180px;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 780px){
+  .table-tools{ flex-wrap:wrap; }
+  .table-tools .search{ flex:1 1 100%; }
+}
+
+.search{
+  border:.8px solid var(--line);border-radius:12px;padding:9px 10px;
+  min-width:220px;background:rgba(255,255,255,.55);outline:none;
+}
+[data-theme="dark"] .search{background:rgba(255,255,255,.03);color:var(--text)}
+
+/* ---------- Table ---------- */
+.table-wrap{overflow-y:auto;overflow-x: hidden;}
+.table-wrap.table-max{max-height:520px;} /* ✅ vertical scroll after limit */
+
+.fixed-table{width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed;}
+.fixed-table thead th{
+  text-align:left;
+  padding:10px 12px;
+  font-weight:900;
+  border-bottom:.8px solid var(--line);
+  white-space:normal;   /* ✅ يسمح باللف */
+  line-height:1.15;
+  font-size:12px;       /* ✅ يقلل الزحمة */
+}
+
+.fixed-table tbody td{
+  padding:12px 14px;border-bottom:.8px solid rgba(0,0,0,.06);vertical-align:middle;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+[data-theme="dark"] .fixed-table tbody td{border-bottom:.8px solid rgba(255,255,255,.08)}
+
+.col-id{width:110px;}
+.col-num{width:78px;}
+.col-label{width:110px;}
+.col-action{width:80px;}
+
+
+.pill{
+  display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;
+  font-size:12px;border:.8px solid;white-space:nowrap;font-weight:900;
+}
+.pill.ai{background:rgba(21,93,252,.08);border-color:rgba(21,93,252,.22);color:#1447e6}
+.pill.human{background:rgba(0,188,125,.10);border-color:rgba(0,188,125,.28);color:#007a55}
+.pill.mixed{background:rgba(173,70,255,.10);border-color:rgba(173,70,255,.25);color:#6b21a8}
+
+.btn-link{
+  border:none;background:rgba(21,93,252,.08);color:#155dfc;
+  padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:900;
+}
+.btn-link:hover{background:rgba(21,93,252,.14)}
+[data-theme="dark"] .btn-link{background:rgba(255,255,255,.08);color:var(--text)}
+
+/* Expand row */
+.expand-row td{background:rgba(255,255,255,.65)}
+[data-theme="dark"] .expand-row td{background:rgba(255,255,255,.03)}
+.expand-box{
+  border-radius:14px;border:.8px solid var(--line);
+  background:rgba(255,255,255,.72);padding:14px 14px 12px;
+}
+[data-theme="dark"] .expand-box{background:rgba(255,255,255,.03)}
+.expand-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap}
+.expand-head .title{font-weight:900;font-size:14px;color:var(--text)}
+.expand-head .sub{font-size:12px;color:var(--muted)}
+
+/* Turns table */
+.turns-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.turns-table th{padding:10px 12px;border-bottom:.8px solid var(--line);text-align:left;white-space:nowrap}
+.turns-table td{
+  padding:10px 12px;border-bottom:.8px solid rgba(0,0,0,.06);vertical-align:top;
+  white-space:normal; /* ✅ allow wrapping for turn text */
+}
+[data-theme="dark"] .turns-table td{border-bottom:.8px solid rgba(255,255,255,.08)}
+
+/* ✅ Dialogue details horizontal scroll (only inside details) */
+.turns-scroll{
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+}
+
+/* خلي الجدول ياخذ عرض أكبر عشان يظهر سكرول أفقي عند الحاجة */
+.turns-table{
+  min-width: 980px;
+}
+
+/* ✅ Filter bar inside details */
+.turns-tools{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+
+.turns-tools .select{
+  width:auto !important;
+  min-width:220px;
+}
+
+
+/* Prev (Show/Hide) */
+.prev-btn{
+  border:none;
+  background:rgba(21,93,252,.10);
+  color:#155dfc;
+  padding:6px 10px;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:900;
+}
+.prev-btn:hover{background:rgba(21,93,252,.16)}
+
+.prev-row td{background:rgba(21,93,252,.04)}
+[data-theme="dark"] .prev-row td{background:rgba(255,255,255,.03)}
+
+.prev-box{
+  border:.8px solid var(--line);
+  border-radius:12px;
+  padding:10px 12px;
+  background:rgba(255,255,255,.70);
+  color:var(--text);
+  line-height:1.5;
+}
+[data-theme="dark"] .prev-box{background:rgba(255,255,255,.03)}
+
+
+/* ---------- Modal ---------- */
+.modal{position:fixed;inset:0;display:none;z-index:2000}
+.modal.show{display:block}
+.modal-card{
+  position:relative;max-width:520px;margin:8vh auto 0;background:var(--bg);
+  border:.8px solid var(--line);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.25);padding:14px;
+}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.modal-title{font-weight:900}
+.modal-x{border:none;background:rgba(0,0,0,.06);border-radius:10px;padding:8px 10px;cursor:pointer}
+[data-theme="dark"] .modal-x{background:rgba(255,255,255,.06)}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35)}
+
+.cm-wrap{padding:10px}
+.cm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cm-cell{border:.8px solid var(--line);border-radius:12px;padding:12px;background:rgba(21,93,252,.06)}
+.cm-cell b{display:block;font-size:18px}
+.cm-cell span{color:var(--muted);font-weight:900;font-size:12px}
+
+/* ---------- Toast ---------- */
+.toast{
+  position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  background:var(--bg);border:.8px solid var(--line);border-radius:999px;
+  padding:10px 14px;box-shadow:0 10px 20px rgba(0,0,0,.15);
+  display:none;font-weight:900;
+}
+.toast.show{display:block}
+
+/* ---------- Responsive ---------- */
+@media (max-width:980px){
+  .stats-6{grid-template-columns:1fr}
+  .grid{grid-template-columns:1fr}
+  .page-title h1{font-size:30px}
+  .mast-tools{min-width:auto}
+  .user-info{display:none}
+  .bar{width:86px}
+  .bar-labels{gap:72px}
+  .insights-grid{grid-template-columns:1fr}
+}
+  </style>
+</head>
+
+<body>
+  <div class="page">
+
+    <!-- HEADER -->
+    <header class="mast">
+      <div class="brand" onclick="window.location.href='/'" aria-label="Go to home">
+        <!-- ✅ Fix 404 path -->
+        <img src="/static/images/icon_logo.svg" alt="TrustLens logo">
+        <div class="brand-name">TrustLens</div>
+      </div>
+
+      <div class="mast-tools">
+        <button class="lang-btn" id="langBtn" title="Switch Language" type="button">EN</button>
+
+        <button class="theme-btn" id="themeBtn" title="Toggle Theme" type="button">
+          <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"></svg>
+          <svg class="moon" viewBox="0 0 24 24" style="display:none" aria-hidden="true"></svg>
+        </button>
+
+        <div class="user-profile" id="userProfile" aria-label="User menu">
+          <div class="user-avatar">{{ user_name[0]|upper }}</div>
+          <div class="user-info">
+            <h3>{{ user_name }}</h3>
+            <p>examiner</p>
+          </div>
+
+          <div class="user-dropdown" id="userDropdown">
+            <a href="/examinerdashboard" class="dropdown-item">Home</a>
+            <div class="dropdown-divider"></div>
+            <a href="/profile" class="dropdown-item">Profile</a>
+            <a href="/profile" class="dropdown-item">Settings</a>
+            <div class="dropdown-divider"></div>
+            <a href="/logout" class="dropdown-item">Logout</a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <div class="content-wrapper">
+      <section class="card">
+        <div class="card-inner">
+
+          <div class="top-bar">
+            <a class="back-btn" href="{{ url_for('project_details_examiner', project_id=project_id) }}">
+              ← Back to Project
+            </a>
+          </div>
+
+          <div class="page-title">
+            <div class="title-row">
+              <div class="badge-icon"></div>
+              <h1>Conversation Analysis</h1>
+            </div>
+
+            <p class="subtitle" id="subtitleText">
+              Select a model, then run detection.
+            </p>
+          </div>
+
+          <!-- STATE 1: READY -->
+          <div class="state active" id="stateReady">
+            <div class="center-stage">
+              <div class="center-box">
+                <div class="stage-steps">
+                  <div class="stage-step active">1. Ready</div>
+                  <div class="stage-step">2. Processing</div>
+                  <div class="stage-step">3. Results</div>
+                </div>
+
+                <div class="stage-kicker">Uploaded conversation detection</div>
+                <h2>Ready to analyze uploaded conversations</h2>
+                <p>Select a detector to evaluate the uploaded CSV conversation turns and generate dialogue-level results.</p>
+
+                <div class="ready-controls" aria-label="Model selection">
+                  <div class="field">
+                    <label class="field-label" for="modelSelect">Model</label>
+                    <select class="select" id="modelSelect" aria-label="Select model">
+                      <option value="tfidf_logreg" selected>
+                        Baseline — TF-IDF + Logistic Regression (LR)
+                      </option>
+                      <option value="rnn">
+                        Baseline — RNN
+                      </option>
+                      <option value="sota_model">
+                        State-of-the-Art (SOTA) — LLM-based (Coming soon)
+                      </option>
+                    </select>
+
+                    <div class="help-text" id="modelDesc">
+                      Fast classical baseline for turn-level detection.
+                    </div>
+                  </div>
+                </div>
+
+                <button class="primary-btn" id="startBtn" type="button">
+                  Run Detection
+                </button>
+
+                <!-- ✅ Correct ID -->
+                <div class="notice" id="comingSoonNotice" style="display:none;" aria-live="polite">
+                  This model is coming soon. Please select the baseline to run detection.
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+          <!-- STATE 2: PROCESSING -->
+          <div class="state" id="stateProcessing">
+            <div class="center-stage">
+              <div class="center-box">
+                <div class="stage-steps">
+                  <div class="stage-step active">1. Ready</div>
+                  <div class="stage-step active">2. Processing</div>
+                  <div class="stage-step">3. Results</div>
+                </div>
+                <div class="stage-kicker">Uploaded conversation detection</div>
+                <h2>Processing uploaded dataset</h2>
+                <p>The selected model is reading turns, building previous-turn context, and preparing the analysis dashboard.</p>
+                <div class="progress-wrap">
+                  <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                  </div>
+                  <div class="progress-meta">
+                    <div>Processing Dataset...</div>
+                    <div><span id="progressPct">0%</span></div>
+                  </div>
+                  <div id="apiStatus"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STATE 3: RESULTS -->
+          <div class="state" id="stateResults">
+
+            <div class="info-bar">
+              <div class="info-left">
+                <div class="info-title">Analysis Summary</div>
+                <div class="info-sub" id="infoSub">—</div>
+              </div>
+
+              <div class="info-right">
+                <div class="export-wrap">
+                  <button class="export-main" id="exportMainBtn" type="button">
+                    Download <span class="caret">▾</span>
+                  </button>
+                  <div class="export-menu" id="exportMenu">
+                    <button class="export-item" id="exportJsonBtn" type="button">JSON</button>
+                    <button class="export-item" id="exportCsvBtn" type="button">CSV</button>
+                  </div>
+                </div>
+
+                <button class="ghost-btn" id="advToggleBtn" type="button">Advanced</button>
+
+                <button class="ghost-btn" id="submitBtn" type="button" style="display:none;">
+                  Submit Results
+                </button>
+              </div>
+            </div>
+
+            <!-- ✅ Advanced = Insights + Diagnostics -->
+            <div class="advanced-panel" id="advancedPanel" style="display:none;">
+              <div class="panel-block">
+                <div class="panel-block-head">
+                  <div class="panel-block-title">Insights</div>
+                  <div class="panel-block-sub">Deeper summary to support analysis (no threshold controls).</div>
+                </div>
+
+                <div class="insights-grid">
+                  <div class="insight-tile">
+                    <span>Avg Turns / Dialogue</span>
+                    <b id="avgTurnsVal">—</b>
+                  </div>
+                  <div class="insight-tile">
+                    <span>Highest AI% Dialogue</span>
+                    <b id="topAiDialogueVal">—</b>
+                  </div>
+                  <div class="insight-tile">
+                    <span>Mixed Dialogues</span>
+                    <b id="mixedCountVal">—</b>
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel-block">
+                <div class="panel-block-head">
+                  <div class="panel-block-title">Run Diagnostics</div>
+                  <div class="panel-block-sub">Metadata for traceability.</div>
+                </div>
+
+                <div class="meta-row" id="advancedChips">
+                  <!-- injected by JS -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Stats cards -->
+            <div class="stats stats-6">
+              <div class="stat stat-a">
+                <div class="label">Total Dialogues</div>
+                <div class="value" id="totalDialogues">0</div>
+              </div>
+
+              <div class="stat stat-b">
+                <div class="label">Total Turns</div>
+                <div class="value" id="totalTurns">0</div>
+              </div>
+
+              <div class="stat stat-c">
+                <div class="label">Human Turns</div>
+                <div class="value" id="humanTurns">0</div>
+              </div>
+
+              <div class="stat stat-d">
+                <div class="label">Machine Turns</div>
+                <div class="value" id="aiTurns">0</div>
+              </div>
+
+              <div class="stat stat-e">
+                <div class="label">Human %</div>
+                <div class="value" id="humanPct">—</div>
+              </div>
+
+              <div class="stat stat-f">
+                <div class="label">Machine %</div>
+                <div class="value" id="aiPct">—</div>
+              </div>
+            </div>
+
+            <!-- ✅ Small line outside cards -->
+            <div class="sub-metrics" id="subMetricsLine">
+              Avg Turns/Dialogue: <b id="avgTurnsInline">—</b>
+              <span class="dot">•</span>
+              AI-heavy Dialogues: <b id="aiHeavyInline">—</b>
+              <span class="dot">•</span>
+              Mixed: <b id="mixedInline">—</b>
+              <span class="dot">•</span>
+              Human: <b id="humanInline">—</b>
+            </div>
+
+            <!-- Evaluation -->
+            <div class="eval-card" id="evalCard" style="display:none;">
+              <div class="eval-head">
+                <div class="eval-title">Evaluation Metrics</div>
+                <button class="ghost-btn" id="cmBtn" type="button">Confusion Matrix</button>
+              </div>
+
+              <div class="eval-grid">
+                <div class="eval-item"><span>Accuracy</span><b id="accVal">—</b></div>
+                <div class="eval-item"><span>F1 Macro</span><b id="f1Val">—</b></div>
+                <div class="eval-item"><span>Precision Macro</span><b id="precVal">—</b></div>
+                <div class="eval-item"><span>Recall Macro</span><b id="recVal">—</b></div>
+              </div>
+            </div>
+
+            <div class="eval-empty" id="evalEmpty" style="display:none;">
+              Ground truth not provided — metrics are hidden.
+            </div>
+
+            <div class="grid">
+
+              <!-- Distribution -->
+              <div class="panel">
+                <div class="panel-header">
+                  <p class="panel-title">Distribution</p>
+
+                  <div class="dist-switch">
+                    <button class="switch-btn active" data-dist="turns" type="button">Turn-level</button>
+                    <button class="switch-btn" data-dist="dialogues" type="button">Dialogue-level</button>
+                  </div>
+                </div>
+
+                <div class="chart-box">
+                  <div class="mini-chart">
+                    <div class="bars">
+                      <div class="bar human" id="barA"><span class="val" id="valA">0</span></div>
+                      <div class="bar ai" id="barB"><span class="val" id="valB">0</span></div>
+                      <div class="bar mixed" id="barC" style="display:none;"><span class="val" id="valC">0</span></div>
+                    </div>
+
+                    <div class="bar-labels" id="distLabels">
+                      <span id="labelA">Human</span>
+                      <span id="labelB">Machine</span>
+                      <span id="labelC" style="display:none;">Mixed</span>
+                    </div>
+
+                    <div class="mini-meta">
+                      Total: <b id="distTotal">0</b>
+                      <span class="mini-hint" id="distHint">Turns distribution</span>
+                    </div>
+
+                    <!-- ✅ Not empty anymore -->
+                    <div class="insight" id="distInsight">—</div>
+                    <div class="insight-mini" id="distInsightMini">—</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Dialogues -->
+              <div class="panel">
+                <div class="panel-header">
+                  <p class="panel-title">Dialogues</p>
+
+                  <!-- ✅ one horizontal row -->
+                  <div class="table-tools">
+                    <input class="search" id="searchBox" type="search" placeholder="Search Dialogue ID..." />
+                    <select class="select select-sm" id="labelFilter">
+                      <option value="all">All labels</option>
+                      <option value="human">Human</option>
+                      <option value="mixed">Mixed</option>
+                      <option value="ai-heavy">AI-heavy</option>
+                    </select>
+                    <select class="select select-sm" id="sortBy">
+                      <option value="ai_desc">Sort: AI% (desc)</option>
+                      <option value="turns_desc">Sort: #Turns (desc)</option>
+                      <option value="id_asc">Sort: ID (asc)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- ✅ vertical scroll after max height -->
+                <div class="table-wrap table-max">
+                  <table class="fixed-table">
+                    <thead>
+                      <tr>
+                        <th class="col-id">Dialogue ID</th>
+                        <th class="col-num">#Turns</th>
+                        <th class="col-num">#Human</th>
+                        <th class="col-num">#Machine</th>
+                        <th class="col-num">Machine %</th>
+                        <th class="col-num">Human %</th>
+                        <th class="col-label">Final Label</th>
+                        <th class="col-action" style="text-align:right;">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dialoguesTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div><!-- /grid -->
+          </div><!-- /stateResults -->
+
+        </div><!-- /card-inner -->
+      </section>
+    </div><!-- /content-wrapper -->
+  </div><!-- /page -->
+
+  <!-- Confusion Matrix Modal -->
+  <div class="modal" id="cmModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <div class="modal-title">Confusion Matrix</div>
+        <button class="modal-x" id="cmCloseBtn" type="button">✕</button>
+      </div>
+      <div class="cm-wrap" id="cmWrap"></div>
+    </div>
+    <div class="modal-backdrop" id="cmBackdrop"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    (function(){
+  // ---------- Helpers ----------
+  const $ = (id)=>document.getElementById(id);
+  const escapeHtml = (str)=>String(str??"")
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+
+  const n = (v, d=0)=>{
+    const x = Number(v);
+    return Number.isFinite(x) ? x : d;
+  };
+
+  function toast(msg){
+    const t = $("toast");
+    if(!t) return;
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(()=>t.classList.remove("show"), 2400);
+  }
+
+  function formatISO(iso){
+    if(!iso) return "—";
+    try{
+      const d = new Date(iso);
+      if(Number.isNaN(d.getTime())) return String(iso);
+      return d.toLocaleString();
+    }catch{
+      return String(iso);
+    }
+  }
+
+  function showState(targetId){
+    ["stateReady","stateProcessing","stateResults"].forEach(id=>$(id)?.classList.remove("active"));
+    $(targetId)?.classList.add("active");
+
+    const submitBtn = $("submitBtn");
+    if(submitBtn){
+      submitBtn.style.display = (targetId === "stateResults") ? "" : "none";
+    }
+  }
+
+  function setProgress(p){
+    const pct = Math.max(0, Math.min(100, Math.round(p)));
+    $("progressFill").style.width = pct + "%";
+    $("progressPct").textContent = pct + "%";
+  }
+
+  // ---------- Label helpers ----------
+  function pillFinalLabel(lbl){
+    const s = String(lbl||"").toLowerCase();
+    if(s.includes("ai-heavy") || s.includes("aiheavy") || s.includes("ai_heavy")) return `<span class="pill ai">AI-heavy</span>`;
+    if(s.includes("mixed")) return `<span class="pill mixed">Mixed</span>`;
+    return `<span class="pill human">Human</span>`;
+  }
+
+  function getFinalLabelKey(lbl){
+    const s = String(lbl||"").toLowerCase();
+    if(s.includes("ai-heavy") || s.includes("aiheavy") || s.includes("ai_heavy")) return "ai-heavy";
+    if(s.includes("mixed")) return "mixed";
+    return "human";
+  }
+
+  // ---------- Top UI bindings ----------
+  const userProfile = $("userProfile");
+  const userDropdown = $("userDropdown");
+  userProfile?.addEventListener("click",(e)=>{ e.stopPropagation(); userDropdown.classList.toggle("show"); });
+  window.addEventListener("click",()=> userDropdown?.classList.remove("show"));
+
+  const themeBtn = $("themeBtn");
+  const sunIcon = document.querySelector(".theme-btn .sun");
+  const moonIcon = document.querySelector(".theme-btn .moon");
+  themeBtn?.addEventListener("click",()=>{
+    const html = document.documentElement;
+    const isDark = html.getAttribute("data-theme")==="dark";
+    html.setAttribute("data-theme", isDark ? "light":"dark");
+    if(isDark){ if(sunIcon) sunIcon.style.display=""; if(moonIcon) moonIcon.style.display="none"; }
+    else{ if(sunIcon) sunIcon.style.display="none"; if(moonIcon) moonIcon.style.display=""; }
+  });
+
+  // Export menu
+  const exportMainBtn = $("exportMainBtn");
+  const exportMenu = $("exportMenu");
+  exportMainBtn?.addEventListener("click",(e)=>{
+    e.stopPropagation();
+    exportMenu?.classList.toggle("show");
+  });
+  window.addEventListener("click",()=> exportMenu?.classList.remove("show"));
+
+  // Advanced toggle (panel)
+  const advToggleBtn = $("advToggleBtn");
+  const advancedPanel = $("advancedPanel");
+  advToggleBtn?.addEventListener("click",()=>{
+    const shown = advancedPanel.style.display !== "none";
+    advancedPanel.style.display = shown ? "none" : "flex";
+  });
+
+  // Confusion Matrix modal
+  const cmModal = $("cmModal");
+  const cmBackdrop = $("cmBackdrop");
+  const cmCloseBtn = $("cmCloseBtn");
+  const cmBtn = $("cmBtn");
+  function openCM(){ cmModal?.classList.add("show"); cmModal?.setAttribute("aria-hidden","false"); }
+  function closeCM(){ cmModal?.classList.remove("show"); cmModal?.setAttribute("aria-hidden","true"); }
+  cmBackdrop?.addEventListener("click", closeCM);
+  cmCloseBtn?.addEventListener("click", closeCM);
+  cmBtn?.addEventListener("click", openCM);
+
+  // Distribution toggle
+  let currentDistMode = "turns"; // "turns" | "dialogues"
+  document.querySelectorAll(".switch-btn[data-dist]").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      document.querySelectorAll(".switch-btn[data-dist]").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      currentDistMode = btn.getAttribute("data-dist");
+      renderDistribution(lastSummary, lastDialogues);
+    });
+  });
+
+  // Search / filter / sort
+  const searchBox = $("searchBox");
+  const labelFilter = $("labelFilter");
+  const sortBy = $("sortBy");
+  [searchBox,labelFilter,sortBy].forEach(el=>{
+    el?.addEventListener("input", ()=> renderDialoguesTable(lastDialogues));
+    el?.addEventListener("change", ()=> renderDialoguesTable(lastDialogues));
+  });
+
+  // ---------- Controls (Model) ----------
+  const modelSelect = $("modelSelect");
+  const startBtn = $("startBtn");
+  const comingSoonNotice = $("comingSoonNotice");
+
+  const MODEL_META = {
+    tfidf_logreg: { name: "Baseline — TF-IDF + Logistic Regression", desc: "Fast classical baseline for turn-level detection." },
+    rnn: { name: "Baseline — RNN", desc: "Neural conversation detector connected to the conversation RNN model." },
+    sota_model: { name: "State-of-the-Art (SOTA)", desc: "Advanced LLM-based detector (coming soon).", comingSoon: true }
+  };
+
+  function getSelectedModel(){ return modelSelect?.value || "tfidf_logreg"; }
+
+  function updateUIForModel(){
+    const key = getSelectedModel();
+    const meta = MODEL_META[key] || { name:key, desc:"" };
+
+    const sub = $("subtitleText");
+    if(sub){
+      sub.innerHTML = `Selected model: <b>${escapeHtml(meta.name)}</b> — ${escapeHtml(meta.desc)}`;
+    }
+
+    const modelDesc = $("modelDesc");
+    if(modelDesc){
+      modelDesc.textContent = meta.desc || "";
+    }
+
+    if(comingSoonNotice){
+      comingSoonNotice.style.display = meta.comingSoon ? "" : "none";
+    }
+  }
+  modelSelect?.addEventListener("change", updateUIForModel);
+  updateUIForModel();
+
+  // ---------- Params ----------
+  const params = new URLSearchParams(window.location.search);
+  const PROJECT_ID = params.get("projectId") || params.get("project_id") || "{{ project_id }}";
+  const TASK_ID = params.get("taskId") || params.get("task_id") || "{{ task_id or '' }}";
+
+  // ---------- State variables ----------
+  let lastSummary = null;
+  let lastDialogues = [];
+
+  // ---------- API ----------
+  async function fetchConversationResults(modelKey){
+    const qs = new URLSearchParams({ model_key: modelKey });
+    const res = await fetch(`/api/project/${PROJECT_ID}/conversation_analysis_results?${qs.toString()}`);
+    if(!res.ok) throw new Error(await res.text() || "Results request failed");
+    return await res.json();
+  }
+
+  function taskModelKey(modelKey){
+    return modelKey === "tfidf_logreg" ? "logreg" : modelKey;
+  }
+
+  async function saveUploadedTaskModelSelection(modelKey){
+    if(!PROJECT_ID || !TASK_ID) return;
+
+    const res = await fetch("/api/conversation/select_model_task", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        project_id: PROJECT_ID,
+        task_id: TASK_ID,
+        model: taskModelKey(modelKey)
+      })
+    });
+
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok && !String(data?.error || "").toLowerCase().includes("already")) {
+      throw new Error(data?.error || "Could not save selected model for this task");
+    }
+  }
+
+  async function runConversationAnalysis(){
+    if(!PROJECT_ID){ alert("Missing projectId"); return; }
+
+    const model_key = getSelectedModel();
+    const meta = MODEL_META[model_key] || {};
+
+    if(meta.comingSoon){
+      toast("This model is coming soon. Please use the TF-IDF + Logistic Regression baseline for now.");
+      return;
+    }
+
+    closeAnyExpanded();
+    showState("stateProcessing");
+    $("apiStatus").textContent = "Starting analysis on server...";
+    let p=0; setProgress(0);
+    const timer=setInterval(()=>{ p+=(p<70)?6:2; if(p>95)p=95; setProgress(p); },180);
+
+    try{
+      // ✅ No threshold sent (deleted)
+      const runRes = await fetch(`/api/project/${PROJECT_ID}/analyze_conversations`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ model_key })
+      });
+      if(!runRes.ok) throw new Error(await runRes.text() || "Analyze request failed");
+
+      $("apiStatus").textContent = "Analysis complete. Fetching results...";
+      const data = await fetchConversationResults(model_key);
+      try {
+        await saveUploadedTaskModelSelection(model_key);
+      } catch (saveErr) {
+        console.warn("Task model selection save failed:", saveErr);
+        toast("Results updated, but task model selection was not saved");
+      }
+
+      clearInterval(timer);
+      setProgress(100);
+
+      showState("stateResults");
+      hydrateResults(data, model_key);
+
+      toast("Results updated");
+    }catch(err){
+      clearInterval(timer);
+      setProgress(0);
+      showState("stateReady");
+      $("apiStatus").textContent="";
+      alert("Analysis failed: " + (err?.message || err));
+    }
+  }
+
+  startBtn?.addEventListener("click", runConversationAnalysis);
+
+  // ---------- Submit Results ----------
+  const submitBtn = $("submitBtn");
+  submitBtn?.addEventListener("click", async ()=>{
+    if(!lastSummary){
+      toast("No results to submit yet");
+      return;
+    }
+
+    if(!TASK_ID){
+      toast("Missing task id. Open this page from the model-selection task.");
+      return;
+    }
+
+    const oldText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Submitting...";
+
+    try{
+      await saveUploadedTaskModelSelection(lastSummary.model_key || getSelectedModel());
+      toast("Model selection submitted");
+    }catch(err){
+      console.error(err);
+      toast(err?.message || "Could not submit model selection");
+    }finally{
+      submitBtn.disabled = false;
+      submitBtn.textContent = oldText;
+    }
+  });
+
+  // ---------- Export ordering ----------
+  const EXPORT_COL_ORDER = [
+    "dialogue_id",
+    "turn_index",
+    "sender",
+    "text",
+    "previous_text",
+    "prediction",
+    "ground_truth",
+    "confidence",
+    "p_machine",
+    "source_row_id",
+  ];
+
+  function pickCol(row, key){
+    if(key === "dialogue_id") return row.dialogue_id ?? row.dialogueId ?? row.dialogue ?? "";
+    if(key === "turn_index") return row.turn_index ?? row.turnIndex ?? row.index ?? "";
+    if(key === "previous_text") return row.previous_text ?? row.prev_text ?? row.previousText ?? row.context ?? "";
+    if(key === "p_machine") return row.p_machine ?? row.prob_machine ?? row.probability_machine ?? row.pMachine ?? "";
+    if(key === "ground_truth") return row.ground_truth ?? row.gt ?? row.label ?? row.y_true ?? "";
+    if(key === "source_row_id") return row.source_row_id ?? row.row_id ?? row.sourceRowId ?? "";
+    return row[key] ?? "";
+  }
+
+  // ✅ Excel-safe for source_row_id to prevent #NAME?
+  function excelSafeText(value){
+    const s = String(value ?? "");
+    if(!s) return "";
+    // safest for Excel: ="value"
+    return `="${s.replaceAll('"','""')}"`;
+  }
+
+  // ✅ confidence fallback from p_machine if empty
+  function normalizeExportRow(row){
+    const out = {};
+    EXPORT_COL_ORDER.forEach(k=>{
+      out[k] = pickCol(row, k);
+    });
+
+    // confidence: if empty, try p_machine
+    const conf = out.confidence;
+    const pm = out.p_machine;
+    const confNum = Number(conf);
+    const pmNum = Number(pm);
+
+    if(!(typeof conf === "number" || (Number.isFinite(confNum) && conf !== ""))){
+      if(Number.isFinite(pmNum)){
+        // store as decimal probability (0..1) to be consistent
+        out.confidence = pmNum;
+      }
+    }
+
+    // source_row_id excel safe
+    if(out.source_row_id !== ""){
+      out.source_row_id = excelSafeText(out.source_row_id);
+    }
+
+    // keep any extra keys
+    Object.keys(row || {}).forEach(k=>{
+      if(!(k in out)) out[k] = row[k];
+    });
+
+    return out;
+  }
+
+  // ---------- Export ----------
+  function openExportJson(){
+    const model_key = getSelectedModel();
+    const qs = new URLSearchParams({ model_key });
+    window.open(`/api/project/${PROJECT_ID}/conversation_export?${qs.toString()}`, "_blank");
+  }
+
+  async function downloadExportCsv(){
+    try{
+      const model_key = getSelectedModel();
+      const qs = new URLSearchParams({ model_key });
+      const res = await fetch(`/api/project/${PROJECT_ID}/conversation_export?${qs.toString()}`);
+      if(!res.ok) throw new Error(await res.text() || "Export fetch failed");
+      const data = await res.json();
+
+      const rawRows = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : []);
+      if(rawRows.length === 0){ toast("No rows to export"); return; }
+
+      const rows = rawRows.map(normalizeExportRow);
+
+      const headers = Object.keys(rows[0]);
+
+      const esc = (v)=> {
+        const s = String(v ?? "");
+        if(/[",\n]/.test(s)) return `"${s.replaceAll('"','""')}"`;
+        return s;
+      };
+
+      const csv = [
+        headers.join(","),
+        ...rows.map(r=> headers.map(h=> esc(r[h])).join(","))
+      ].join("\n");
+
+      const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `trustlens_conversation_export_${model_key}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      toast("CSV downloaded");
+    }catch(e){
+      toast("CSV export failed");
+      console.error(e);
+    }
+  }
+
+  $("exportJsonBtn")?.addEventListener("click", openExportJson);
+  $("exportCsvBtn")?.addEventListener("click", downloadExportCsv);
+
+  // ---------- Hydrate dashboard ----------
+  function hydrateResults(data, model_key){
+    lastSummary = data?.summary || {};
+    lastDialogues = Array.isArray(data?.dialogues) ? data.dialogues : [];
+
+    lastSummary.model_key = lastSummary.model_key || model_key;
+
+    const meta = MODEL_META[lastSummary.model_key] || { name:lastSummary.model_key, desc:"" };
+    const analyzedAt = formatISO(lastSummary?.analyzed_at ?? lastSummary?.analyzedAt);
+    const hasGT = !!(lastSummary?.has_any_ground_truth ?? lastSummary?.hasGT ?? lastSummary?.has_gt);
+
+    // ✅ No threshold shown
+    $("infoSub").textContent =
+      `Model: ${meta.name} • Time: ${analyzedAt} • GT: ${hasGT ? "Yes":"No"}`;
+
+    // Advanced chips (run diagnostics)
+    const chips = $("advancedChips");
+    if(chips){
+      chips.innerHTML = `
+        <span class="meta-chip">Model: <b>${escapeHtml(meta.name)}</b></span>
+        <span class="meta-chip">Model Key: <b>${escapeHtml(lastSummary.model_key)}</b></span>
+        <span class="meta-chip">Run ID: <b>${escapeHtml(lastSummary.run_id ?? "—")}</b></span>
+        <span class="meta-chip">Analyzed At: <b>${escapeHtml(analyzedAt)}</b></span>
+        <span class="meta-chip">Has GT: <b>${hasGT ? "true":"false"}</b></span>
+      `;
+    }
+
+    // Top metrics
+    const humanTurns = n(lastSummary?.human_turns ?? lastSummary?.humanTurns ?? lastSummary?.human_count);
+    const aiTurns    = n(lastSummary?.machine_turns ?? lastSummary?.ai_turns ?? lastSummary?.machineTurns ?? lastSummary?.ai_count);
+    const totalTurns = n(lastSummary?.total_turns ?? lastSummary?.totalTurns ?? (humanTurns + aiTurns));
+    const totalDialogues = n(lastSummary?.total_dialogues ?? lastSummary?.dialogues_total ?? lastDialogues.length);
+
+    const aiPct = (typeof lastSummary?.machine_percentage === "number")
+      ? lastSummary.machine_percentage
+      : (totalTurns>0 ? (aiTurns/totalTurns)*100 : 0);
+
+    $("totalDialogues").textContent = String(totalDialogues);
+    $("totalTurns").textContent = String(totalTurns);
+    $("humanTurns").textContent = String(humanTurns);
+    $("aiTurns").textContent = String(aiTurns);
+    $("aiPct").textContent = totalTurns>0 ? `${aiPct.toFixed(1)}%` : "—";
+    $("humanPct").textContent = totalTurns>0 ? `${(100 - aiPct).toFixed(1)}%` : "—";
+
+    // Insights (avg turns/dialogue + top AI dialogue + mixed count)
+    const norms = (Array.isArray(lastDialogues) ? lastDialogues : []).map(normalizeDialogueRow);
+    const avgTurns = norms.length ? (norms.reduce((s,r)=>s + r.turns,0) / norms.length) : 0;
+
+    let top = null;
+    norms.forEach(r=>{
+      if(!top || r.aiPct > top.aiPct) top = r;
+    });
+
+    const mixedCount = norms.filter(r=> getFinalLabelKey(r.finalLabel)==="mixed").length;
+    const aiHeavyCount = norms.filter(r=> getFinalLabelKey(r.finalLabel)==="ai-heavy").length;
+    const humanCount = norms.filter(r=> getFinalLabelKey(r.finalLabel)==="human").length;
+
+    $("avgTurnsVal").textContent = norms.length ? avgTurns.toFixed(2) : "—";
+    $("avgTurnsInline").textContent = norms.length ? avgTurns.toFixed(2) : "—";
+
+    $("topAiDialogueVal").textContent = top ? `${top.dialogueId} (${top.aiPct.toFixed(1)}%)` : "—";
+    $("mixedCountVal").textContent = String(mixedCount);
+
+    $("aiHeavyInline").textContent = String(aiHeavyCount);
+    $("mixedInline").textContent = String(mixedCount);
+    $("humanInline").textContent = String(humanCount);
+
+    // Evaluation
+    const macro = lastSummary?.macro_metrics;
+    if(hasGT && macro && typeof macro === "object"){
+      $("evalCard").style.display = "block";
+      $("evalEmpty").style.display = "none";
+      $("accVal").textContent  = (n(macro.accuracy) * 100).toFixed(2) + "%";
+      $("f1Val").textContent   = n(macro.f1_macro).toFixed(4);
+      $("precVal").textContent = n(macro.precision_macro).toFixed(4);
+      $("recVal").textContent  = n(macro.recall_macro).toFixed(4);
+
+      const cm = lastSummary?.confusion_matrix || macro?.confusion_matrix;
+      renderConfusionMatrix(cm);
+    }else{
+      $("evalCard").style.display = "none";
+      $("evalEmpty").style.display = "block";
+      renderConfusionMatrix(null);
+    }
+
+    renderDistribution(lastSummary, lastDialogues);
+    renderDialoguesTable(lastDialogues);
+  }
+
+  function renderConfusionMatrix(cm){
+    const wrap = $("cmWrap");
+    if(!wrap) return;
+
+    if(!cm || typeof cm !== "object"){
+      wrap.innerHTML = `<div style="color:var(--muted);font-weight:900;">Confusion matrix is not available.</div>`;
+      return;
+    }
+
+    let tn=0, fp=0, fn=0, tp=0;
+    if(Array.isArray(cm) && Array.isArray(cm[0])){
+      tn = n(cm[0][0]); fp = n(cm[0][1]); fn = n(cm[1][0]); tp = n(cm[1][1]);
+    }else{
+      tn = n(cm.tn); fp = n(cm.fp); fn = n(cm.fn); tp = n(cm.tp);
+    }
+
+    wrap.innerHTML = `
+      <div class="cm-grid">
+        <div class="cm-cell"><span>True Negative</span><b>${tn}</b></div>
+        <div class="cm-cell"><span>False Positive</span><b>${fp}</b></div>
+        <div class="cm-cell"><span>False Negative</span><b>${fn}</b></div>
+        <div class="cm-cell"><span>True Positive</span><b>${tp}</b></div>
+      </div>
+    `;
+  }
+//  prev in table show and hide
+
+document.addEventListener("click", (e)=>{
+  const btn = e.target?.closest("button[data-action='toggle-prev']");
+  if(!btn) return;
+
+  const tr = btn.closest("tr");
+  if(!tr) return;
+
+  const next = tr.nextElementSibling;
+
+  // Hide
+  if(next && next.classList.contains("prev-row")){
+    next.remove();
+    btn.textContent = "Show";
+    return;
+  }
+
+  // Show
+  const prevText = btn.getAttribute("data-prev") || "";
+  const prevTr = document.createElement("tr");
+  prevTr.className = "prev-row";
+  prevTr.innerHTML = `
+    <td colspan="7">
+      <div class="prev-box"><b>Previous turn:</b><br>${escapeHtml(prevText)}</div>
+    </td>
+  `;
+  tr.insertAdjacentElement("afterend", prevTr);
+  btn.textContent = "Hide";
+});
+
+
+  // ---------- Distribution ----------
+  function renderDistribution(summary, dialogues){
+    const barA = $("barA"), barB = $("barB"), barC = $("barC");
+    const valA = $("valA"), valB = $("valB"), valC = $("valC");
+    const labelA = $("labelA"), labelB = $("labelB"), labelC = $("labelC");
+    const distTotal = $("distTotal"), distHint = $("distHint");
+    const distInsight = $("distInsight"), distInsightMini = $("distInsightMini");
+    const labelsWrap = $("distLabels");
+
+    if(!summary) summary = {};
+    if(!dialogues) dialogues = [];
+
+    const norms = (Array.isArray(dialogues) ? dialogues : []).map(normalizeDialogueRow);
+    const avgTurns = norms.length ? (norms.reduce((s,r)=>s + r.turns,0) / norms.length) : 0;
+
+    let top = null;
+    norms.forEach(r=>{
+      if(!top || r.aiPct > top.aiPct) top = r;
+    });
+
+    const mixedCount = norms.filter(r=> getFinalLabelKey(r.finalLabel)==="mixed").length;
+
+    if(currentDistMode === "turns"){
+      const h = n(summary?.human_turns ?? summary?.humanTurns ?? summary?.human_count);
+      const a = n(summary?.machine_turns ?? summary?.ai_turns ?? summary?.ai_count);
+      const total = n(summary?.total_turns ?? (h+a));
+
+      barC.style.display = "none";
+      labelC.style.display = "none";
+      labelsWrap.style.gap = "58px";
+
+      labelA.textContent = "Human";
+      labelB.textContent = "Machine";
+      distHint.textContent = "Turns distribution";
+
+      valA.textContent = String(h);
+      valB.textContent = String(a);
+      distTotal.textContent = String(total);
+
+      const maxV = Math.max(h,a,1);
+      barA.style.setProperty("--h", ((h/maxV)*100).toFixed(1)+"%");
+      barB.style.setProperty("--h", ((a/maxV)*100).toFixed(1)+"%");
+
+      const aiPct = total>0 ? (a/total)*100 : 0;
+      distInsight.textContent = total>0
+        ? `Machine turns are ${aiPct.toFixed(1)}% of all turns.`
+        : "No turns found yet.";
+
+      distInsightMini.textContent = norms.length
+        ? `Avg Turns/Dialogue: ${avgTurns.toFixed(2)} • Highest AI%: ${top ? `${top.dialogueId} (${top.aiPct.toFixed(1)}%)` : "—"}`
+        : "—";
+
+      return;
+    }
+
+    // dialogues mode
+    let humanD=0, mixedD=0, aiHeavyD=0;
+    norms.forEach(r=>{
+      const key = getFinalLabelKey(r.finalLabel);
+      if(key==="ai-heavy") aiHeavyD++;
+      else if(key==="mixed") mixedD++;
+      else humanD++;
+    });
+
+    const totalD = norms.length;
+
+    barC.style.display = "";
+    labelC.style.display = "";
+    labelsWrap.style.gap = "34px";
+
+    labelA.textContent = "Human";
+    labelB.textContent = "AI-heavy";
+    labelC.textContent = "Mixed";
+    distHint.textContent = "Dialogues distribution";
+
+    valA.textContent = String(humanD);
+    valB.textContent = String(aiHeavyD);
+    valC.textContent = String(mixedD);
+    distTotal.textContent = String(totalD);
+
+    const maxV = Math.max(humanD, aiHeavyD, mixedD, 1);
+    barA.style.setProperty("--h", ((humanD/maxV)*100).toFixed(1)+"%");
+    barB.style.setProperty("--h", ((aiHeavyD/maxV)*100).toFixed(1)+"%");
+    barC.style.setProperty("--h", ((mixedD/maxV)*100).toFixed(1)+"%");
+
+    if(totalD>0){
+      const mPct = (mixedD/totalD)*100;
+      distInsight.textContent = mixedD>0
+        ? `Mixed dialogues are ${mPct.toFixed(1)}% of all dialogues.`
+        : `No mixed dialogues detected.`;
+    }else{
+      distInsight.textContent = "No dialogues found yet.";
+    }
+
+    distInsightMini.textContent = norms.length
+      ? `Avg Turns/Dialogue: ${avgTurns.toFixed(2)} • Highest AI%: ${top ? `${top.dialogueId} (${top.aiPct.toFixed(1)}%)` : "—"} • Mixed: ${mixedCount}`
+      : "—";
+  }
+
+  // ---------- Dialogues table + Expand ----------
+  const dialoguesTbody = $("dialoguesTbody");
+
+  dialoguesTbody?.addEventListener("click", async (e)=>{
+    const btn = e.target?.closest("button[data-action='toggle']");
+    if(!btn) return;
+
+    const row = btn.closest("tr");
+    const dialogueId = row?.dataset?.dialogueId;
+    if(!dialogueId) return;
+
+    await toggleExpandRow(row, dialogueId, lastSummary);
+  });
+
+  function closeAnyExpanded(){
+    document.querySelectorAll("tr.expand-row").forEach(r=>r.remove());
+    document.querySelectorAll("tr[data-open='true']").forEach(r=>{
+      r.dataset.open = "false";
+      const btn=r.querySelector("button[data-action='toggle']");
+      if(btn) btn.textContent="View";
+    });
+  }
+
+  function normalizeDialogueRow(d){
+    const dialogueId = d.dialogue_id ?? d.dialogueId ?? d.id ?? "—";
+    const turns = n(d.turns ?? d.turns_count ?? d.num_turns ?? d.numTurns);
+    const human = n(d.human_turns ?? d.human_count ?? d.humanCount);
+    const ai = n(d.ai_turns ?? d.ai_count ?? d.machine_turns ?? d.machineTurns);
+    const aiPct = (typeof d.ai_percentage === "number") ? d.ai_percentage : (turns>0 ? (ai/turns)*100 : 0);
+    const hPct  = (typeof d.human_percentage === "number") ? d.human_percentage : (turns>0 ? (human/turns)*100 : 0);
+    const finalLabel = d.final_label ?? d.finalLabel ?? "Human";
+    return { dialogueId, turns, human, ai, aiPct, hPct, finalLabel };
+  }
+
+  function renderDialoguesTable(dialogues){
+    if(!dialoguesTbody) return;
+    dialoguesTbody.innerHTML = "";
+
+    const q = String(searchBox?.value ?? "").trim().toLowerCase();
+    const lf = String(labelFilter?.value ?? "all");
+    const sb = String(sortBy?.value ?? "ai_desc");
+
+    let rows = (Array.isArray(dialogues) ? dialogues : []).map(normalizeDialogueRow);
+
+    if(q) rows = rows.filter(r=> String(r.dialogueId).toLowerCase().includes(q));
+    if(lf !== "all") rows = rows.filter(r=> getFinalLabelKey(r.finalLabel) === lf);
+
+    if(sb === "ai_desc") rows.sort((a,b)=> b.aiPct - a.aiPct);
+    else if(sb === "turns_desc") rows.sort((a,b)=> b.turns - a.turns);
+    else if(sb === "id_asc") rows.sort((a,b)=> String(a.dialogueId).localeCompare(String(b.dialogueId)));
+
+    if(rows.length === 0){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="8" style="color:var(--muted);font-weight:900;">No dialogues found.</td>`;
+      dialoguesTbody.appendChild(tr);
+      return;
+    }
+
+    rows.forEach(r=>{
+      const tr = document.createElement("tr");
+      tr.dataset.dialogueId = r.dialogueId;
+      tr.dataset.open = "false";
+      tr.innerHTML = `
+        <td style="font-weight:900;" title="${escapeHtml(r.dialogueId)}">${escapeHtml(r.dialogueId)}</td>
+        <td>${r.turns}</td>
+        <td>${r.human}</td>
+        <td>${r.ai}</td>
+        <td>${r.aiPct.toFixed(2)}%</td>
+        <td>${r.hPct.toFixed(2)}%</td>
+        <td>${pillFinalLabel(r.finalLabel)}</td>
+        <td style="text-align:right;">
+          <button class="btn-link" type="button" data-action="toggle">View</button>
+        </td>
+      `;
+      dialoguesTbody.appendChild(tr);
+    });
+  }
+
+  // ---------- Expand Dialogue ----------
+  async function toggleExpandRow(parentRow, dialogueId, summary){
+    const alreadyOpen = parentRow.dataset.open === "true";
+    const domKey = String(dialogueId).replace(/[^\w-]/g, "_");
+
+    closeAnyExpanded();
+    if(alreadyOpen) return;
+
+    parentRow.dataset.open = "true";
+    const btn = parentRow.querySelector("button[data-action='toggle']");
+    if(btn) btn.textContent="Close";
+
+    const expandTr = document.createElement("tr");
+    expandTr.className = "expand-row";
+    
+expandTr.innerHTML = `
+  <td colspan="8">
+    <div class="expand-box">
+      <div class="expand-head">
+        <div>
+          <div class="title">Dialogue Details: ${escapeHtml(dialogueId)}</div>
+          <div class="sub" id="dlgSub_${domKey}">Loading...</div>
+        </div>
+      </div>
+
+      <!-- 🔎 Filter bar -->
+      <div class="turns-tools" style="margin:8px 0;">
+        <select class="select select-sm" data-role="turn-filter" data-target="${domKey}">
+          <option value="all" selected>All turns</option>
+          <option value="mismatch">Mismatches only (Pred ≠ GT)</option>
+          <option value="correct">Correct only (Pred = GT)</option>
+          <option value="gt_human">GT: Human</option>
+          <option value="gt_machine">GT: Machine</option>
+          <option value="pred_human">Prediction: Human</option>
+          <option value="pred_machine">Prediction: Machine</option>
+        </select>
+      </div>
+
+      <!-- 📜 Horizontal scroll -->
+      <div class="turns-scroll" style="overflow-x:auto;">
+        <table class="turns-table" style="min-width:900px;">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Sender</th>
+              <th>Text</th>
+              <th>Prev</th>
+              <th>Prediction</th>
+              <th>GT</th>
+              <th>Confidence</th>
+            </tr>
+          </thead>
+          <tbody id="turnsBody_${domKey}">
+            <tr>
+              <td colspan="7" style="color:var(--muted);font-weight:900;">Loading turns...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </td>
+`;
+
+    parentRow.insertAdjacentElement("afterend", expandTr);
+
+    try{
+      const qs = new URLSearchParams({
+        model_key: (summary?.model_key ?? getSelectedModel()),
+        run_id: (summary?.run_id ?? "")
+      });
+
+      const res = await fetch(`/api/project/${PROJECT_ID}/conversation_dialogue/${encodeURIComponent(dialogueId)}?${qs.toString()}`);
+      if(!res.ok) throw new Error(await res.text() || "Dialogue details failed");
+      const data = await res.json();
+
+      const header = data?.header || {};
+      const turns = Array.isArray(data?.turns) ? data.turns : [];
+
+      const sub = expandTr.querySelector(`#dlgSub_${CSS.escape(domKey)}`);
+      if(sub){
+        const t = header.total_turns ?? turns.length;
+        const h = header.human_turns ?? "—";
+        const a = header.ai_turns ?? "—";
+        const ap = (header.ai_percentage ?? "—");
+        sub.textContent = `Total: ${t} | Human: ${h} | Machine: ${a} | Machine%: ${ap}`;
+      }
+
+      const body = expandTr.querySelector(`#turnsBody_${CSS.escape(domKey)}`);
+      renderTurns(body, turns);
+
+    }catch(err){
+      const body = expandTr.querySelector(`#turnsBody_${CSS.escape(domKey)}`);
+      if(body){
+        body.innerHTML = `<tr><td colspan="7" style="color:var(--muted);font-weight:900;">Failed to load: ${escapeHtml(err?.message||err)}</td></tr>`;
+      }
+    }
+  }
+
+  function isPredAI(t){
+    const pred = String(t?.prediction ?? "").toLowerCase();
+    if(pred.includes("machine")) return true;
+    if(Number(t?.prediction_int)===1) return true;
+    return false;
+  }
+
+  function getConfidencePercent(t){
+    const c = t?.confidence;
+    if(typeof c === "number" && Number.isFinite(c)) return c * 100;
+
+    const pm = t?.p_machine ?? t?.prob_machine ?? t?.probability_machine ?? t?.pMachine;
+    const pmNum = Number(pm);
+    if(Number.isFinite(pmNum)) return pmNum * 100;
+
+    return null;
+  }
+
+  function renderTurns(tbody, turns){
+  if(!tbody) return;
+  tbody.innerHTML = "";
+
+  if(turns.length === 0){
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--muted);font-weight:900;">No turns.</td></tr>`;
+    return;
+  }
+
+  turns.forEach(t=>{
+    const idx = t.turn_index ?? t.turnIndex ?? t.index ?? "—";
+    const sender = t.sender ?? "";
+    const text = t.text ?? "";
+
+    const predAI = isPredAI(t);
+
+    const gtVal = t.ground_truth ?? t.gt ?? null;
+    const gt = (gtVal === 0) ? "Human" : (gtVal === 1 ? "Machine" : "—");
+
+    const confPct = getConfidencePercent(t);
+    const conf = (confPct === null) ? "—" : `${confPct.toFixed(1)}%`;
+
+    const prevText = (t.previous_text ?? t.prev_text ?? t.previousText ?? t.context ?? "");
+    const hasPrev = String(prevText).trim().length > 0;
+
+    tbody.insertAdjacentHTML("beforeend", `
+      <tr>
+        <td>${escapeHtml(idx)}</td>
+        <td>${escapeHtml(sender || "—")}</td>
+        <td>${escapeHtml(text)}</td>
+
+        <td>
+          ${hasPrev
+            ? `<button type="button" class="prev-btn" data-action="toggle-prev" data-prev="${escapeHtml(prevText)}">Show</button>`
+            : "—"
+          }
+        </td>
+
+        <td>${predAI ? `<span class="pill ai">Machine</span>` : `<span class="pill human">Human</span>`}</td>
+
+        <td>${gt === "—"
+          ? "—"
+          : (gt === "Machine"
+              ? `<span class="pill ai">Machine</span>`
+              : `<span class="pill human">Human</span>`
+            )
+        }</td>
+
+        <td>${conf}</td>
+      </tr>
+    `);
+  });
+}
+
+  // ✅ no auto-load
+  showState("stateReady");
+
+})();
+  </script>
+
+</body>
+</html>

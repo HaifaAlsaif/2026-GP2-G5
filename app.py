@@ -16,7 +16,10 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import requests
+import re
+import hashlib
 from llm_service import generate_reply
+from conversation_baseline_model import predict_one_turn
 from flask import abort
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -49,9 +52,10 @@ ANALYSIS_ROOT = "analysis_results/conversation_gen"
 CONV_LOGREG_KEY = "tfidf_logreg"
 CONV_RNN_KEY = "rnn"
 CONV_RNN_AI_CLASS_IS_ONE = False 
+CONV_RNN_MAX_LEN = 300
 
 # مسارات موديلات المحادثات
-CONV_LOGREG_MODEL_PATH = "Model-Gen-Con/conversation_logistic_regression.joblib"
+CONV_LOGREG_MODEL_PATH = "models/conversation_logistic_regression.joblib"
 CONV_RNN_MODEL_PATH = "Model-Gen-Con/rnn_v2_model.keras"
 CONV_RNN_TOKENIZER_PATH = "Model-Gen-Con/rnn_v2_tokenizer.pkl"
 
@@ -1708,23 +1712,17 @@ def api_create_task():
             return jsonify({"error": "Model Selection task requires exactly 1 examiner"}), 400
 
     else:
-        # ✅ Conversation العادي: نفس منطقك القديم
-        conversation_type = data.get("conversation_type")
-        number_of_turns = data.get("number_of_turns")
+        # ✅ Uploaded Conversation: model selection / labeling مثل المقالات، بدون Human-Human أو Human-AI
+        task_type = (data.get("task_type") or "").strip().lower()
 
-        try:
-            number_of_turns = int(number_of_turns)
-        except (TypeError, ValueError):
-            return jsonify({"error": "number_of_turns must be 2–7"}), 400
+        if task_type not in ["model_selection", "labeling"]:
+            return jsonify({"error": "Invalid task_type. Must be 'model_selection' or 'labeling'"}), 400
 
-        if conversation_type not in ["human-ai", "human-human"]:
-            return jsonify({"error": "Invalid conversation_type"}), 400
+        task_doc["task_type"] = task_type
+        task_doc["task_description"] = task_description
 
-        if not (2 <= number_of_turns <= 7):
-            return jsonify({"error": "number_of_turns must be 2–7"}), 400
-
-        task_doc["conversation_type"] = conversation_type
-        task_doc["number_of_turns"] = number_of_turns
+        if task_type == "model_selection" and len(examiner_uids) != 1:
+            return jsonify({"error": "Model Selection task requires exactly 1 examiner"}), 400
 
 
     # ---- حفظ الـ Task ----
@@ -3213,6 +3211,14 @@ def model_selection_task_page(task_id):
     if is_generated_conversation:
         return redirect(url_for("results_con", projectId=project_id, taskId=task_id))
 
+    is_uploaded_conversation = (
+        category in ["conversation", "conversations", "chat", "chats"]
+        and not bool(proj_data.get("generated_from_scratch", False))
+    )
+
+    if is_uploaded_conversation:
+        return redirect(url_for("conversation_analysis_page_examiner", project_id=project_id, taskId=task_id))
+
 
 
     return render_template(
@@ -3647,6 +3653,20 @@ def feedback_task_page(task_id):
     if is_generated_conversation:
         return redirect(url_for("results_con", projectId=project_id, taskId=task_id, mode="feedback"))
 
+    is_uploaded_conversation = (
+        category in ["conversation", "conversations", "chat", "chats"]
+        and not bool(proj_data.get("generated_from_scratch", False))
+    )
+
+    if is_uploaded_conversation:
+        return redirect(url_for(
+            "results_con",
+            projectId=project_id,
+            taskId=task_id,
+            mode="feedback",
+            source="uploaded"
+        ))
+
     
     # ✅ Article flow كما هو (بدون تغيير سلوكه)
     dataset_id = proj_data.get("dataset_id", "")
@@ -3832,6 +3852,7 @@ def show_results():
 
     project_id = request.args.get("projectId")
     task_id = request.args.get("taskId")
+    source = (request.args.get("source") or "").strip().lower()
     mode = (request.args.get("mode") or "model_selection").strip().lower()  # ✅ mode: model_selection | feedback
 
     user_doc = get_current_user_doc()
@@ -3840,10 +3861,12 @@ def show_results():
     return render_template(
         "results.con.html",
         user_name=user_name,
+        user_uid=session.get("uid"),
         user_role="Examiner",
         project_id=project_id,
         task_id=task_id,
-        mode=mode
+        mode=mode,
+        source=source
     )
 
 
@@ -4120,6 +4143,8 @@ def api_conversation_select_model_task():
     project_id = (data.get("project_id") or "").strip()
     task_id = (data.get("task_id") or "").strip()
     selected_model = (data.get("model") or "").strip().lower()
+    if selected_model == "tfidf_logreg":
+        selected_model = "logreg"
 
     if selected_model not in ("logreg", "rnn"):
         return jsonify({"error": "Invalid model"}), 400
@@ -4228,7 +4253,7 @@ def _pick_conversation_model_for_project(project_id):
         if raw in ("rnn",):
             picked = "rnn"
             break
-        if raw in ("logreg", "logistic"):
+        if raw in ("logreg", "logistic", "tfidf_logreg"):
             picked = "logreg"
             break
         if "rnn" in name:
@@ -4577,6 +4602,283 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
         return jsonify({"error": "Server error while saving turn feedback"}), 500
 
 
+def _feedback_examiner_name(uid):
+    user_doc = db.collection("users").document(uid).get()
+    if not user_doc.exists:
+        return "Examiner"
+
+    user_data = user_doc.to_dict() or {}
+    profile = user_data.get("profile", {}) or {}
+    return f"{profile.get('firstName','')} {profile.get('lastName','')}".strip() or "Examiner"
+
+
+def _uploaded_conversation_run(project_id, model_key):
+    base_ref = rtdb.reference(f"analysis_results/conversations/{model_key}/{project_id}")
+    run_id = _safe_str(base_ref.child("latest_run_id").get())
+    if not run_id:
+        return None, None, None
+
+    run_ref = base_ref.child("runs").child(run_id)
+    summary = run_ref.child("summary").get()
+    if not summary:
+        return None, None, None
+
+    return run_id, run_ref, summary
+
+
+def _uploaded_feedback_model_key(model_key):
+    return CONV_RNN_KEY if model_key == CONV_RNN_KEY else CONV_LOGREG_KEY
+
+
+@app.route("/api/task/<task_id>/uploaded_conversation_feedback_list", methods=["GET"])
+def api_uploaded_conversation_feedback_list(task_id):
+    if not session.get("idToken"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    uid = session.get("uid")
+
+    task_doc = db.collection("tasks").document(task_id).get()
+    if not task_doc.exists:
+        return jsonify({"error": "Task not found"}), 404
+
+    task_data = task_doc.to_dict() or {}
+    if task_data.get("task_type") != "labeling":
+        return jsonify({"error": "Task is not labeling"}), 400
+    if uid not in (task_data.get("examiner_ids") or []):
+        return jsonify({"error": "Forbidden"}), 403
+
+    project_id = task_data.get("project_ID")
+    selected_model, model_key, model_label = _pick_conversation_model_for_project(project_id)
+    if not selected_model:
+        return jsonify({
+            "waiting": True,
+            "message": "Waiting for model selection task to be completed"
+        }), 200
+
+    model_key = _uploaded_feedback_model_key(model_key)
+    run_id, run_ref, summary = _uploaded_conversation_run(project_id, model_key)
+    if not run_ref:
+        return jsonify({
+            "waiting": True,
+            "message": "Analysis not ready yet, please run conversation detection first"
+        }), 200
+
+    dialogues = run_ref.child("dialogues").get() or []
+    if isinstance(dialogues, dict):
+        dialogues = list(dialogues.values())
+
+    key_map = run_ref.child("dialogue_key_map").get() or {}
+    all_turns = run_ref.child("dialogue_turns").get() or {}
+    all_feedbacks = run_ref.child("turn_feedbacks").get() or {}
+
+    items = []
+    reviewed_dialogues = 0
+
+    for order_index, dialogue in enumerate(dialogues):
+        if not isinstance(dialogue, dict):
+            continue
+
+        dialogue_id = _safe_str(dialogue.get("dialogue_id")) or f"dialogue_{order_index + 1}"
+        safe_key = key_map.get(dialogue_id) or _rtdb_safe_key(dialogue_id)
+
+        turns_raw = all_turns.get(safe_key) or []
+        turns = list(turns_raw.values()) if isinstance(turns_raw, dict) else (turns_raw if isinstance(turns_raw, list) else [])
+        turns.sort(key=lambda x: int((x or {}).get("turn_index", 0) or 0))
+
+        feedback_root = all_feedbacks.get(safe_key) or {}
+        clean_turns = []
+        feedback_users_map = {}
+        reviewed_turns = 0
+        confs = []
+
+        for idx, turn in enumerate(turns):
+            if not isinstance(turn, dict):
+                continue
+
+            ui_turn_index = idx + 1
+            raw_prediction = _safe_str(turn.get("prediction"))
+            prediction = "AI" if raw_prediction.lower() in ("ai", "machine", "machine-generated") else "Human"
+
+            confidence = turn.get("confidence")
+            confidence_pct = None
+            try:
+                confidence_pct = float(confidence)
+                if confidence_pct <= 1:
+                    confidence_pct *= 100.0
+                confs.append(confidence_pct)
+            except Exception:
+                confidence_pct = None
+
+            turn_feedbacks = feedback_root.get(str(ui_turn_index), {}) if isinstance(feedback_root, dict) else {}
+            if not isinstance(turn_feedbacks, dict):
+                turn_feedbacks = {}
+
+            my_feedback = turn_feedbacks.get(uid)
+            turn_feedback_users = []
+
+            for feedback_uid, feedback_data in turn_feedbacks.items():
+                feedback_data = feedback_data or {}
+                feedback_name = feedback_data.get("examiner_name") or _feedback_examiner_name(feedback_uid)
+                user_item = {
+                    "uid": feedback_uid,
+                    "examiner_uid": feedback_uid,
+                    "name": feedback_name,
+                    "examiner_name": feedback_name,
+                    "label": feedback_data.get("label"),
+                    "explanation": feedback_data.get("explanation", ""),
+                    "agreed_with_model": bool(feedback_data.get("agreed_with_model", False)),
+                    "submitted_at": feedback_data.get("submitted_at")
+                }
+                turn_feedback_users.append(user_item)
+                feedback_users_map[feedback_uid] = {
+                    "uid": feedback_uid,
+                    "name": feedback_name
+                }
+
+            if turn_feedback_users:
+                reviewed_turns += 1
+
+            clean_turns.append({
+                "turn_index": ui_turn_index,
+                "source_turn_index": turn.get("turn_index"),
+                "sender": turn.get("sender", ""),
+                "text": turn.get("text", ""),
+                "prediction": prediction,
+                "gt": turn.get("ground_truth"),
+                "confidence": round(confidence_pct, 2) if isinstance(confidence_pct, (int, float)) else None,
+                "turn_locked": bool(turn_feedback_users),
+                "turn_feedback": turn_feedback_users[0] if turn_feedback_users else None,
+                "my_feedback": my_feedback,
+                "feedback_users": turn_feedback_users
+            })
+
+        total_turns = len(clean_turns)
+        conversation_locked = total_turns > 0 and reviewed_turns >= total_turns
+        if conversation_locked:
+            reviewed_dialogues += 1
+
+        items.append({
+            "conversation_id": dialogue_id,
+            "task_name": f"Dialogue {dialogue_id}",
+            "order_index": order_index,
+            "turns_count": total_turns,
+            "ai_percentage": float(dialogue.get("ai_percentage") or 0),
+            "human_percentage": float(dialogue.get("human_percentage") or 0),
+            "confidence": round(sum(confs) / len(confs), 2) if confs else 0.0,
+            "has_feedback": reviewed_turns > 0,
+            "conversation_locked": conversation_locked,
+            "feedback_users": list(feedback_users_map.values()),
+            "turns": clean_turns
+        })
+
+    total_dialogues = len(items)
+    new_status = "completed" if total_dialogues > 0 and reviewed_dialogues >= total_dialogues else ("progress" if reviewed_dialogues > 0 else "pending")
+    if (task_data.get("status") or "").strip().lower() != new_status:
+        db.collection("tasks").document(task_id).update({"status": new_status})
+
+    return jsonify({
+        "waiting": False,
+        "project_id": project_id,
+        "task_id": task_id,
+        "source": "uploaded",
+        "selected_model": selected_model,
+        "selected_model_name": model_label,
+        "run_id": run_id,
+        "progress": {
+            "reviewed": reviewed_dialogues,
+            "total": total_dialogues
+        },
+        "items": items
+    }), 200
+
+
+@app.route("/api/task/<task_id>/uploaded_conversation_feedback/<dialogue_id>/turn/<int:turn_index>/submit", methods=["POST"])
+def api_submit_uploaded_conversation_turn_feedback(task_id, dialogue_id, turn_index):
+    try:
+        if not session.get("idToken"):
+            return jsonify({"error": "Unauthorized"}), 401
+
+        uid = session.get("uid")
+        data = request.get_json(silent=True) or {}
+
+        agree_with_model = bool(data.get("agree_with_model", False))
+        label = (data.get("label") or "").strip()
+        explanation = (data.get("explanation") or "").strip()
+
+        if turn_index <= 0:
+            return jsonify({"error": "Invalid turn_index"}), 400
+
+        task_doc = db.collection("tasks").document(task_id).get()
+        if not task_doc.exists:
+            return jsonify({"error": "Task not found"}), 404
+
+        task_data = task_doc.to_dict() or {}
+        if task_data.get("task_type") != "labeling":
+            return jsonify({"error": "Task is not labeling"}), 400
+        if uid not in (task_data.get("examiner_ids") or []):
+            return jsonify({"error": "Forbidden"}), 403
+
+        project_id = task_data.get("project_ID")
+        selected_model, model_key, _ = _pick_conversation_model_for_project(project_id)
+        if not selected_model:
+            return jsonify({"error": "Model selection is not completed yet"}), 400
+
+        model_key = _uploaded_feedback_model_key(model_key)
+        run_id, run_ref, _ = _uploaded_conversation_run(project_id, model_key)
+        if not run_ref:
+            return jsonify({"error": "Analysis results not found"}), 404
+
+        key_map = run_ref.child("dialogue_key_map").get() or {}
+        safe_key = key_map.get(dialogue_id) or _rtdb_safe_key(dialogue_id)
+        turns_raw = run_ref.child("dialogue_turns").child(safe_key).get() or []
+        turns = list(turns_raw.values()) if isinstance(turns_raw, dict) else (turns_raw if isinstance(turns_raw, list) else [])
+
+        if turn_index > len(turns):
+            return jsonify({"error": "Turn not found"}), 404
+
+        target_turn = turns[turn_index - 1] or {}
+        model_prediction = "AI" if _safe_str(target_turn.get("prediction")).lower() in ("ai", "machine", "machine-generated") else "Human"
+
+        if agree_with_model:
+            label = model_prediction
+            if not explanation:
+                explanation = "Agreed with model prediction."
+        else:
+            if label not in ["Human", "AI"]:
+                return jsonify({"error": "Invalid label"}), 400
+            if not explanation:
+                return jsonify({"error": "Explanation is required"}), 400
+
+        feedback_ref = run_ref.child("turn_feedbacks").child(safe_key).child(str(turn_index))
+        existing_feedbacks = feedback_ref.get() or {}
+        if isinstance(existing_feedbacks, dict) and existing_feedbacks:
+            return jsonify({"error": "Feedback already submitted for this turn"}), 409
+
+        examiner_name = _feedback_examiner_name(uid)
+        payload = {
+            "examiner_uid": uid,
+            "examiner_name": examiner_name,
+            "agreed_with_model": agree_with_model,
+            "label": label,
+            "explanation": explanation,
+            "submitted_at": datetime.utcnow().isoformat() + "Z"
+        }
+
+        feedback_ref.child(uid).set(payload)
+
+        return jsonify({
+            "message": "Turn feedback saved successfully",
+            "conversation_id": dialogue_id,
+            "turn_index": turn_index,
+            "selected_model": selected_model,
+            "run_id": run_id
+        }), 200
+
+    except Exception as e:
+        app.logger.exception("api_submit_uploaded_conversation_turn_feedback failed: %s", e)
+        return jsonify({"error": "Server error while saving turn feedback"}), 500
+
+
 
 @app.route("/project/<project_id>/analysis/examiner")
 def analysis_examiner_redirect(project_id):
@@ -4717,6 +5019,31 @@ def api_examiner_feedback_count(project_id):
                                     counts[eid] = counts.get(eid, 0) + 1
 
                         break
+            else:
+                _, model_key, _ = _pick_conversation_model_for_project(project_id)
+                model_keys_to_try = [model_key] if model_key else [CONV_LOGREG_KEY, CONV_RNN_KEY]
+
+                for mk in model_keys_to_try:
+                    mk = _uploaded_feedback_model_key(mk)
+                    base_ref = rtdb.reference(f"analysis_results/conversations/{mk}/{project_id}")
+                    run_id = _safe_str(base_ref.child("latest_run_id").get())
+                    if not run_id:
+                        continue
+
+                    feedback_root = base_ref.child("runs").child(run_id).child("turn_feedbacks").get() or {}
+                    if not isinstance(feedback_root, dict):
+                        continue
+
+                    for dialogue_feedbacks in feedback_root.values():
+                        if not isinstance(dialogue_feedbacks, dict):
+                            continue
+                        for turn_feedbacks in dialogue_feedbacks.values():
+                            if not isinstance(turn_feedbacks, dict):
+                                continue
+                            for eid in turn_feedbacks.keys():
+                                counts[eid] = counts.get(eid, 0) + 1
+
+                    break
 
         # ratings
         ratings = {}
@@ -4753,5 +5080,802 @@ def api_my_rating(project_id):
         "stars": rd.get("stars", 0),
         "comment": rd.get("comment", "")
     }), 200
+
+
+# ==================================================
+# Open Uploaded Conversation Results Page
+# ==================================================
+@app.route("/projectdetailsexaminer/<project_id>/conversation-analysis")
+def conversation_analysis_page_examiner(project_id):
+    if not session.get("idToken"):
+        return redirect(url_for("login_page"))
+
+    examiner_uid = session.get("uid")
+    task_id = request.args.get("taskId") or request.args.get("task_id") or ""
+
+    inv = (
+        db.collection("invitations")
+        .where("project_id", "==", project_id)
+        .where("examiner_id", "==", examiner_uid)
+        .where("status", "==", "accepted")
+        .limit(1)
+        .get()
+    )
+    if not inv:
+        abort(403)
+
+    user_doc = db.collection("users").document(examiner_uid).get()
+    full_name = "User"
+    if user_doc.exists:
+        prof = user_doc.to_dict().get("profile", {})
+        full_name = f"{prof.get('firstName','')} {prof.get('lastName','')}".strip() or "User"
+
+    return render_template(
+        "ConversationAnalysisResults.html",
+        user_name=full_name,
+        project_id=project_id,
+        task_id=task_id
+    )
+
+
+# ===================================================================
+# CONVERSATIONS Baseline Analysis (Uploaded dataset dashboard)
+# ===================================================================
+
+def _safe_str(x):
+    try:
+        return ("" if x is None else str(x)).strip()
+    except Exception:
+        return ""
+
+
+def _as_int(x, default=0):
+    try:
+        return int(str(x).strip())
+    except Exception:
+        return default
+
+
+def _normalize_gt(label):
+    if label is None:
+        return None
+
+    s = str(label).strip().lower()
+    if s == "":
+        return None
+
+    if s in ("0", "human", "h", "real", "genuine"):
+        return 0
+    if s in ("1", "ai", "machine", "machine-generated", "synthetic", "bot", "llm"):
+        return 1
+
+    if "human" in s:
+        return 0
+    if "ai" in s or "machine" in s or "llm" in s:
+        return 1
+
+    return None
+
+
+def _extract_conversation_fields(payload):
+    dialogue_id = (
+        payload.get("dialogue_id") or payload.get("dialogueId") or payload.get("Dialogue_ID")
+        or payload.get("conversation_id") or payload.get("conversationId") or payload.get("Conversation_ID")
+        or payload.get("chat_id") or payload.get("Chat_ID")
+        or payload.get("thread_id") or payload.get("Thread_ID")
+        or payload.get("session_id") or payload.get("Session_ID")
+        or payload.get("id") or payload.get("ID")
+    )
+    dialogue_id = _safe_str(dialogue_id)
+
+    turn_index = (
+        payload.get("turn_index") or payload.get("turnIndex") or payload.get("Turn_Index")
+        or payload.get("turn_id") or payload.get("turnId") or payload.get("Turn_ID")
+        or payload.get("turn_number") or payload.get("turnNumber") or payload.get("Turn_Number")
+        or payload.get("utterance_id") or payload.get("Utterance_ID")
+        or payload.get("message_index") or payload.get("messageIndex")
+    )
+    turn_index = None if turn_index is None or str(turn_index).strip() == "" else _as_int(turn_index, default=0)
+
+    text = (
+        payload.get("text") or payload.get("Text")
+        or payload.get("utterance") or payload.get("Utterance")
+        or payload.get("message") or payload.get("Message")
+        or payload.get("turn") or payload.get("Turn")
+        or payload.get("content") or payload.get("Content")
+        or payload.get("reply") or payload.get("Reply")
+        or payload.get("msg") or payload.get("Msg")
+    )
+    text = _safe_str(text)
+
+    sender = (
+        payload.get("sender") or payload.get("Sender")
+        or payload.get("role") or payload.get("Role")
+        or payload.get("author") or payload.get("Author")
+        or payload.get("from") or payload.get("From")
+    )
+    sender = _safe_str(sender)
+
+    gt = (
+        payload.get("ground_truth") or payload.get("Ground_Truth") or payload.get("groundTruth")
+        or payload.get("label") or payload.get("Label")
+        or payload.get("target") or payload.get("Target")
+        or payload.get("is_ai") or payload.get("isAI")
+        or payload.get("class") or payload.get("Class")
+        or payload.get("y") or payload.get("Y") or payload.get("MachineGen")
+    )
+    gt_norm = _normalize_gt(gt)
+
+    return dialogue_id, turn_index, text, gt_norm, sender
+
+
+def _build_prev_text_for_dialogue(turns_sorted, idx, max_chars=800):
+    if idx <= 0:
+        return ""
+    prev = _safe_str(turns_sorted[idx - 1].get("text", ""))
+    if len(prev) > max_chars:
+        prev = prev[-max_chars:]
+    return prev
+
+
+def _final_label_rule(ai_pct):
+    try:
+        p = float(ai_pct)
+    except Exception:
+        p = 0.0
+
+    if p <= 10:
+        return "Human"
+    if p >= 70:
+        return "AI-heavy"
+    return "Mixed"
+
+
+def _now_utc_iso():
+    return datetime.utcnow().isoformat() + "Z"
+
+
+def _rtdb_safe_key(raw_id: str) -> str:
+    s = _safe_str(raw_id) or "unknown_dialogue"
+    s_clean = re.sub(r'[.#$\[\]/]', '_', s) or "unknown_dialogue"
+    h = hashlib.md5(s.encode("utf-8")).hexdigest()[:8]
+    return f"{s_clean}__{h}"
+
+
+def _ensure_project_access(project_id):
+    if not session.get("idToken"):
+        return None, (jsonify({"error": "Unauthorized"}), 401)
+
+    uid = session.get("uid")
+
+    proj_doc = db.collection("projects").document(project_id).get()
+    if not proj_doc.exists:
+        return None, (jsonify({"error": "Project not found"}), 404)
+
+    proj_data = proj_doc.to_dict()
+    is_owner = (proj_data.get("owner_id") == uid)
+
+    is_examiner = False
+    if not is_owner:
+        inv_docs = list(
+            db.collection("invitations")
+            .where("project_id", "==", project_id)
+            .where("examiner_id", "==", uid)
+            .where("status", "==", "accepted")
+            .limit(1)
+            .stream()
+        )
+        is_examiner = len(inv_docs) > 0
+
+    if not is_owner and not is_examiner:
+        return None, (jsonify({"error": "Forbidden"}), 403)
+
+    return {"uid": uid, "proj_data": proj_data}, None
+
+
+def _predict_with_proba(text: str, previous_text: str = "", threshold: float = 0.5, model_key: str = CONV_LOGREG_KEY):
+    p_machine = None
+    pred_int = 0
+
+    if model_key == CONV_RNN_KEY:
+        seq = conv_rnn_tokenizer.texts_to_sequences([text or ""])
+        x = pad_sequences(seq, maxlen=CONV_RNN_MAX_LEN, padding="post", truncating="post")
+        raw_pred = conv_rnn_model.predict(x, verbose=0)
+        arr = np.asarray(raw_pred)
+        p_pos = float(arr[0, 1]) if (arr.ndim == 2 and arr.shape[1] == 2) else float(arr.reshape(-1)[0])
+        p_machine = p_pos if CONV_RNN_AI_CLASS_IS_ONE else (1.0 - p_pos)
+        p_machine = float(np.clip(p_machine, 0.0, 1.0))
+        pred_int = 1 if p_machine >= float(threshold) else 0
+        confidence = p_machine if pred_int == 1 else (1.0 - p_machine)
+        return pred_int, p_machine, confidence
+
+    out = predict_one_turn(text, previous_text)
+
+    if isinstance(out, dict):
+        if "pred_int" in out:
+            pred_int = int(out.get("pred_int") or 0)
+        elif "prediction_int" in out:
+            pred_int = int(out.get("prediction_int") or 0)
+        elif "pred" in out:
+            pred_int = int(out.get("pred") or 0)
+        elif "prediction" in out:
+            pred_int = int(out.get("prediction") or 0)
+
+        for k in ("p_machine", "proba", "prob", "score", "machine_proba"):
+            if k in out and out.get(k) is not None:
+                try:
+                    p_machine = float(out.get(k))
+                except Exception:
+                    p_machine = None
+                break
+
+    elif isinstance(out, (tuple, list)) and len(out) >= 2:
+        a, b = out[0], out[1]
+
+        def _is_prob(x):
+            try:
+                fx = float(x)
+                return 0.0 <= fx <= 1.0
+            except Exception:
+                return False
+
+        if _is_prob(a) and not _is_prob(b):
+            p_machine = float(a)
+            pred_int = int(b)
+        elif _is_prob(b) and not _is_prob(a):
+            p_machine = float(b)
+            pred_int = int(a)
+        else:
+            try:
+                pred_int = int(a)
+            except Exception:
+                pred_int = 0
+            p_machine = float(b) if _is_prob(b) else None
+
+    elif isinstance(out, (float, int)) and not isinstance(out, bool):
+        try:
+            fx = float(out)
+            if 0.0 <= fx <= 1.0 and fx not in (0.0, 1.0):
+                p_machine = fx
+            else:
+                pred_int = int(fx)
+        except Exception:
+            pred_int = 0
+
+    if p_machine is not None:
+        pred_int = 1 if p_machine >= float(threshold) else 0
+        confidence = p_machine if pred_int == 1 else (1.0 - p_machine)
+    else:
+        confidence = None
+        pred_int = 1 if int(pred_int) == 1 else 0
+
+    return pred_int, p_machine, confidence
+
+
+@app.route("/api/project/<project_id>/conversation_dataset", methods=["GET"])
+def get_project_conversation_dataset(project_id):
+    ctx, err = _ensure_project_access(project_id)
+    if err:
+        return err
+
+    proj_data = ctx["proj_data"]
+    dataset_id = proj_data.get("dataset_id")
+    if not dataset_id:
+        return jsonify({"error": "No dataset found for this project"}), 404
+
+    try:
+        ref = rtdb.reference(f"datasets/uploaded_conversations/{dataset_id}")
+        snapshot = ref.get()
+
+        if not snapshot:
+            return jsonify({"dialogues": [], "total_rows": 0, "dataset_id": dataset_id}), 200
+
+        temp_rows = []
+        any_dialogue_id = False
+
+        for push_id, row_data in snapshot.items():
+            if not isinstance(row_data, dict):
+                continue
+
+            payload = row_data.get("payload", {}) or {}
+            if not isinstance(payload, dict):
+                continue
+
+            dialogue_id, turn_index, text, gt, sender = _extract_conversation_fields(payload)
+            if not _safe_str(text):
+                continue
+
+            if _safe_str(dialogue_id):
+                any_dialogue_id = True
+
+            temp_rows.append({
+                "id": push_id,
+                "dialogue_id": dialogue_id,
+                "turn_index": turn_index,
+                "text": text,
+                "sender": sender,
+                "ground_truth": gt,
+                "raw_payload": payload,
+            })
+
+        if not temp_rows:
+            return jsonify({"dialogues": [], "total_rows": 0, "dataset_id": dataset_id}), 200
+
+        rows = []
+        for r in temp_rows:
+            d_id = _safe_str(r.get("dialogue_id"))
+
+            if not any_dialogue_id and not d_id:
+                d_id = f"auto_dialogue_all_{dataset_id}"
+            elif any_dialogue_id and not d_id:
+                d_id = "unknown_dialogue"
+
+            r["dialogue_id"] = d_id
+            rows.append(r)
+
+        dialogues_map = {}
+        for r in rows:
+            dialogues_map.setdefault(r["dialogue_id"], []).append(r)
+
+        dialogues = []
+        for d_id, turns in dialogues_map.items():
+            turns_sorted = sorted(
+                turns,
+                key=lambda x: (x.get("turn_index") is None, x.get("turn_index") or 0, x.get("id", ""))
+            )
+            for i, t in enumerate(turns_sorted):
+                if t.get("turn_index") is None:
+                    t["turn_index"] = i
+
+            turns_sorted.sort(key=lambda x: (x.get("turn_index", 0), x.get("id", "")))
+
+            dialogues.append({
+                "dialogue_id": d_id,
+                "num_turns": len(turns_sorted),
+                "turns": [
+                    {
+                        "turn_index": t.get("turn_index", 0),
+                        "text_preview": (t.get("text", "")[:160] + ("..." if len(t.get("text", "")) > 160 else "")),
+                        "sender": t.get("sender", ""),
+                        "ground_truth": t.get("ground_truth"),
+                        "row_id": t.get("id"),
+                    }
+                    for t in turns_sorted
+                ]
+            })
+
+        dialogues.sort(key=lambda d: d.get("num_turns", 0), reverse=True)
+
+        return jsonify({
+            "dialogues": dialogues,
+            "total_rows": len(rows),
+            "total_dialogues": len(dialogues),
+            "dataset_id": dataset_id,
+            "note": ("No dialogue_id found in upload. Grouped all rows into one dialogue."
+                     if not any_dialogue_id else "")
+        }), 200
+
+    except Exception as e:
+        app.logger.exception("Failed to fetch conversation dataset: %s", e)
+        return jsonify({"error": "Failed to fetch dataset"}), 500
+
+
+@app.route("/api/project/<project_id>/analyze_conversations", methods=["POST"])
+def analyze_all_conversations(project_id):
+    ctx, err = _ensure_project_access(project_id)
+    if err:
+        return err
+
+    uid = ctx["uid"]
+    proj_data = ctx["proj_data"]
+
+    dataset_id = proj_data.get("dataset_id")
+    if not dataset_id:
+        return jsonify({"error": "No dataset found"}), 404
+
+    req = request.get_json(silent=True) or {}
+    model_key = _safe_str(req.get("model_key")) or "tfidf_logreg"
+    if model_key in ("baseline_rnn", "conv_rnn"):
+        model_key = CONV_RNN_KEY
+    elif model_key not in (CONV_LOGREG_KEY, CONV_RNN_KEY):
+        model_key = CONV_LOGREG_KEY
+
+    try:
+        threshold = float(req.get("threshold", 0.5))
+        if threshold < 0.0:
+            threshold = 0.0
+        if threshold > 1.0:
+            threshold = 1.0
+    except Exception:
+        threshold = 0.5
+
+    run_id = uuid.uuid4().hex[:10]
+    analyzed_at = _now_utc_iso()
+
+    try:
+        ref = rtdb.reference(f"datasets/uploaded_conversations/{dataset_id}")
+        snapshot = ref.get()
+        if not snapshot:
+            return jsonify({"error": "Dataset is empty"}), 404
+
+        temp_rows = []
+        any_dialogue_id = False
+
+        for push_id, row_data in snapshot.items():
+            if not isinstance(row_data, dict):
+                continue
+
+            payload = row_data.get("payload", {}) or {}
+            if not isinstance(payload, dict):
+                continue
+
+            dialogue_id, turn_index, text, gt, sender = _extract_conversation_fields(payload)
+            text = _safe_str(text)
+            if not text:
+                continue
+
+            if _safe_str(dialogue_id):
+                any_dialogue_id = True
+
+            temp_rows.append({
+                "row_id": push_id,
+                "dialogue_id": dialogue_id,
+                "turn_index": turn_index,
+                "text": text,
+                "sender": sender,
+                "gt": gt,
+            })
+
+        if not temp_rows:
+            return jsonify({"error": "Dataset rows have no valid text"}), 404
+
+        rows = []
+        for r in temp_rows:
+            d_id = _safe_str(r.get("dialogue_id"))
+
+            if not any_dialogue_id and not d_id:
+                d_id = f"auto_dialogue_all_{dataset_id}"
+            elif any_dialogue_id and not d_id:
+                d_id = "unknown_dialogue"
+
+            r["dialogue_id"] = d_id
+            rows.append(r)
+
+        dialogues_map = {}
+        for r in rows:
+            dialogues_map.setdefault(r["dialogue_id"], []).append(r)
+
+        dialogue_details = []
+        dialogue_turns_map = {}
+
+        human_turns = 0
+        machine_turns = 0
+
+        y_true = []
+        y_pred = []
+        has_any_gt = False
+        has_all_gt = True
+
+        for d_id, turns in dialogues_map.items():
+            turns_sorted = sorted(
+                turns,
+                key=lambda x: (x.get("turn_index") is None, x.get("turn_index") or 0, x.get("row_id", ""))
+            )
+            for i, t in enumerate(turns_sorted):
+                if t.get("turn_index") is None:
+                    t["turn_index"] = i
+
+            turns_sorted.sort(key=lambda x: (x.get("turn_index", 0), x.get("row_id", "")))
+
+            d_h = 0
+            d_m = 0
+            per_turn = []
+
+            for i, t in enumerate(turns_sorted):
+                previous_text = _build_prev_text_for_dialogue(turns_sorted, i)
+
+                pred, p_machine, confidence = _predict_with_proba(
+                    text=t["text"],
+                    previous_text=previous_text,
+                    threshold=threshold,
+                    model_key=model_key
+                )
+
+                if pred == 0:
+                    human_turns += 1
+                    d_h += 1
+                else:
+                    machine_turns += 1
+                    d_m += 1
+
+                gt = t.get("gt")
+                if gt is None:
+                    has_all_gt = False
+                else:
+                    has_any_gt = True
+                    y_true.append(int(gt))
+                    y_pred.append(int(pred))
+
+                per_turn.append({
+                    "row_id": t["row_id"],
+                    "dialogue_id": d_id,
+                    "turn_index": int(t.get("turn_index", 0) or 0),
+                    "sender": t.get("sender", ""),
+                    "text": t.get("text", ""),
+                    "text_preview": (t["text"][:180] + ("..." if len(t["text"]) > 180 else "")),
+                    "previous_text": previous_text,
+                    "prediction": "Machine-generated" if pred == 1 else "Human",
+                    "prediction_int": int(pred),
+                    "p_machine": p_machine,
+                    "confidence": confidence,
+                    "ground_truth": gt,
+                })
+
+            dialogue_turns_map[d_id] = per_turn
+
+            total_d = max(1, (d_h + d_m))
+            d_ai_pct = round((d_m / total_d) * 100.0, 2)
+            d_h_pct = round((d_h / total_d) * 100.0, 2)
+            final_label = _final_label_rule(d_ai_pct)
+
+            dialogue_details.append({
+                "dialogue_id": d_id,
+                "turns": total_d,
+                "human_turns": d_h,
+                "ai_turns": d_m,
+                "human_percentage": d_h_pct,
+                "ai_percentage": d_ai_pct,
+                "final_label": final_label,
+            })
+
+        total_turns = human_turns + machine_turns
+        if total_turns == 0:
+            return jsonify({"error": "No turns analyzed"}), 500
+
+        summary = {
+            "project_id": project_id,
+            "dataset_id": dataset_id,
+            "model_key": model_key,
+            "run_id": run_id,
+            "analyzed_at": analyzed_at,
+            "analyzed_by": uid,
+            "threshold": threshold,
+            "total_dialogues": len(dialogues_map),
+            "total_turns": total_turns,
+            "human_turns": human_turns,
+            "machine_turns": machine_turns,
+            "human_percentage": round((human_turns / total_turns) * 100.0, 2),
+            "machine_percentage": round((machine_turns / total_turns) * 100.0, 2),
+            "has_any_ground_truth": has_any_gt,
+            "has_all_ground_truth": has_all_gt,
+            "show_confusion_matrix": bool(has_any_gt),
+            "show_classification_report": bool(has_any_gt),
+            "note": ("No dialogue_id found in upload. Grouped all rows into one dialogue."
+                     if not any_dialogue_id else "")
+        }
+
+        metrics_block = {}
+        if has_any_gt and len(y_true) == len(y_pred) and len(y_true) > 0:
+            try:
+                from sklearn.metrics import (
+                    confusion_matrix, classification_report,
+                    f1_score, precision_score, recall_score, accuracy_score
+                )
+
+                cm_2d = confusion_matrix(y_true, y_pred, labels=[0, 1]).tolist()
+                if not (isinstance(cm_2d, list) and len(cm_2d) == 2 and len(cm_2d[0]) == 2 and len(cm_2d[1]) == 2):
+                    cm_2d = [[0, 0], [0, 0]]
+
+                report_dict = classification_report(
+                    y_true, y_pred, labels=[0, 1],
+                    target_names=["Human", "Machine-generated"],
+                    output_dict=True,
+                    zero_division=0
+                )
+
+                macro = {
+                    "accuracy": float(accuracy_score(y_true, y_pred)),
+                    "precision_macro": float(precision_score(y_true, y_pred, average="macro", zero_division=0)),
+                    "recall_macro": float(recall_score(y_true, y_pred, average="macro", zero_division=0)),
+                    "f1_macro": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
+                }
+
+                metrics_block = {
+                    "confusion_matrix": cm_2d,
+                    "classification_report": report_dict,
+                    "macro_metrics": macro
+                }
+            except Exception as e:
+                app.logger.warning("Metrics skipped: %s", e)
+                metrics_block = {
+                    "confusion_matrix": None,
+                    "classification_report": None,
+                    "macro_metrics": None,
+                    "metrics_error": "Could not compute sklearn metrics on server."
+                }
+
+        analysis_doc = {**summary, **metrics_block}
+
+        try:
+            db.collection("project_analysis_conversations").document(project_id).collection("runs").document(run_id).set(analysis_doc)
+            db.collection("project_analysis_conversations").document(project_id).set({
+                "latest_run_id": run_id,
+                "latest_model_key": model_key,
+                "latest_analyzed_at": analyzed_at
+            }, merge=True)
+        except Exception as e:
+            app.logger.warning("Firestore save skipped/failed: %s", e)
+
+        base_ref = rtdb.reference(f"analysis_results/conversations/{model_key}/{project_id}")
+        base_ref.child("latest_run_id").set(run_id)
+
+        run_ref = base_ref.child("runs").child(run_id)
+
+        run_ref.child("summary").set(analysis_doc)
+        run_ref.child("dialogues").set(dialogue_details)
+
+        turns_ref = run_ref.child("dialogue_turns")
+        dialogue_key_map = {}
+
+        for d_id, per_turn in dialogue_turns_map.items():
+            safe_key = _rtdb_safe_key(d_id)
+            dialogue_key_map[d_id] = safe_key
+            turns_ref.child(safe_key).set(per_turn)
+
+        run_ref.child("dialogue_key_map").set(dialogue_key_map)
+
+        return jsonify({
+            "message": "Conversation analysis complete",
+            "summary": analysis_doc,
+            "total_dialogues": summary["total_dialogues"],
+            "total_turns": summary["total_turns"],
+            "model_key": model_key,
+            "run_id": run_id
+        }), 200
+
+    except Exception as e:
+        app.logger.exception("Conversation batch analysis failed: %s", e)
+        return jsonify({"error": "Analysis failed"}), 500
+
+
+@app.route("/api/project/<project_id>/conversation_dialogue/<dialogue_id>", methods=["GET"])
+def get_one_dialogue_details(project_id, dialogue_id):
+    ctx, err = _ensure_project_access(project_id)
+    if err:
+        return err
+
+    model_key = _safe_str(request.args.get("model_key")) or "tfidf_logreg"
+    run_id = _safe_str(request.args.get("run_id"))
+
+    base_ref = rtdb.reference(f"analysis_results/conversations/{model_key}/{project_id}")
+
+    if not run_id:
+        run_id = _safe_str(base_ref.child("latest_run_id").get())
+
+    if not run_id:
+        return jsonify({"error": "No run found (analyze first)"}), 404
+
+    run_ref = base_ref.child("runs").child(run_id)
+
+    summary = run_ref.child("summary").get()
+    if not summary:
+        return jsonify({"error": "No results for this run"}), 404
+
+    key_map = run_ref.child("dialogue_key_map").get() or {}
+    safe_key = key_map.get(dialogue_id) or _rtdb_safe_key(dialogue_id)
+
+    turns = run_ref.child("dialogue_turns").child(safe_key).get() or []
+
+    h = sum(1 for t in turns if int(t.get("prediction_int", 0)) == 0)
+    a = sum(1 for t in turns if int(t.get("prediction_int", 0)) == 1)
+    total = max(1, h + a)
+    ai_pct = round((a / total) * 100.0, 2)
+
+    header = {
+        "dialogue_id": dialogue_id,
+        "total_turns": h + a,
+        "human_turns": h,
+        "ai_turns": a,
+        "human_percentage": round((h / total) * 100.0, 2),
+        "ai_percentage": ai_pct,
+        "final_label": _final_label_rule(ai_pct),
+        "model_key": model_key,
+        "run_id": run_id,
+    }
+
+    return jsonify({
+        "header": header,
+        "turns": turns
+    }), 200
+
+
+@app.route("/api/project/<project_id>/conversation_analysis_results", methods=["GET"])
+def get_conversation_analysis_results(project_id):
+    ctx, err = _ensure_project_access(project_id)
+    if err:
+        return err
+
+    model_key = _safe_str(request.args.get("model_key")) or "tfidf_logreg"
+    run_id = _safe_str(request.args.get("run_id"))
+
+    base_ref = rtdb.reference(f"analysis_results/conversations/{model_key}/{project_id}")
+
+    if not run_id:
+        run_id = _safe_str(base_ref.child("latest_run_id").get())
+
+    if not run_id:
+        return jsonify({"error": "No conversation analysis results found"}), 404
+
+    run_ref = base_ref.child("runs").child(run_id)
+
+    summary = run_ref.child("summary").get()
+    dialogues = run_ref.child("dialogues").get()
+
+    if not summary or dialogues is None:
+        return jsonify({"error": "No conversation analysis results found"}), 404
+
+    return jsonify({
+        "summary": summary,
+        "dialogues": dialogues
+    }), 200
+
+
+@app.route("/api/project/<project_id>/conversation_export", methods=["GET"])
+def export_conversation_enriched_dataset(project_id):
+    ctx, err = _ensure_project_access(project_id)
+    if err:
+        return err
+
+    model_key = _safe_str(request.args.get("model_key")) or "tfidf_logreg"
+    run_id = _safe_str(request.args.get("run_id"))
+
+    base_ref = rtdb.reference(f"analysis_results/conversations/{model_key}/{project_id}")
+    if not run_id:
+        run_id = _safe_str(base_ref.child("latest_run_id").get())
+
+    if not run_id:
+        return jsonify({"error": "No run found (analyze first)"}), 404
+
+    run_ref = base_ref.child("runs").child(run_id)
+
+    dialogue_turns = run_ref.child("dialogue_turns").get() or {}
+    key_map = run_ref.child("dialogue_key_map").get() or {}
+
+    rev_map = {v: k for k, v in (key_map.items() if isinstance(key_map, dict) else [])}
+
+    flat = []
+    for safe_key, turns in (dialogue_turns.items() if isinstance(dialogue_turns, dict) else []):
+        if not isinstance(turns, list):
+            continue
+
+        original_id = rev_map.get(safe_key, safe_key)
+
+        for t in turns:
+            flat.append({
+                "dialogue_id": original_id,
+                "turn_index": t.get("turn_index", 0),
+                "sender": t.get("sender", ""),
+                "text": t.get("text", ""),
+                "previous_text": t.get("previous_text", ""),
+                "prediction": t.get("prediction", ""),
+                "prediction_int": t.get("prediction_int", None),
+                "p_machine": t.get("p_machine", None),
+                "confidence": t.get("confidence", None),
+                "ground_truth": t.get("ground_truth", None),
+                "source_row_id": t.get("row_id", ""),
+            })
+
+    flat.sort(key=lambda x: (str(x.get("dialogue_id", "")), int(x.get("turn_index", 0) or 0)))
+
+    return jsonify({
+        "project_id": project_id,
+        "model_key": model_key,
+        "run_id": run_id,
+        "exported_at": _now_utc_iso(),
+        "rows": flat,
+        "total_rows": len(flat)
+    }), 200
+
+
 if __name__ == "__main__":
  app.run(debug=True)

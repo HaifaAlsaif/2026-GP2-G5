@@ -972,11 +972,12 @@ const isGenerated =
   data.generated_from_scratch === true ||
   data.generated_from_scratch === "true";
   window.isGeneratedConversationProject = isGenerated;
+  window.isUploadedConversationProject = isConversation && !isGenerated;
 
 
 const displayCategory = (isConversation && isGenerated)
   ? "Generate Conversation"
-  : (data.category || "Unknown");
+  : (isConversation ? "Uploaded Conversation" : (data.category || "Unknown"));
 
 catSpan.textContent = displayCategory;
 categoryDiv.appendChild(catSpan);
@@ -1176,7 +1177,13 @@ loadProjectDetails().then(() => {
 });
 
   function goToTask(taskId, type, taskType) {
-    // ✅ لو Article Task
+    // ✅ Uploaded Conversation Detection
+    if (window.isUploadedConversationProject === true && taskType === 'model_selection') {
+      window.location.href = `/projectdetailsexaminer/${PROJECT_ID}/conversation-analysis?taskId=${encodeURIComponent(taskId)}&projectId=${encodeURIComponent(PROJECT_ID)}`;
+      return;
+    }
+
+    // ✅ Article Task أو Uploaded Conversation feedback لاحقاً
     if (!type) {
       if (taskType === 'model_selection') {
         window.location.href = `/task/${taskId}/model-selection`;

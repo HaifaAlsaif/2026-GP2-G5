@@ -92,6 +92,16 @@
     .drop h5{margin:0;font-size:16px;font-weight:400}
     .drop p{margin:0;color:var(--muted)}
     .file-input{display:none}
+    .dataset-guide{display:none;border:1px solid rgba(0,184,219,.28);border-radius:10px;background:linear-gradient(90deg,rgba(0,184,219,.06),rgba(21,93,252,.05));padding:12px 14px;margin-top:12px}
+    .dataset-guide.show{display:block}
+    .guide-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted)}
+    .guide-link{border:0;background:transparent;color:#155DFC;font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;padding:0}
+    .guide-details{display:none;margin-top:12px;border-top:1px solid rgba(0,0,0,.08);padding-top:12px}
+    .guide-details.open{display:block}
+    .guide-details h5{margin:0 0 8px;font-size:14px}
+    .guide-details ul{margin:0 0 10px 18px;padding:0;color:var(--muted)}
+    .guide-details li{margin:4px 0}
+    .guide-example{margin:8px 0 0;white-space:pre-wrap;overflow:auto;border-radius:8px;background:#fff;border:1px solid var(--line);padding:10px;font-size:12px;color:#334155}
     .gen-row{display:none;align-items:center;gap:8px}
     .checkbox{width:16px;height:16px;border-radius:4px;background:#f3f3f5;border:0.8px solid var(--line);box-shadow:0 1px 2px rgba(0,0,0,.05)}
     .cats:has(#cat-conv:checked) ~ .dataset .gen-row{display:flex;}
@@ -186,6 +196,17 @@
   background:var(--dm-input) !important;
   border:1px solid var(--dm-line) !important;
   color:var(--dm-text) !important;
+}
+
+[data-theme="dark"] .dataset-guide{
+  background:linear-gradient(90deg,rgba(0,184,219,.12),rgba(21,93,252,.10));
+  border-color:#35517c;
+}
+[data-theme="dark"] .guide-details{border-top-color:#35517c}
+[data-theme="dark"] .guide-example{
+  background:#10213f;
+  border-color:#35517c;
+  color:#dce9ff;
 }
 
 [data-theme="dark"] .input::placeholder,
@@ -338,6 +359,13 @@
                 <p>Evaluate dialogue content</p>
               </label>
             </div>
+            <div class="dataset-guide" id="datasetGuide">
+              <div class="guide-summary">
+                <span id="guideIntro">Before uploading, check the accepted CSV structure.</span>
+                <button class="guide-link" id="guideToggle" type="button">Dataset structure</button>
+              </div>
+              <div class="guide-details" id="guideDetails"></div>
+            </div>
           </div>
 
           <!-- Dataset -->
@@ -447,6 +475,7 @@ if (BASIC_MODE) {
   
     
       syncGenVisibility();
+      syncDatasetGuide();
     
       // تعديل العنوان والزر
       $(".title").textContent = "Edit Project";
@@ -539,13 +568,69 @@ if (BASIC_MODE) {
 
     /* ===== Category & Dataset ===== */
     const catNews=$("#cat-news"), catConv=$("#cat-conv"), genRow=$("#genRow");
+    const datasetGuide=$("#datasetGuide"), guideIntro=$("#guideIntro"),
+          guideToggle=$("#guideToggle"), guideDetails=$("#guideDetails");
+    const guideContent = {
+      news: {
+        intro: "News datasets must include an article text column. Click Dataset structure for the accepted CSV columns.",
+        html: `
+          <h5>News Articles CSV</h5>
+          <ul>
+            <li>Required text column: <strong>text</strong>, <strong>Text</strong>, <strong>content</strong>, or <strong>Content</strong>.</li>
+            <li>Optional title column: <strong>title</strong> or <strong>Title</strong>.</li>
+            <li>Optional label column can be included for reference, such as <strong>label</strong>.</li>
+          </ul>
+          <pre class="guide-example">title,text,label
+Article title,Full article text here,Human
+Another title,Generated article text here,AI</pre>
+        `
+      },
+      conversation: {
+        intro: "Conversation datasets need turn-level rows. Click Dataset structure for the accepted dialogue columns.",
+        html: `
+          <h5>Conversations CSV</h5>
+          <ul>
+            <li>Dialogue id: <strong>dialogue_id</strong>, <strong>conversation_id</strong>, <strong>chat_id</strong>, <strong>thread_id</strong>, <strong>session_id</strong>, or <strong>id</strong>.</li>
+            <li>Turn order: <strong>turn_index</strong>, <strong>turn_id</strong>, <strong>turn_number</strong>, <strong>utterance_id</strong>, or <strong>message_index</strong>.</li>
+            <li>Required text column: <strong>text</strong>, <strong>utterance</strong>, <strong>message</strong>, <strong>turn</strong>, <strong>content</strong>, <strong>reply</strong>, or <strong>msg</strong>.</li>
+            <li>Optional sender: <strong>sender</strong>, <strong>role</strong>, <strong>author</strong>, or <strong>from</strong>.</li>
+            <li>Optional ground truth: <strong>ground_truth</strong>, <strong>label</strong>, <strong>target</strong>, <strong>is_ai</strong>, <strong>class</strong>, <strong>y</strong>, or <strong>MachineGen</strong>.</li>
+          </ul>
+          <pre class="guide-example">dialogue_id,turn_index,sender,text,ground_truth
+conv1,1,human,Hello how are you?,human
+conv1,2,assistant,I am doing well.,ai</pre>
+        `
+      }
+    };
+
+    function syncDatasetGuide(){
+      const type = catNews.checked ? "news" : (catConv.checked ? "conversation" : "");
+      if(!type){
+        datasetGuide.classList.remove("show");
+        guideDetails.classList.remove("open");
+        guideDetails.innerHTML = "";
+        return;
+      }
+      datasetGuide.classList.add("show");
+      guideIntro.textContent = guideContent[type].intro;
+      guideDetails.innerHTML = guideContent[type].html;
+      guideDetails.classList.remove("open");
+      guideToggle.textContent = "Dataset structure";
+    }
+
+    guideToggle.addEventListener("click", () => {
+      const isOpen = guideDetails.classList.toggle("open");
+      guideToggle.textContent = isOpen ? "Hide structure" : "Dataset structure";
+    });
+
     function syncGenVisibility(){
   const hasUploadedFile = !!document.getElementById("file")?.files?.[0];
   genRow.style.display = (catConv.checked && !hasUploadedFile) ? "flex" : "none";
 }
-    catNews.addEventListener("change", syncGenVisibility);
-    catConv.addEventListener("change", syncGenVisibility);
+    catNews.addEventListener("change", () => { syncGenVisibility(); syncDatasetGuide(); });
+    catConv.addEventListener("change", () => { syncGenVisibility(); syncDatasetGuide(); });
     syncGenVisibility();
+    syncDatasetGuide();
 
     /* ===== Dropzone ===== */
     const fileInput=$("#file"), drop=$("#dropzone"), fileErr=$("#fileErr"),
@@ -801,6 +886,7 @@ loadVolunteers().then(() => {
       catNews.checked = false;
       catConv.checked = false;
       syncGenVisibility();
+      syncDatasetGuide();
 
       // dataset
       fileInput.value="";
