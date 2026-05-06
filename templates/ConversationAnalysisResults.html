@@ -1275,6 +1275,7 @@ a{color:inherit}
     "prediction",
     "ground_truth",
     "confidence",
+    "uncertainty",
     "p_machine",
     "source_row_id",
   ];
@@ -1298,6 +1299,18 @@ a{color:inherit}
   }
 
   // ✅ confidence fallback from p_machine if empty
+  function confidenceFromMachineProbability(value){
+    const pmNum = Number(value);
+    if(!Number.isFinite(pmNum)) return "";
+    return Math.max(pmNum, 1 - pmNum);
+  }
+
+  function uncertaintyFromMachineProbability(value){
+    const pmNum = Number(value);
+    if(!Number.isFinite(pmNum)) return "";
+    return Math.abs(pmNum - 0.5);
+  }
+
   function normalizeExportRow(row){
     const out = {};
     EXPORT_COL_ORDER.forEach(k=>{
@@ -1312,8 +1325,15 @@ a{color:inherit}
 
     if(!(typeof conf === "number" || (Number.isFinite(confNum) && conf !== ""))){
       if(Number.isFinite(pmNum)){
-        // store as decimal probability (0..1) to be consistent
-        out.confidence = pmNum;
+        out.confidence = confidenceFromMachineProbability(pmNum);
+      }
+    }
+
+    const uncertainty = out.uncertainty;
+    const uncertaintyNum = Number(uncertainty);
+    if(!(typeof uncertainty === "number" || (Number.isFinite(uncertaintyNum) && uncertainty !== ""))){
+      if(Number.isFinite(pmNum)){
+        out.uncertainty = uncertaintyFromMachineProbability(pmNum);
       }
     }
 
@@ -1813,11 +1833,11 @@ expandTr.innerHTML = `
 
   function getConfidencePercent(t){
     const c = t?.confidence;
-    if(typeof c === "number" && Number.isFinite(c)) return c * 100;
+    if(typeof c === "number" && Number.isFinite(c)) return c <= 1 ? c * 100 : c;
 
     const pm = t?.p_machine ?? t?.prob_machine ?? t?.probability_machine ?? t?.pMachine;
     const pmNum = Number(pm);
-    if(Number.isFinite(pmNum)) return pmNum * 100;
+    if(Number.isFinite(pmNum)) return Math.max(pmNum, 1 - pmNum) * 100;
 
     return null;
   }

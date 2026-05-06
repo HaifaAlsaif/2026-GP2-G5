@@ -18,6 +18,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 import requests
 import re
 import hashlib
+import math
 from llm_service import generate_reply
 from conversation_baseline_model import predict_one_turn
 from flask import abort
@@ -58,6 +59,10 @@ CONV_RNN_MAX_LEN = 300
 CONV_LOGREG_MODEL_PATH = "models/conversation_logistic_regression.joblib"
 CONV_RNN_MODEL_PATH = "Model-Gen-Con/rnn_v2_model.keras"
 CONV_RNN_TOKENIZER_PATH = "Model-Gen-Con/rnn_v2_tokenizer.pkl"
+
+# إعدادات اختيار عينات Active Learning للمراجعة
+ACTIVE_LEARNING_PERCENT = 0.20
+ACTIVE_LEARNING_MAX_SAMPLES = 50
 
 import __main__
 __main__.ItemSelector = ItemSelector
@@ -109,6 +114,200 @@ def rnn_predict_proba(texts):
 
 
 #------------- 
+def _confidence_uncertainty_from_prob(p_positive):
+    """
+    يحسب الثقة وعدم اليقين من احتمال الكلاس الإيجابي.
+    كلما كان الاحتمال قريب من 0.5 يكون المثال أولى بالمراجعة.
+    """
+    try:
+        p = float(p_positive)
+    except Exception:
+        return None, None
+
+    p = float(np.clip(p, 0.0, 1.0))
+    confidence = max(p, 1.0 - p)
+    uncertainty = abs(p - 0.5)
+    return confidence, uncertainty
+
+
+def _percent_or_none(value):
+    """
+    يحول القيمة العشرية إلى نسبة مئوية عند توفرها.
+    """
+    if value is None:
+        return None
+    try:
+        return round(float(value) * 100.0, 2)
+    except Exception:
+        return None
+
+
+def _machine_probability_from_proba(model, proba_row):
+    """
+    يستخرج احتمال الكلاس Machine/AI من predict_proba.
+    يعتمد على class 1 عند توفر classes_، وإلا يستخدم العمود الثاني مثل كود التدريب.
+    """
+    try:
+        classes = list(getattr(model, "classes_", []))
+        if 1 in classes:
+            return float(proba_row[classes.index(1)])
+        if "1" in classes:
+            return float(proba_row[classes.index("1")])
+        for label in ("AI", "Machine", "Machine-generated", "machine", "machine-generated"):
+            if label in classes:
+                return float(proba_row[classes.index(label)])
+    except Exception:
+        pass
+
+    try:
+        return float(proba_row[1])
+    except Exception:
+        return None
+
+
+def _active_learning_limit(total_count):
+    """
+    يختار 20% من العينات بحد أقصى 50 عينة.
+    """
+    try:
+        total = int(total_count or 0)
+    except Exception:
+        total = 0
+
+    if total <= 0:
+        return 0
+
+    return max(1, min(ACTIVE_LEARNING_MAX_SAMPLES, int(math.ceil(total * ACTIVE_LEARNING_PERCENT))))
+
+
+def _active_learning_sort_value(row):
+    """
+    قيمة الترتيب لاختيار الأقل ثقة.
+    الأقل يعني أقرب لاحتمال 0.5 وأهم للمراجعة.
+    """
+    if not isinstance(row, dict):
+        return float("inf")
+
+    raw_uncertainty = row.get("uncertainty")
+    if raw_uncertainty is not None:
+        try:
+            value = float(raw_uncertainty)
+            return value * 100.0 if value <= 1 else value
+        except Exception:
+            pass
+
+    raw_confidence = row.get("confidence")
+    if raw_confidence is not None:
+        try:
+            value = float(raw_confidence)
+            value = value * 100.0 if value <= 1 else value
+            return max(0.0, value - 50.0)
+        except Exception:
+            pass
+
+    raw_p_machine = row.get("p_machine")
+    if raw_p_machine is not None:
+        try:
+            return abs(float(raw_p_machine) - 0.5) * 100.0
+        except Exception:
+            pass
+
+    raw_ai = row.get("ai_percentage")
+    if raw_ai is not None:
+        try:
+            value = float(raw_ai)
+            value = value / 100.0 if value > 1 else value
+            return abs(value - 0.5) * 100.0
+        except Exception:
+            pass
+
+    return float("inf")
+
+
+def _is_logistic_model_key(model_key):
+    """
+    Active Learning يطبق على Logistic Regression فقط.
+    """
+    normalized = _safe_str(model_key).lower()
+    return normalized in ("logistic", "logreg", CONV_LOGREG_KEY)
+
+
+def _apply_active_learning_turn_selection(items, enabled=True):
+    """
+    يختار أقل turns ثقة مع إبقاء بقية Turns داخل نفس المحادثة كسياق.
+    """
+    if not enabled:
+        return items, {
+            "enabled": False,
+            "percent": ACTIVE_LEARNING_PERCENT,
+            "max_samples": ACTIVE_LEARNING_MAX_SAMPLES,
+            "source_total": sum(len(item.get("turns") or []) for item in items),
+            "selected": sum(len(item.get("turns") or []) for item in items),
+            "reviewed": sum(1 for item in items if item.get("conversation_locked")),
+            "total": len(items),
+            "unit": "conversations"
+        }
+
+    candidates = []
+    for item in items:
+        conversation_id = item.get("conversation_id")
+        for turn in item.get("turns") or []:
+            candidates.append({
+                "conversation_id": conversation_id,
+                "turn_index": int(turn.get("turn_index", 0) or 0),
+                "score": _active_learning_sort_value(turn)
+            })
+
+    limit = _active_learning_limit(len(candidates))
+    selected = sorted(
+        candidates,
+        key=lambda row: (row["score"], str(row["conversation_id"]), row["turn_index"])
+    )[:limit]
+    selected_keys = {
+        (str(row["conversation_id"]), int(row["turn_index"]))
+        for row in selected
+    }
+
+    focused_items = []
+    reviewed_turns = 0
+    for item in items:
+        conversation_id = str(item.get("conversation_id"))
+        selected_count = 0
+        reviewed_count = 0
+
+        for turn in item.get("turns") or []:
+            key = (conversation_id, int(turn.get("turn_index", 0) or 0))
+            is_selected = key in selected_keys
+            turn["active_learning_selected"] = is_selected
+            if is_selected:
+                selected_count += 1
+                if turn.get("turn_locked"):
+                    reviewed_count += 1
+
+        if selected_count > 0:
+            item["active_learning_selected_turns"] = selected_count
+            item["active_learning_reviewed_turns"] = reviewed_count
+            item["conversation_locked"] = reviewed_count >= selected_count
+            item["has_feedback"] = reviewed_count > 0
+            focused_items.append(item)
+            reviewed_turns += reviewed_count
+
+    focused_items.sort(key=lambda item: min(
+        [_active_learning_sort_value(turn) for turn in (item.get("turns") or []) if turn.get("active_learning_selected")] or [float("inf")]
+    ))
+
+    return focused_items, {
+        "enabled": True,
+        "percent": ACTIVE_LEARNING_PERCENT,
+        "max_samples": ACTIVE_LEARNING_MAX_SAMPLES,
+        "source_total": len(candidates),
+        "selected": len(selected_keys),
+        "reviewed": reviewed_turns,
+        "total": len(selected_keys),
+        "unit": "turns"
+    }
+
+
 def get_current_user_doc():
     """
     ترجع وثيقة المستخدم الحالي من Firestore
@@ -3094,6 +3293,7 @@ def analyze_all_articles(project_id):
           
             #4 النتيجة النهائية
             prediction = "AI" if final_ai > final_human else "Human"
+            confidence, uncertainty = _confidence_uncertainty_from_prob(final_ai)
             
             if prediction == "Human":
                 human_count += 1
@@ -3101,8 +3301,8 @@ def analyze_all_articles(project_id):
                 ai_count += 1
 
             results.append({
-                "confidence": round(max(final_human, final_ai) * 100, 2),
-                "confidence": round(max(final_human, final_ai) * 100, 2),
+                "confidence": _percent_or_none(confidence),
+                "uncertainty": _percent_or_none(uncertainty),
     "article_id": push_id,
     "title": title[:100] if title else "",
     "content": full_text[:500] if full_text else "",
@@ -3318,6 +3518,7 @@ def api_run_model(task_id):
             final_ai = sum(ai_scores) / len(ai_scores)
             
             prediction = "AI" if final_ai > final_human else "Human"
+            confidence, uncertainty = _confidence_uncertainty_from_prob(final_ai)
             
             if prediction == "Human":
                 human_count += 1
@@ -3325,8 +3526,8 @@ def api_run_model(task_id):
                 ai_count += 1
             
             results.append({
-                "confidence": round(max(final_human, final_ai) * 100, 2),
-                "confidence": round(max(final_human, final_ai) * 100, 2),
+                "confidence": _percent_or_none(confidence),
+                "uncertainty": _percent_or_none(uncertainty),
                 "article_id": push_id,
                 "title": title[:100] if title else "Untitled",
                 "content": content[:500] if content else "",  # ✅ أول 500 حرف
@@ -3440,6 +3641,7 @@ def api_select_model(task_id):
                 final_human = sum(human_scores) / len(human_scores)
                 final_ai = sum(ai_scores) / len(ai_scores)
                 prediction = "AI" if final_ai > final_human else "Human"
+                confidence, uncertainty = _confidence_uncertainty_from_prob(final_ai)
 
                 if prediction == "Human":
                     human_count += 1
@@ -3447,8 +3649,8 @@ def api_select_model(task_id):
                     ai_count += 1
 
                 results.append({
-                    "confidence": round(max(final_human, final_ai) * 100, 2),
-                    "confidence": round(max(final_human, final_ai) * 100, 2),
+                    "confidence": _percent_or_none(confidence),
+                    "uncertainty": _percent_or_none(uncertainty),
                     "article_id": push_id,
                     "title": title[:100],
                     "content": content[:500],
@@ -3769,15 +3971,38 @@ def api_get_task_articles(task_id):
                 "human_percentage": article.get("human_percentage", 0),
                 "ai_percentage": article.get("ai_percentage", 0),
                 "confidence": article.get("confidence"),
+                "uncertainty": article.get("uncertainty"),
                 "chunks": article.get("chunks", []),
                 "has_feedback": feedback is not None,
                 "feedback": feedback
             })
 
+        active_learning_enabled = _is_logistic_model_key(selected_model)
+        active_learning_total = len(articles_with_feedback)
+        active_learning_limit = _active_learning_limit(active_learning_total) if active_learning_enabled else active_learning_total
+
+        if active_learning_enabled:
+            selected_articles = sorted(
+                articles_with_feedback,
+                key=lambda item: (_active_learning_sort_value(item), item.get("article_id", ""))
+            )[:active_learning_limit]
+            selected_ids = {item.get("article_id") for item in selected_articles}
+            for item in articles_with_feedback:
+                item["active_learning_selected"] = item.get("article_id") in selected_ids
+            articles_with_feedback = [item for item in articles_with_feedback if item.get("active_learning_selected")]
+            articles_with_feedback.sort(key=lambda item: (_active_learning_sort_value(item), item.get("article_id", "")))
+
         return jsonify({
             "articles": articles_with_feedback,
             "summary": summary,
             "selected_model": selected_model,
+            "active_learning": {
+                "enabled": active_learning_enabled,
+                "percent": ACTIVE_LEARNING_PERCENT,
+                "max_samples": ACTIVE_LEARNING_MAX_SAMPLES,
+                "selected": len(articles_with_feedback),
+                "source_total": active_learning_total
+            },
             "total": len(articles_with_feedback)
         }), 200
 
@@ -4009,7 +4234,15 @@ def api_run_analysis_project(project_id):
 
             turns_ref = task_ref.child("turns")
             for i, (m, label) in enumerate(zip(msgs, labels), start=1):
-                conf = float(max(probs[i - 1])) if probs is not None else None
+                p_machine = None
+                conf = None
+                uncertainty = None
+                if probs is not None:
+                    if selected_model == CONV_RNN_KEY:
+                        p_machine = float(probs[i - 1][1])
+                    else:
+                        p_machine = _machine_probability_from_proba(conv_logreg_model, probs[i - 1])
+                    conf, uncertainty = _confidence_uncertainty_from_prob(p_machine)
                 turns_ref.push({
                     "turn_index": i,
                     "text": m["text"],
@@ -4017,7 +4250,9 @@ def api_run_analysis_project(project_id):
                     "prediction": label,
                     "gt": _gt_label_from_sender(m.get("sender_type"), conv_type),
                     "sender": _sender_label(m.get("sender_type"), conv_type),
+                    "p_machine": p_machine,
                     "confidence": conf,
+                    "uncertainty": uncertainty,
                 })
 
         if analyzed_conversations == 0:
@@ -4357,6 +4592,7 @@ def api_conversation_feedback_list(task_id):
         ai_count = 0
         human_count = 0
         confs = []
+        uncertainties = []
         clean_turns = []
         conv_feedback_users_map = {}
 
@@ -4383,6 +4619,17 @@ def api_conversation_feedback_list(task_id):
                     confs.append(c_pct)
                 except Exception:
                     c_pct = None
+
+            u_raw = t.get("uncertainty")
+            u_pct = None
+            if u_raw is not None:
+                try:
+                    u_pct = float(u_raw)
+                    if u_pct <= 1:
+                        u_pct *= 100.0
+                    uncertainties.append(u_pct)
+                except Exception:
+                    u_pct = None
 
             turn_idx = int(t.get("turn_index", 0) or 0)
 
@@ -4433,6 +4680,7 @@ def api_conversation_feedback_list(task_id):
                 "prediction": pred,
                 "gt": t.get("gt", ""),
                 "confidence": round(c_pct, 2) if isinstance(c_pct, (int, float)) else None,
+                "uncertainty": round(u_pct, 2) if isinstance(u_pct, (int, float)) else None,
                 "turn_locked": turn_locked,
                 "turn_feedback": shared_feedback,
                 "my_feedback": my_tf,
@@ -4453,6 +4701,7 @@ def api_conversation_feedback_list(task_id):
             "ai_percentage": ai_pct,
             "human_percentage": human_pct,
             "confidence": conv_conf,
+            "uncertainty": round(sum(uncertainties) / len(uncertainties), 2) if uncertainties else 0.0,
             "has_feedback": reviewed_in_conv > 0,
             "conversation_locked": conv_locked,
             "feedback_users": list(conv_feedback_users_map.values()),
@@ -4461,10 +4710,20 @@ def api_conversation_feedback_list(task_id):
 
     items.sort(key=lambda x: x["order_index"])
 
+    active_learning_enabled = _is_logistic_model_key(model_key)
+    items, active_learning_info = _apply_active_learning_turn_selection(items, active_learning_enabled)
+
     total_conversations = len(items)
     reviewed_conversations = sum(1 for x in items if x.get("conversation_locked"))
 
-    new_status = "completed" if total_conversations > 0 and reviewed_conversations >= total_conversations else ("progress" if reviewed_conversations > 0 else "pending")
+    if active_learning_enabled:
+        status_total = active_learning_info["total"]
+        status_reviewed = active_learning_info["reviewed"]
+    else:
+        status_total = total_conversations
+        status_reviewed = reviewed_conversations
+
+    new_status = "completed" if status_total > 0 and status_reviewed >= status_total else ("progress" if status_reviewed > 0 else "pending")
     if (task_data.get("status") or "").strip().lower() != new_status:
         db.collection("tasks").document(task_id).update({"status": new_status})
 
@@ -4474,9 +4733,11 @@ def api_conversation_feedback_list(task_id):
         "task_id": task_id,
         "selected_model": selected_model,
         "selected_model_name": model_label,
+        "active_learning": active_learning_info,
         "progress": {
-            "reviewed": reviewed_conversations,
-            "total": total_conversations
+            "reviewed": status_reviewed,
+            "total": status_total,
+            "unit": active_learning_info.get("unit", "conversations")
         },
 
         "items": items
@@ -4630,6 +4891,214 @@ def _uploaded_feedback_model_key(model_key):
     return CONV_RNN_KEY if model_key == CONV_RNN_KEY else CONV_LOGREG_KEY
 
 
+def _label_to_int(label):
+    value = _safe_str(label).strip().lower()
+    if value in ("ai", "machine", "machine-generated", "1"):
+        return 1
+    if value in ("human", "0"):
+        return 0
+    return None
+
+
+def _project_logistic_task_model(project_id):
+    for task in db.collection("tasks").where("project_ID", "==", project_id).stream():
+        data = task.to_dict() or {}
+        if data.get("task_type") == "model_selection" and _is_logistic_model_key(data.get("selected_model")):
+            return data.get("selected_model")
+    return None
+
+
+def _export_news_active_learning_rows(project_id, proj_data):
+    selected_model = _project_logistic_task_model(project_id) or "logistic"
+    dataset_id = proj_data.get("dataset_id")
+    if not dataset_id:
+        return []
+
+    safe_pid = project_id.replace(".", "_").replace("#", "_").replace("$", "_").replace("[", "_").replace("]", "_")
+    results_data = rtdb.reference(f"analysis_results/{safe_pid}/{selected_model}").get() or {}
+    details = results_data.get("details") or []
+    if not isinstance(details, list):
+        details = list(details.values()) if isinstance(details, dict) else []
+
+    selected = sorted(
+        details,
+        key=lambda item: (_active_learning_sort_value(item), item.get("article_id", ""))
+    )[:_active_learning_limit(len(details))]
+    selected_ids = {item.get("article_id") for item in selected}
+
+    dataset_rows = rtdb.reference(f"datasets/uploaded_news/{dataset_id}").get() or {}
+    detail_map = {item.get("article_id"): item for item in selected if isinstance(item, dict)}
+    rows = []
+
+    for article_id in selected_ids:
+        source = dataset_rows.get(article_id) or {}
+        payload = source.get("payload", {}) if isinstance(source, dict) else {}
+        feedback = source.get("feedback", {}) if isinstance(source, dict) else {}
+        detail = detail_map.get(article_id, {})
+
+        if not isinstance(feedback, dict) or not feedback:
+            continue
+
+        label = feedback.get("label") if not feedback.get("agreed_with_model") else detail.get("prediction")
+        label_int = _label_to_int(label)
+        if label_int is None:
+            continue
+
+        title = payload.get("title") or payload.get("Title") or detail.get("title", "")
+        article = payload.get("Article") or payload.get("article") or payload.get("content") or detail.get("content", "")
+
+        rows.append({
+            "project_id": project_id,
+            "dataset_id": dataset_id,
+            "article_id": article_id,
+            "title": title,
+            "Article": article,
+            "text": f"{title}. {article}" if title else article,
+            "MachineGen": label_int,
+            "label": label_int,
+            "feedback_label": label,
+            "agreed_with_model": bool(feedback.get("agreed_with_model", False)),
+            "confidence": detail.get("confidence"),
+            "uncertainty": detail.get("uncertainty"),
+            "examiner_uid": feedback.get("examiner_uid"),
+            "submitted_at": feedback.get("submitted_at")
+        })
+
+    return rows
+
+
+def _first_turn_feedback(feedback_root, turn_index):
+    if not isinstance(feedback_root, dict):
+        return None
+    turn_feedbacks = feedback_root.get(str(turn_index), {}) or {}
+    if not isinstance(turn_feedbacks, dict) or not turn_feedbacks:
+        return None
+    return next(iter(turn_feedbacks.values()))
+
+
+def _export_generated_conversation_active_learning_rows(project_id):
+    raw = rtdb.reference(f"{ANALYSIS_ROOT}/{CONV_LOGREG_KEY}/{project_id}").get() or {}
+    if not isinstance(raw, dict):
+        return []
+
+    rows = []
+    for node_key, node_val in raw.items():
+        node = node_val or {}
+        meta = node.get("meta", {}) or {}
+        conversation_id = meta.get("task_id") or node_key
+        turns_raw = node.get("turns", {}) or {}
+        turns = list(turns_raw.values()) if isinstance(turns_raw, dict) else (turns_raw if isinstance(turns_raw, list) else [])
+        feedback_root = node.get("turn_feedbacks") or {}
+
+        for turn in turns:
+            if not isinstance(turn, dict):
+                continue
+            turn_index = int(turn.get("turn_index", 0) or 0)
+            feedback = _first_turn_feedback(feedback_root, turn_index)
+            if not feedback:
+                continue
+            label_int = _label_to_int(feedback.get("label"))
+            if label_int is None:
+                continue
+
+            rows.append({
+                "project_id": project_id,
+                "conversation_id": conversation_id,
+                "turn_index": turn_index,
+                "text": turn.get("text", ""),
+                "prev_text": turn.get("prev_text", ""),
+                "MachineGen": label_int,
+                "label": label_int,
+                "feedback_label": feedback.get("label"),
+                "agreed_with_model": bool(feedback.get("agreed_with_model", False)),
+                "confidence": turn.get("confidence"),
+                "uncertainty": turn.get("uncertainty"),
+                "examiner_uid": feedback.get("examiner_uid"),
+                "submitted_at": feedback.get("submitted_at")
+            })
+
+    rows.sort(key=lambda item: (_active_learning_sort_value(item), item.get("conversation_id", ""), item.get("turn_index", 0)))
+    return rows
+
+
+def _export_uploaded_conversation_active_learning_rows(project_id):
+    run_id, run_ref, _ = _uploaded_conversation_run(project_id, CONV_LOGREG_KEY)
+    if not run_ref:
+        return []
+
+    dialogue_turns = run_ref.child("dialogue_turns").get() or {}
+    feedback_root = run_ref.child("turn_feedbacks").get() or {}
+    key_map = run_ref.child("dialogue_key_map").get() or {}
+    reverse_key_map = {v: k for k, v in key_map.items()} if isinstance(key_map, dict) else {}
+
+    rows = []
+    for safe_key, turns_raw in (dialogue_turns.items() if isinstance(dialogue_turns, dict) else []):
+        turns = list(turns_raw.values()) if isinstance(turns_raw, dict) else (turns_raw if isinstance(turns_raw, list) else [])
+        dialogue_id = reverse_key_map.get(safe_key, safe_key)
+        dialogue_feedbacks = feedback_root.get(safe_key, {}) if isinstance(feedback_root, dict) else {}
+
+        for idx, turn in enumerate(turns):
+            if not isinstance(turn, dict):
+                continue
+            turn_index = idx + 1
+            feedback = _first_turn_feedback(dialogue_feedbacks, turn_index)
+            if not feedback:
+                continue
+            label_int = _label_to_int(feedback.get("label"))
+            if label_int is None:
+                continue
+
+            rows.append({
+                "project_id": project_id,
+                "run_id": run_id,
+                "dialogue_id": dialogue_id,
+                "turn_index": turn.get("turn_index", turn_index),
+                "text": turn.get("text", ""),
+                "prev_text": turn.get("previous_text", ""),
+                "MachineGen": label_int,
+                "label": label_int,
+                "feedback_label": feedback.get("label"),
+                "agreed_with_model": bool(feedback.get("agreed_with_model", False)),
+                "confidence": turn.get("confidence"),
+                "uncertainty": turn.get("uncertainty"),
+                "examiner_uid": feedback.get("examiner_uid"),
+                "submitted_at": feedback.get("submitted_at")
+            })
+
+    rows.sort(key=lambda item: (_active_learning_sort_value(item), item.get("dialogue_id", ""), item.get("turn_index", 0)))
+    return rows
+
+
+@app.route("/api/project/<project_id>/active_learning_export", methods=["GET"])
+def api_project_active_learning_export(project_id):
+    ctx, err = _ensure_project_access(project_id)
+    if err:
+        return err
+
+    proj_data = ctx["proj_data"]
+    category = (proj_data.get("category") or "").strip().lower()
+    is_conversation = category in ("conversation", "conversations", "chat", "chats")
+
+    if not is_conversation:
+        rows = _export_news_active_learning_rows(project_id, proj_data)
+        project_type = "news"
+    elif bool(proj_data.get("generated_from_scratch", False)):
+        rows = _export_generated_conversation_active_learning_rows(project_id)
+        project_type = "generated_conversation"
+    else:
+        rows = _export_uploaded_conversation_active_learning_rows(project_id)
+        project_type = "uploaded_conversation"
+
+    return jsonify({
+        "project_id": project_id,
+        "project_type": project_type,
+        "model_key": CONV_LOGREG_KEY if is_conversation else "logistic",
+        "exported_at": _now_utc_iso(),
+        "rows": rows,
+        "total_rows": len(rows)
+    }), 200
+
+
 @app.route("/api/task/<task_id>/uploaded_conversation_feedback_list", methods=["GET"])
 def api_uploaded_conversation_feedback_list(task_id):
     if not session.get("idToken"):
@@ -4690,6 +5159,7 @@ def api_uploaded_conversation_feedback_list(task_id):
         feedback_users_map = {}
         reviewed_turns = 0
         confs = []
+        uncertainties = []
 
         for idx, turn in enumerate(turns):
             if not isinstance(turn, dict):
@@ -4708,6 +5178,16 @@ def api_uploaded_conversation_feedback_list(task_id):
                 confs.append(confidence_pct)
             except Exception:
                 confidence_pct = None
+
+            uncertainty = turn.get("uncertainty")
+            uncertainty_pct = None
+            try:
+                uncertainty_pct = float(uncertainty)
+                if uncertainty_pct <= 1:
+                    uncertainty_pct *= 100.0
+                uncertainties.append(uncertainty_pct)
+            except Exception:
+                uncertainty_pct = None
 
             turn_feedbacks = feedback_root.get(str(ui_turn_index), {}) if isinstance(feedback_root, dict) else {}
             if not isinstance(turn_feedbacks, dict):
@@ -4746,6 +5226,7 @@ def api_uploaded_conversation_feedback_list(task_id):
                 "prediction": prediction,
                 "gt": turn.get("ground_truth"),
                 "confidence": round(confidence_pct, 2) if isinstance(confidence_pct, (int, float)) else None,
+                "uncertainty": round(uncertainty_pct, 2) if isinstance(uncertainty_pct, (int, float)) else None,
                 "turn_locked": bool(turn_feedback_users),
                 "turn_feedback": turn_feedback_users[0] if turn_feedback_users else None,
                 "my_feedback": my_feedback,
@@ -4765,14 +5246,27 @@ def api_uploaded_conversation_feedback_list(task_id):
             "ai_percentage": float(dialogue.get("ai_percentage") or 0),
             "human_percentage": float(dialogue.get("human_percentage") or 0),
             "confidence": round(sum(confs) / len(confs), 2) if confs else 0.0,
+            "uncertainty": round(sum(uncertainties) / len(uncertainties), 2) if uncertainties else 0.0,
             "has_feedback": reviewed_turns > 0,
             "conversation_locked": conversation_locked,
             "feedback_users": list(feedback_users_map.values()),
             "turns": clean_turns
         })
 
+    active_learning_enabled = _is_logistic_model_key(model_key)
+    items, active_learning_info = _apply_active_learning_turn_selection(items, active_learning_enabled)
+
     total_dialogues = len(items)
-    new_status = "completed" if total_dialogues > 0 and reviewed_dialogues >= total_dialogues else ("progress" if reviewed_dialogues > 0 else "pending")
+    reviewed_dialogues = sum(1 for item in items if item.get("conversation_locked"))
+
+    if active_learning_enabled:
+        status_total = active_learning_info["total"]
+        status_reviewed = active_learning_info["reviewed"]
+    else:
+        status_total = total_dialogues
+        status_reviewed = reviewed_dialogues
+
+    new_status = "completed" if status_total > 0 and status_reviewed >= status_total else ("progress" if status_reviewed > 0 else "pending")
     if (task_data.get("status") or "").strip().lower() != new_status:
         db.collection("tasks").document(task_id).update({"status": new_status})
 
@@ -4784,9 +5278,11 @@ def api_uploaded_conversation_feedback_list(task_id):
         "selected_model": selected_model,
         "selected_model_name": model_label,
         "run_id": run_id,
+        "active_learning": active_learning_info,
         "progress": {
-            "reviewed": reviewed_dialogues,
-            "total": total_dialogues
+            "reviewed": status_reviewed,
+            "total": status_total,
+            "unit": active_learning_info.get("unit", "dialogues")
         },
         "items": items
     }), 200
@@ -5286,8 +5782,20 @@ def _predict_with_proba(text: str, previous_text: str = "", threshold: float = 0
         p_machine = p_pos if CONV_RNN_AI_CLASS_IS_ONE else (1.0 - p_pos)
         p_machine = float(np.clip(p_machine, 0.0, 1.0))
         pred_int = 1 if p_machine >= float(threshold) else 0
-        confidence = p_machine if pred_int == 1 else (1.0 - p_machine)
-        return pred_int, p_machine, confidence
+        confidence, uncertainty = _confidence_uncertainty_from_prob(p_machine)
+        return pred_int, p_machine, confidence, uncertainty
+
+    df_in = pd.DataFrame([{"text": text or "", "prev_text": previous_text or ""}])
+    try:
+        probs = conv_logreg_model.predict_proba(df_in)[0]
+        p_machine = _machine_probability_from_proba(conv_logreg_model, probs)
+        if p_machine is not None:
+            p_machine = float(np.clip(p_machine, 0.0, 1.0))
+            pred_int = 1 if p_machine >= float(threshold) else 0
+            confidence, uncertainty = _confidence_uncertainty_from_prob(p_machine)
+            return pred_int, p_machine, confidence, uncertainty
+    except Exception as e:
+        app.logger.warning("Conversation predict_proba failed, falling back to label only: %s", e)
 
     out = predict_one_turn(text, previous_text)
 
@@ -5344,12 +5852,13 @@ def _predict_with_proba(text: str, previous_text: str = "", threshold: float = 0
 
     if p_machine is not None:
         pred_int = 1 if p_machine >= float(threshold) else 0
-        confidence = p_machine if pred_int == 1 else (1.0 - p_machine)
+        confidence, uncertainty = _confidence_uncertainty_from_prob(p_machine)
     else:
         confidence = None
+        uncertainty = None
         pred_int = 1 if int(pred_int) == 1 else 0
 
-    return pred_int, p_machine, confidence
+    return pred_int, p_machine, confidence, uncertainty
 
 
 @app.route("/api/project/<project_id>/conversation_dataset", methods=["GET"])
@@ -5574,7 +6083,7 @@ def analyze_all_conversations(project_id):
             for i, t in enumerate(turns_sorted):
                 previous_text = _build_prev_text_for_dialogue(turns_sorted, i)
 
-                pred, p_machine, confidence = _predict_with_proba(
+                pred, p_machine, confidence, uncertainty = _predict_with_proba(
                     text=t["text"],
                     previous_text=previous_text,
                     threshold=threshold,
@@ -5608,6 +6117,7 @@ def analyze_all_conversations(project_id):
                     "prediction_int": int(pred),
                     "p_machine": p_machine,
                     "confidence": confidence,
+                    "uncertainty": uncertainty,
                     "ground_truth": gt,
                 })
 
@@ -5861,6 +6371,7 @@ def export_conversation_enriched_dataset(project_id):
                 "prediction_int": t.get("prediction_int", None),
                 "p_machine": t.get("p_machine", None),
                 "confidence": t.get("confidence", None),
+                "uncertainty": t.get("uncertainty", None),
                 "ground_truth": t.get("ground_truth", None),
                 "source_row_id": t.get("row_id", ""),
             })

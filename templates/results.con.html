@@ -425,6 +425,10 @@ body.dark .tab.active{
 
 .fb-sort-row{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700}
 .fb-sort-row select{min-width:280px}
+.fb-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:10px}
+.fb-filter-field{display:flex;flex-direction:column;gap:5px}
+.fb-filter-field label{font-size:12px;font-weight:800;color:#4b5563}
+.fb-filter-note{font-size:12px;color:#6b7280;line-height:1.4;margin-top:8px}
 
 .fb-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .fb-title{font-size:21px;font-weight:800;color:#111827}
@@ -434,6 +438,7 @@ body.dark .tab.active{
 .fb-badge.conf{background:#eef2ff;color:#3743c6;border-color:#d9ddff}
 .fb-badge.ok{background:#e9f9ef;color:#15803d;border-color:#a7e6bf}
 .fb-badge.pending{background:#fff8e8;color:#a16207;border-color:#f2d58a}
+.fb-badge.context{background:#f3f4f6;color:#4b5563;border-color:#d1d5db}
 .fb-expand{font-size:20px;font-weight:800;background:transparent;border:0;cursor:pointer}
 
 .fb-body{margin-top:12px;border-top:1px solid #eef0f5;padding-top:12px}
@@ -1417,17 +1422,17 @@ body.dark .fb-turn-lock{
 }
 /* ===== Fix oversized agree font ===== */
 #feedbackModeRoot .agree-model-title{
-  font-size:16px !important;
+  font-size:13px !important;
   line-height:1.25 !important;
 }
 
 #feedbackModeRoot .agree-model-sub{
-  font-size:11px !important;
+  font-size:10px !important;
   line-height:1.35 !important;
 }
 
 #feedbackModeRoot .agree-state{
-  font-size:16px !important;
+  font-size:12px !important;
   min-width:28px !important;
 }
 
@@ -1638,8 +1643,9 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
         <span>📊 Sort Conversations:</span>
         <select id="fbSortSelect" class="select">
           <option value="default">Default Order</option>
-          <option value="confidence_low">Low Confidence First</option>
-          <option value="confidence_high">High Confidence First</option>
+          <option value="most_uncertain">Most Uncertain First</option>
+          <option value="least_uncertain">Least Uncertain First</option>
+          <option value="most_pending">Most Pending Targets</option>
         </select>
       </div>
     
@@ -1647,8 +1653,28 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
         Turn Sort: Default
       </button>
     </div>
-    
-
+    <div class="fb-filter-grid">
+      <div class="fb-filter-field">
+        <label for="fbDialogueFilter">Dialogues</label>
+        <select id="fbDialogueFilter" class="select">
+          <option value="all">All dialogues</option>
+          <option value="targets">With review targets</option>
+          <option value="pending">Pending targets</option>
+          <option value="reviewed">Reviewed targets</option>
+        </select>
+      </div>
+      <div class="fb-filter-field">
+        <label for="fbTurnFilter">Turns inside dialogue</label>
+        <select id="fbTurnFilter" class="select">
+          <option value="all">All turns</option>
+          <option value="targets">Review targets only</option>
+          <option value="context">Context only</option>
+          <option value="pending">Pending targets</option>
+          <option value="reviewed">Reviewed targets</option>
+        </select>
+      </div>
+    </div>
+    <div class="fb-filter-note">Most uncertain means the model is closest to a 50/50 decision. Review targets are used for Active Learning; context turns are shown only to help judgment.</div>
 
   </div>
 
@@ -1802,6 +1828,8 @@ const feedbackModeRoot = document.getElementById("feedbackModeRoot");
 const fbProgressFill = document.getElementById("fbProgressFill");
 const fbProgressText = document.getElementById("fbProgressText");
 const fbSortSelect = document.getElementById("fbSortSelect");
+const fbDialogueFilter = document.getElementById("fbDialogueFilter");
+const fbTurnFilter = document.getElementById("fbTurnFilter");
 const fbCardsEl = document.getElementById("fbCards");
 const currentExaminerUid = cleanParam("{{ user_uid or user_id or '' }}");
 const currentExaminerName = cleanParam("{{ user_name or '' }}") || "Examiner";
@@ -1810,6 +1838,8 @@ const currentExaminerName = cleanParam("{{ user_name or '' }}") || "Examiner";
 let feedbackItems = [];
 let feedbackOpenId = null;
 let feedbackSortMode = "default";
+let feedbackDialogueFilter = "all";
+let feedbackTurnFilter = "all";
 const feedbackDraft = {};
 
 let activeModel = "";
@@ -2385,10 +2415,10 @@ renderDistribution();
   updateSummaryMeta();
 
 }
-function renderFeedbackProgress(done, total) {
+function renderFeedbackProgress(done, total, unit = "conversations") {
   const pct = total ? (done / total) * 100 : 0;
   if (fbProgressFill) fbProgressFill.style.width = `${pct}%`;
-  if (fbProgressText) fbProgressText.textContent = `${done} / ${total} conversations reviewed`;
+  if (fbProgressText) fbProgressText.textContent = `${done} / ${total} ${unit} reviewed`;
 }
 
 function getConversationConfidence(item) {
@@ -2405,12 +2435,64 @@ function getConversationConfidence(item) {
   return Number.isFinite(fallback) ? fallback : 0;
 }
 
+function getTurnUncertainty(turn) {
+  const direct = Number(turn?.uncertainty);
+  if (Number.isFinite(direct)) return direct;
+
+  const confidence = Number(turn?.confidence);
+  if (Number.isFinite(confidence)) return Math.abs(confidence - 50);
+
+  const pMachine = Number(turn?.p_machine);
+  if (Number.isFinite(pMachine)) return Math.abs(pMachine - 0.5) * 100;
+
+  return Number.POSITIVE_INFINITY;
+}
+
+function getConversationUncertainty(item) {
+  const turns = Array.isArray(item.turns) ? item.turns : [];
+  const selectedTurns = turns.filter(t => t?.active_learning_selected !== false);
+  const sourceTurns = selectedTurns.length ? selectedTurns : turns;
+  const vals = sourceTurns
+    .map(t => getTurnUncertainty(t))
+    .filter(v => Number.isFinite(v));
+
+  if (vals.length > 0) {
+    return Math.min(...vals);
+  }
+
+  const fallback = Number(item?.uncertainty);
+  return Number.isFinite(fallback) ? fallback : Number.POSITIVE_INFINITY;
+}
+
+function isReviewTargetTurn(turn) {
+  return turn?.active_learning_selected !== false;
+}
+
+function isReviewedTurn(turn) {
+  return Boolean(getTurnSharedFeedback(turn) || turn?.turn_locked);
+}
+
+function getPendingTargetCount(item) {
+  return (item.turns || []).filter(t => isReviewTargetTurn(t) && !isReviewedTurn(t)).length;
+}
+
+function dialogueMatchesFilter(item) {
+  const targets = (item.turns || []).filter(isReviewTargetTurn);
+  const pending = targets.filter(t => !isReviewedTurn(t));
+  if (feedbackDialogueFilter === "targets") return targets.length > 0;
+  if (feedbackDialogueFilter === "pending") return pending.length > 0;
+  if (feedbackDialogueFilter === "reviewed") return targets.length > 0 && pending.length === 0;
+  return true;
+}
+
 function sortedFeedbackItems() {
-  const arr = [...feedbackItems];
-  if (feedbackSortMode === "confidence_low") {
-    arr.sort((a, b) => getConversationConfidence(a) - getConversationConfidence(b));
-  } else if (feedbackSortMode === "confidence_high") {
-    arr.sort((a, b) => getConversationConfidence(b) - getConversationConfidence(a));
+  const arr = feedbackItems.filter(dialogueMatchesFilter);
+  if (feedbackSortMode === "most_uncertain" || feedbackSortMode === "confidence_low") {
+    arr.sort((a, b) => getConversationUncertainty(a) - getConversationUncertainty(b));
+  } else if (feedbackSortMode === "least_uncertain" || feedbackSortMode === "confidence_high") {
+    arr.sort((a, b) => getConversationUncertainty(b) - getConversationUncertainty(a));
+  } else if (feedbackSortMode === "most_pending") {
+    arr.sort((a, b) => getPendingTargetCount(b) - getPendingTargetCount(a));
   } else {
     arr.sort((a, b) => (a.order_index || 999999) - (b.order_index || 999999));
   }
@@ -2512,7 +2594,7 @@ function buildTurnFeedbackLog(turns) {
 }
 
 
-let turnSortMode = "default"; // default | confidence_high | confidence_low
+let turnSortMode = "default"; // default | least_uncertain | most_uncertain
 const fbTurnSortBtn = document.getElementById("fbTurnSortBtn");
 if (fbTurnSortBtn) {
   fbTurnSortBtn.style.display = "none";
@@ -2520,19 +2602,25 @@ if (fbTurnSortBtn) {
 }
 
 function sortTurnsForView(turns) {
-  const arr = [...(turns || [])];
+  let arr = [...(turns || [])];
 
-  if (turnSortMode === "confidence_high") {
+  arr = arr.filter((turn) => {
+    const isTarget = isReviewTargetTurn(turn);
+    const isReviewed = isReviewedTurn(turn);
+    if (feedbackTurnFilter === "targets") return isTarget;
+    if (feedbackTurnFilter === "context") return !isTarget;
+    if (feedbackTurnFilter === "pending") return isTarget && !isReviewed;
+    if (feedbackTurnFilter === "reviewed") return isTarget && isReviewed;
+    return true;
+  });
+
+  if (turnSortMode === "least_uncertain" || turnSortMode === "confidence_high") {
     arr.sort((a, b) => {
-      const av = Number.isFinite(Number(a?.confidence)) ? Number(a.confidence) : -1;
-      const bv = Number.isFinite(Number(b?.confidence)) ? Number(b.confidence) : -1;
-      return bv - av;
+      return getTurnUncertainty(b) - getTurnUncertainty(a);
     });
-  } else if (turnSortMode === "confidence_low") {
+  } else if (turnSortMode === "most_uncertain" || turnSortMode === "confidence_low") {
     arr.sort((a, b) => {
-      const av = Number.isFinite(Number(a?.confidence)) ? Number(a.confidence) : Number.POSITIVE_INFINITY;
-      const bv = Number.isFinite(Number(b?.confidence)) ? Number(b.confidence) : Number.POSITIVE_INFINITY;
-      return av - bv;
+      return getTurnUncertainty(a) - getTurnUncertainty(b);
     });
   } else {
     arr.sort((a, b) => (Number(a?.turn_index) || 0) - (Number(b?.turn_index) || 0));
@@ -2543,14 +2631,14 @@ function sortTurnsForView(turns) {
 
 function updateTurnSortBtnLabel() {
   if (!fbTurnSortBtn) return;
-  if (turnSortMode === "confidence_high") fbTurnSortBtn.textContent = "Turn Sort: High -> Low";
-  else if (turnSortMode === "confidence_low") fbTurnSortBtn.textContent = "Turn Sort: Low -> High";
+  if (turnSortMode === "least_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Least Uncertain";
+  else if (turnSortMode === "most_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Most Uncertain";
   else fbTurnSortBtn.textContent = "Turn Sort: Default";
 }
 
 fbTurnSortBtn?.addEventListener("click", () => {
-  if (turnSortMode === "default") turnSortMode = "confidence_high";
-  else if (turnSortMode === "confidence_high") turnSortMode = "confidence_low";
+  if (turnSortMode === "default") turnSortMode = "most_uncertain";
+  else if (turnSortMode === "most_uncertain") turnSortMode = "least_uncertain";
   else turnSortMode = "default";
 
   updateTurnSortBtnLabel();
@@ -2588,6 +2676,8 @@ const statusText = isLocked ? "Reviewed" : "Pending";
   const pred = normalizeTurnPrediction(t.prediction);
 const predCls = pred === "AI" ? "ai" : "human";
 const sender = t.sender || (pred === "AI" ? "Machine" : "Human");
+const uncertainty = (t.uncertainty === 0 || t.uncertainty) ? `${Number(t.uncertainty).toFixed(2)}%` : "N/A";
+const isActiveTarget = t.active_learning_selected !== false;
 const conf = (t.confidence === 0 || t.confidence) ? `${Number(t.confidence).toFixed(2)}%` : "—";
 
 
@@ -2603,7 +2693,7 @@ if (!feedbackDraft[key]) {
   };
 }
 const draft = feedbackDraft[key];
-const canEdit = !sharedFb;
+const canEdit = isActiveTarget && !sharedFb;
 const predictedLabel = ((pred || "").toUpperCase() === "AI") ? "AI" : "Human";
 
 const agreeBar = `
@@ -2648,7 +2738,7 @@ const lockText = sharedFb?.agreed_with_model
 
 const feedbackCell = canEdit
   ? `${agreeBar}${draft.agree ? agreeConfirm : manualEditor}`
-  : `<div class="fb-turn-lock">${lockText}</div>`;
+  : (isActiveTarget ? `<div class="fb-turn-lock">${lockText}</div>` : `<div class="fb-turn-lock">Context only. No feedback required for this turn.</div>`);
 
 const submittedBox = renderTurnSubmittedBox(t);
 
@@ -2661,7 +2751,11 @@ return `
     <div class="fb-turn-main">
   <div>${turnIdx}</div>
   <div>${esc(sender)}</div>
-  <div>${esc(t.text || "")}</div>
+  <div>
+    ${isActiveTarget ? `<span class="fb-badge pending" style="display:inline-block;margin-bottom:6px;">Review target</span>` : `<span class="fb-badge context" style="display:inline-block;margin-bottom:6px;">Context</span>`}
+    <div>${esc(t.text || "")}</div>
+    <div style="margin-top:6px;color:#6b7280;font-size:12px;">Uncertainty: ${esc(uncertainty)}</div>
+  </div>
   <div><span class="fb-pred ${predCls}">${pred}</span></div>
   <div>${esc(conf)}</div>
 </div>
@@ -2711,14 +2805,15 @@ const myBox = isLocked ? `
       <div class="fb-stat">Human: ${Number(item.human_percentage || 0).toFixed(2)}%</div>
       <div class="fb-stat">AI: ${Number(item.ai_percentage || 0).toFixed(2)}%</div>
       <div class="fb-stat">Confidence: ${Number(item.confidence || 0).toFixed(2)}%</div>
+      ${item.active_learning_selected_turns ? `<div class="fb-stat">Targets: ${Number(item.active_learning_reviewed_turns || 0)} / ${Number(item.active_learning_selected_turns || 0)}</div>` : ""}
     </div>
 
     <div class="fb-turn-sort-inline">
       <span style="font-size:12px;font-weight:700;color:#5b657a;">Turn Sort:</span>
       <select class="select fb-turn-sort-select" data-turn-sort="${esc(id)}">
         <option value="default" ${turnSortMode === "default" ? "selected" : ""}>Default</option>
-        <option value="confidence_high" ${turnSortMode === "confidence_high" ? "selected" : ""}>High Confidence</option>
-        <option value="confidence_low" ${turnSortMode === "confidence_low" ? "selected" : ""}>Low Confidence</option>
+        <option value="most_uncertain" ${turnSortMode === "most_uncertain" ? "selected" : ""}>Most Uncertain</option>
+        <option value="least_uncertain" ${turnSortMode === "least_uncertain" ? "selected" : ""}>Least Uncertain</option>
       </select>
     </div>
   </div>
@@ -2792,7 +2887,8 @@ if (prevOpenId && feedbackItems.some(x => String(x.conversation_id) === String(p
 const reviewed = (data.progress && data.progress.reviewed) || 0;
 
     const total = (data.progress && data.progress.total) || 0;
-    renderFeedbackProgress(reviewed, total);
+    const unit = (data.progress && data.progress.unit) || "conversations";
+    renderFeedbackProgress(reviewed, total, unit);
 
     // نعرض اسم الموديل المختار للفيدباك
     if (selectedModelLineEl) {
@@ -2843,6 +2939,14 @@ async function submitConversationFeedback(conversationId) {
 
 fbSortSelect?.addEventListener("change", () => {
   feedbackSortMode = fbSortSelect.value || "default";
+  renderFeedbackCards();
+});
+fbDialogueFilter?.addEventListener("change", () => {
+  feedbackDialogueFilter = fbDialogueFilter.value || "all";
+  renderFeedbackCards();
+});
+fbTurnFilter?.addEventListener("change", () => {
+  feedbackTurnFilter = fbTurnFilter.value || "all";
   renderFeedbackCards();
 });
 fbCardsEl?.addEventListener("change", (e) => {
@@ -3365,6 +3469,11 @@ async function submitTurnFeedback(conversationId, turnIndex) {
 
   if (sharedFb) {
     alert("تم إرسال فيدباك لهذا التيرن مسبقًا.");
+    return;
+  }
+
+  if (turn && turn.active_learning_selected === false) {
+    alert("This turn is shown for context only. Feedback is required for Active Learning targets.");
     return;
   }
 

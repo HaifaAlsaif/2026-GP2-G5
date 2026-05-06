@@ -135,6 +135,26 @@
 
     .filter-select:focus { outline: none; border-color: var(--primary1); }
 
+    .filter-section {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 18px;
+    }
+
+    .filter-section::before {
+      content: "Most uncertain samples are closest to a 50/50 model decision.";
+      flex-basis: 100%;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
     .article-accordion {
       background: #fff;
       border: 1px solid var(--line);
@@ -233,7 +253,7 @@
       background: #f0f9ff;
       border: 1.5px solid #bae6fd;
       border-radius: var(--radius);
-      padding: 20px 24px;
+      padding: 14px 16px;
       margin-bottom: 16px;
       display: flex;
       align-items: center;
@@ -244,15 +264,16 @@
     .agree-toggle-info { flex: 1; }
 
     .agree-toggle-title {
-      font-size: 15px;
+      font-size: 13px;
       font-weight: 700;
       color: #0369a1;
       margin-bottom: 4px;
     }
 
     .agree-toggle-desc {
-      font-size: 13px;
+      font-size: 11px;
       color: #0284c7;
+      line-height: 1.35;
     }
 
     /* Custom toggle switch */
@@ -480,8 +501,18 @@
       <span class="filter-label">📊 Sort by Confidence:</span>
       <select class="filter-select" id="confidenceFilter" onchange="applySorting()">
         <option value="default">Default Order</option>
-        <option value="low-first">Low Confidence First (Review Priority)</option>
-        <option value="high-first">High Confidence First</option>
+        <option value="most-uncertain">Most Uncertain First</option>
+        <option value="least-uncertain">Least Uncertain First</option>
+        <option value="lowest-confidence">Lowest Confidence First</option>
+        <option value="highest-confidence">Highest Confidence First</option>
+      </select>
+      <select class="filter-select" id="articleViewFilter" onchange="applyArticleFilters()">
+        <option value="all">All shown samples</option>
+        <option value="targets">Review targets only</option>
+        <option value="pending">Pending only</option>
+        <option value="reviewed">Reviewed only</option>
+        <option value="human">Human prediction</option>
+        <option value="ai">AI prediction</option>
       </select>
     </div>
 
@@ -502,6 +533,9 @@
     const taskId    = "{{ task_id }}";
     const projectId = "{{ project_id }}";
     const datasetId = "{{ dataset_id }}";
+
+    const sortLabel = document.querySelector('.filter-label');
+    if (sortLabel) sortLabel.textContent = 'Sort by Review Priority:';
 
     let articles         = [];
     let originalArticles = [];
@@ -536,11 +570,9 @@
         reviewedCount = articles.filter(function(a){ return a.has_feedback; }).length;
         updateProgress();
 
-        if (articles.some(function(a){ return a.detection && a.detection.human_percentage !== undefined; })) {
-          document.getElementById('filterSection').style.display = 'flex';
-        }
+        document.getElementById('filterSection').style.display = 'flex';
 
-        renderArticles();
+        applyArticleFilters();
         document.getElementById('loadingState').style.display = 'none';
 
       } catch (err) {
@@ -550,19 +582,73 @@
 
     /* ─── sorting ─── */
     function getConfidence(article) {
-      if (!article.detection) return 0;
-      return Math.max(article.detection.human_percentage || 0, article.detection.ai_percentage || 0);
+      const direct = Number(article.confidence);
+      if (Number.isFinite(direct)) return direct;
+      if (article.detection) {
+        return Math.max(article.detection.human_percentage || 0, article.detection.ai_percentage || 0);
+      }
+      return Math.max(article.human_percentage || 0, article.ai_percentage || 0);
+    }
+
+    function getUncertainty(article) {
+      const direct = Number(article.uncertainty);
+      if (Number.isFinite(direct)) return direct;
+
+      const confidence = getConfidence(article);
+      if (Number.isFinite(confidence) && confidence > 0) {
+        return Math.abs(confidence - 50);
+      }
+
+      return Number.POSITIVE_INFINITY;
     }
 
     function applySorting() {
+      applyArticleFilters();
+      return;
       const v = document.getElementById('confidenceFilter').value;
-      if (v === 'low-first') {
+      if (v === 'most-uncertain') {
+        articles.sort(function(a, b){ return getUncertainty(a) - getUncertainty(b); });
+      } else if (v === 'least-uncertain') {
+        articles.sort(function(a, b){ return getUncertainty(b) - getUncertainty(a); });
+      } else if (v === 'lowest-confidence') {
         articles.sort(function(a, b){ return getConfidence(a) - getConfidence(b); });
-      } else if (v === 'high-first') {
+      } else if (v === 'highest-confidence') {
         articles.sort(function(a, b){ return getConfidence(b) - getConfidence(a); });
       } else {
         articles = JSON.parse(JSON.stringify(originalArticles));
       }
+      renderArticles();
+    }
+
+    function articleMatchesFilter(article, filterValue) {
+      if (filterValue === 'targets') return article.active_learning_selected !== false;
+      if (filterValue === 'pending') return !article.has_feedback;
+      if (filterValue === 'reviewed') return !!article.has_feedback;
+      if (filterValue === 'human') return article.prediction === 'Human';
+      if (filterValue === 'ai') return article.prediction === 'AI';
+      return true;
+    }
+
+    function applyArticleFilters() {
+      const filterValue = document.getElementById('articleViewFilter')?.value || 'all';
+      const sortValue = document.getElementById('confidenceFilter')?.value || 'default';
+
+      articles = originalArticles.filter(function(article){
+        return articleMatchesFilter(article, filterValue);
+      });
+
+      if (sortValue === 'most-uncertain') {
+        articles.sort(function(a, b){ return getUncertainty(a) - getUncertainty(b); });
+      } else if (sortValue === 'least-uncertain') {
+        articles.sort(function(a, b){ return getUncertainty(b) - getUncertainty(a); });
+      } else if (sortValue === 'lowest-confidence') {
+        articles.sort(function(a, b){ return getConfidence(a) - getConfidence(b); });
+      } else if (sortValue === 'highest-confidence') {
+        articles.sort(function(a, b){ return getConfidence(b) - getConfidence(a); });
+      }
+
+      reviewedCount = articles.filter(function(a){ return a.has_feedback; }).length;
+      updateProgress();
       renderArticles();
     }
 
@@ -578,6 +664,10 @@
     function renderArticles() {
       const container = document.getElementById('articlesList');
       container.innerHTML = '';
+      if (articles.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="display:block;"><p>No samples match the selected filters.</p></div>';
+        return;
+      }
       articles.forEach(function(article, index){
         container.appendChild(createAccordion(article, index));
       });
