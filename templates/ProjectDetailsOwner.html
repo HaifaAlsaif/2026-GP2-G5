@@ -1728,7 +1728,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const displayCategory = (isConversation && isGenerated)
        ? "Generate Conversation"
-       : (data.category || "Conversation");
+       : (isConversation ? "Uploaded Conversation" : (data.category || "Conversation"));
 
       document.querySelector(".category-tag").textContent = displayCategory;
 

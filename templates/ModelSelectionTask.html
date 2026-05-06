@@ -31,6 +31,33 @@
       color: var(--text);
       background: #fafafa;
     }
+    body.dark {
+      --bg: #0b1020;
+      --text: #eef2ff;
+      --muted: #a6b0c2;
+      --line: #1f2a44;
+      background: linear-gradient(135deg, #071225 0%, #0b1b37 55%, #0d2747 100%);
+      color: var(--text);
+    }
+    body.dark .mast,
+    body.dark .summary-card,
+    body.dark .action-bar,
+    body.dark .results-container,
+    body.dark .detect-card,
+    body.dark .modal,
+    body.dark .user-dropdown {
+      background: #111827;
+      border-color: var(--line);
+    }
+    body.dark .model-dropdown,
+    body.dark .search-input,
+    body.dark thead,
+    body.dark .modal-content-text,
+    body.dark .overall-row {
+      background: #0f172a;
+      color: var(--text);
+      border-color: var(--line);
+    }
 
     .mast {
       position: fixed;
@@ -55,7 +82,14 @@
       font-weight: 600;
     }
 
-    .user-info { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+    .header-tools { display: flex; align-items: center; gap: 12px; }
+    .lang-btn, .theme-btn {
+      width: 40px; height: 40px; border-radius: 12px; border: none;
+      background: rgba(0,0,0,.06); color: var(--text);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-weight: 700;
+    }
+    .user-profile { position: relative; display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
     .avatar {
       width: 36px; height: 36px;
       border-radius: 50%;
@@ -63,6 +97,19 @@
       display: grid; place-items: center;
       color: #fff; font-weight: 700;
     }
+    .user-stack { display: flex; flex-direction: column; gap: 2px; line-height: 1.1; }
+    .user-stack h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text); }
+    .user-stack p { margin: 0; font-size: 12px; color: var(--muted); text-transform: capitalize; }
+    .user-dropdown {
+      position: absolute; top: calc(100% + 10px); right: 0; width: 220px;
+      background: #fff; border: 1px solid var(--line); border-radius: 14px;
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,.08);
+      display: none; flex-direction: column; z-index: 150; overflow: hidden;
+    }
+    .user-dropdown.show { display: flex; }
+    .dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 14px; color: var(--text); text-decoration: none; }
+    .dropdown-item:hover { background: rgba(0,184,219,.08); }
+    .dropdown-divider { height: 1px; background: var(--line); margin: 4px 0; }
 
     .container {
       max-width: 1400px;
@@ -81,6 +128,45 @@
 
     .page-title { font-size: 28px; font-weight: 600; margin: 0 0 8px 0; }
     .page-subtitle { color: var(--muted); font-size: 16px; margin: 0; }
+
+    .detect-stage { margin-bottom: 28px; }
+    .detect-card {
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 14px 40px rgba(20,22,35,.08);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .detect-steps {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .detect-step {
+      border: 1px solid #e1e7f5;
+      background: #f6f8fc;
+      color: var(--muted);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .detect-step.active { background: #eef3ff; border-color: #cdd9ff; color: var(--primary2); }
+    .detect-hero { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+    .detect-copy { max-width: 620px; }
+    .detect-kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 800; }
+    .detect-title { margin: 4px 0 6px; font-size: 24px; font-weight: 800; color: #0e162b; }
+    .detect-sub { margin: 0; font-size: 14px; line-height: 1.6; color: var(--muted); }
+    .detect-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .detect-select { min-width: 260px; height: 42px; }
+    .detect-progress { width: min(560px, 100%); }
+    .detect-track { height: 10px; border-radius: 999px; background: #e8eefc; overflow: hidden; }
+    .detect-fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, var(--primary1), var(--primary2)); transition: width .25s ease; }
+    .detect-meta { margin-top: 10px; display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13px; font-weight: 700; }
+    .is-hidden { display: none !important; }
 
     .summary-grid {
       display: grid;
@@ -302,9 +388,24 @@
       <img src="/static/images/icon_logo.svg" alt="TrustLens">
       <div class="brand-name">TrustLens</div>
     </div>
-    <div class="user-info">
-      <span id="userName">{{ user_name }}</span>
-      <div class="avatar" id="userAvatar">{{ user_name[0] if user_name else 'E' }}</div>
+    <div class="header-tools">
+      <button class="lang-btn" id="langBtn" type="button">EN</button>
+      <button class="theme-btn" id="themeBtn" type="button">☾</button>
+      <div class="user-profile" id="userProfile">
+        <div class="avatar" id="userAvatar">{{ user_name[0] if user_name else 'E' }}</div>
+        <div class="user-stack">
+          <h3 id="userName">{{ user_name }}</h3>
+          <p>examiner</p>
+        </div>
+        <div class="user-dropdown" id="userDropdown">
+          <a href="/examinerdashboard" class="dropdown-item">Home</a>
+          <div class="dropdown-divider"></div>
+          <a href="/profile" class="dropdown-item">Profile</a>
+          <a href="/profile" class="dropdown-item">Settings</a>
+          <div class="dropdown-divider"></div>
+          <a href="/logout" class="dropdown-item">Logout</a>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -319,8 +420,49 @@
 <p class="page-subtitle" id="taskDescription" style="margin-top:4px;color:#717182;font-size:14px;">{{ task_description }}</p>
     </div>
 
+    <div class="detect-stage" id="newsStage">
+      <div class="detect-card" id="newsReady">
+        <div class="detect-steps">
+          <div class="detect-step active">1. Ready</div>
+          <div class="detect-step">2. Processing</div>
+        </div>
+        <div class="detect-hero">
+          <div class="detect-copy">
+            <div class="detect-kicker">News article detection</div>
+            <h2 class="detect-title">Ready to analyze article dataset</h2>
+            <p class="detect-sub">Choose a detector to classify uploaded articles as Human-written or AI-generated, then review the detailed article results.</p>
+          </div>
+          <div class="detect-actions">
+            <select id="stageNewsModelSelect" class="model-dropdown detect-select">
+              <option value="logistic" selected>Logistic Regression (TF-IDF)</option>
+              <option value="rnn">RNN (BiGRU)</option>
+            </select>
+            <button class="btn btn-primary" id="stageNewsRunBtn" type="button">Run Analysis</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="detect-card is-hidden" id="newsProcessing">
+        <div class="detect-steps">
+          <div class="detect-step active">1. Ready</div>
+          <div class="detect-step active">2. Processing</div>
+        </div>
+        <div class="detect-hero">
+          <div class="detect-copy">
+            <div class="detect-kicker">News article detection</div>
+            <h2 class="detect-title">Processing articles</h2>
+            <p class="detect-sub">The selected model is analyzing article text and preparing probabilities, chunk details, and summary counts.</p>
+          </div>
+          <div class="detect-progress">
+            <div class="detect-track"><div class="detect-fill" id="newsProgressFill"></div></div>
+            <div class="detect-meta"><span id="newsProgressText">Starting analysis...</span><span id="newsProgressPct">0%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Summary Cards -->
-    <div class="summary-grid">
+    <div class="summary-grid is-hidden" id="summaryGrid">
       <div class="summary-card">
         <div class="card-label">Total Articles</div>
         <div class="card-value" id="totalArticles">-</div>
@@ -339,7 +481,7 @@
     </div>
 
     <!-- Action Bar -->
-    <div class="action-bar">
+    <div class="action-bar is-hidden" id="actionBar">
       <div class="search-box">
         <svg class="search-icon" viewBox="0 0 16 16" fill="currentColor">
           <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
@@ -362,7 +504,7 @@
     </div>
 
     <!-- Results Table -->
-    <div class="results-container">
+    <div class="results-container is-hidden" id="resultsContainer">
       <div class="loading" id="loadingState">
         <div class="spinner"></div>
         <p>Loading analysis results...</p>
@@ -419,11 +561,54 @@
 
     let allDetails = [];
     let modelsRan = { logistic: false, rnn: false };
+    const newsReady = document.getElementById('newsReady');
+    const newsProcessing = document.getElementById('newsProcessing');
+    const summaryGrid = document.getElementById('summaryGrid');
+    const actionBar = document.getElementById('actionBar');
+    const resultsContainer = document.getElementById('resultsContainer');
+    const newsProgressFill = document.getElementById('newsProgressFill');
+    const newsProgressPct = document.getElementById('newsProgressPct');
+    const newsProgressText = document.getElementById('newsProgressText');
+    const stageNewsModelSelect = document.getElementById('stageNewsModelSelect');
+    const stageNewsRunBtn = document.getElementById('stageNewsRunBtn');
+    const userProfile = document.getElementById('userProfile');
+    const userDropdown = document.getElementById('userDropdown');
+    const themeBtn = document.getElementById('themeBtn');
+    const langBtn = document.getElementById('langBtn');
+
+    function setNewsStage(mode) {
+      newsReady?.classList.toggle('is-hidden', mode !== 'ready');
+      newsProcessing?.classList.toggle('is-hidden', mode !== 'processing');
+      summaryGrid?.classList.toggle('is-hidden', mode !== 'results');
+      actionBar?.classList.toggle('is-hidden', mode !== 'results');
+      resultsContainer?.classList.toggle('is-hidden', mode !== 'results');
+    }
+
+    function setNewsProgress(value, text) {
+      const pct = Math.max(0, Math.min(100, Number(value) || 0));
+      if (newsProgressFill) newsProgressFill.style.width = `${pct}%`;
+      if (newsProgressPct) newsProgressPct.textContent = `${Math.round(pct)}%`;
+      if (newsProgressText && text) newsProgressText.textContent = text;
+    }
+
+    userProfile?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      userDropdown?.classList.toggle('show');
+    });
+    document.addEventListener('click', () => userDropdown?.classList.remove('show'));
+    themeBtn?.addEventListener('click', () => {
+      document.body.classList.toggle('dark');
+      themeBtn.textContent = document.body.classList.contains('dark') ? '☀' : '☾';
+    });
+    langBtn?.addEventListener('click', () => {
+      langBtn.textContent = langBtn.textContent === 'EN' ? 'AR' : 'EN';
+    });
 
 async function checkIfAlreadySelected() {
   const res = await fetch(`/api/tasks/${taskId}`);
   const data = await res.json();
   if (data.selected_model) {
+    setNewsStage('results');
     document.getElementById('runAnalysisBtn').disabled = true;
     document.getElementById('modelSelect').disabled = true;
     document.getElementById('selectModelBtn').style.display = 'inline-flex';
@@ -468,12 +653,14 @@ checkIfAlreadySelected();
     
 
     function showEmptyState() {
+      setNewsStage('results');
       document.getElementById('loadingState').style.display  = 'none';
       document.getElementById('emptyState').style.display   = 'block';
       document.getElementById('tableWrapper').style.display = 'none';
     }
 
     function displayResults(data) {
+      setNewsStage('results');
       document.getElementById('loadingState').style.display  = 'none';
       document.getElementById('emptyState').style.display   = 'none';
       document.getElementById('tableWrapper').style.display = 'block';
@@ -520,6 +707,7 @@ checkIfAlreadySelected();
 
     document.getElementById('modelSelect').addEventListener('change', () => {
       const modelType = document.getElementById('modelSelect').value;
+      if (stageNewsModelSelect) stageNewsModelSelect.value = modelType;
       if (modelsRan[modelType]) {
         // لو المودل اشتغل قبل، نعرض نتائجه المحفوظة
         // بس الحين API ما يحفظ، فنخليه يشغل مرة ثانية
@@ -527,14 +715,34 @@ checkIfAlreadySelected();
     });
 
     document.getElementById('runAnalysisBtn').addEventListener('click', async () => {
+      if (stageNewsModelSelect) stageNewsModelSelect.value = document.getElementById('modelSelect').value;
       const btn = document.getElementById('runAnalysisBtn');
       btn.disabled    = true;
       btn.textContent = '⏳ Analyzing...';
 
+      setNewsStage('processing');
+      setNewsProgress(8, 'Starting article analysis...');
+      let p = 8;
+      const timer = setInterval(() => {
+        p += p < 70 ? 8 : 2;
+        setNewsProgress(Math.min(p, 94), 'Processing articles...');
+      }, 180);
+
       await loadAnalysisResults();
+      clearInterval(timer);
+      setNewsProgress(100, 'Analysis complete.');
 
       btn.disabled    = false;
       btn.textContent = '🔍 Run Analysis';
+    });
+
+    stageNewsModelSelect?.addEventListener('change', () => {
+      document.getElementById('modelSelect').value = stageNewsModelSelect.value;
+    });
+
+    stageNewsRunBtn?.addEventListener('click', () => {
+      document.getElementById('modelSelect').value = stageNewsModelSelect.value;
+      document.getElementById('runAnalysisBtn').click();
     });
 
     document.getElementById('selectModelBtn').addEventListener('click', async () => {

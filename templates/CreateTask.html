@@ -513,6 +513,8 @@ const projectCategory = "{{ category|safe }}".trim().toLowerCase();
 
 // ✅ هل هذا المشروع Generate Conversation؟
 const isGeneratedConversation = {{ is_generated_conversation|tojson }};
+const isConversationProject = ["conversation", "conversations", "chat", "chats"].includes(projectCategory);
+const isUploadedConversation = isConversationProject && !isGeneratedConversation;
 
 // ========== إظهار/إخفاء الحقول حسب نوع المشروع ==========
 function applyFieldVisibility() {
@@ -547,7 +549,7 @@ function applyFieldVisibility() {
   if (genModeDescField) genModeDescField.style.display = "none";
   genTaskModeField.style.display = "none";
 
-  if (projectCategory === "article") {
+  if (projectCategory === "article" || isUploadedConversation) {
     turnsField.classList.remove("keep-space");
     convField.style.display = "none";
     turnsField.style.display = "none";
@@ -620,7 +622,7 @@ function updateGeneratedDescVisibility() {
     return { exact: 1 }; // human-ai أو model_selection
   }
 
-  if (projectCategory === "article") {
+  if (projectCategory === "article" || isUploadedConversation) {
     const taskType = document.getElementById("taskType").value;
     return taskType === "model_selection" ? { exact: 1 } : { min: 1 };
   }
@@ -632,7 +634,7 @@ function updateGeneratedDescVisibility() {
     let exChecks = [];   
 
     function updateRule(){
-  if (projectCategory === "article") {
+  if (projectCategory === "article" || isUploadedConversation) {
     const exRule = document.querySelector(".ex-rule");
     if (exRule) exRule.style.display = "none";
 
@@ -779,8 +781,8 @@ if (!isValid) {
     return;
   }
 
-  // ✅ Article 
-  if (projectCategory === "article") {
+  // ✅ Article أو Uploaded Conversation
+  if (projectCategory === "article" || isUploadedConversation) {
     const taskType = document.getElementById("taskType").value;
     if (taskType === "model_selection") {
       alert(`Please assign exactly 1 examiner for Model Selection. You selected ${selectedExaminers.length}.`);
@@ -820,8 +822,8 @@ let payload = {
 }
 
 
-  } else if (projectCategory === "article") {
-    // Article كما هو
+  } else if (projectCategory === "article" || isUploadedConversation) {
+    // Article و Uploaded Conversation: مودل سيليكشن / فيدباك
     const taskType = document.getElementById("taskType").value;
     payload.task_type = taskType;
 
