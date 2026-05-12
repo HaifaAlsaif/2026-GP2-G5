@@ -19,6 +19,7 @@ import requests
 import re
 import hashlib
 import math
+from html import escape
 from llm_service import generate_reply
 from conversation_baseline_model import predict_one_turn
 from flask import abort
@@ -112,6 +113,50 @@ def rnn_predict_proba(texts):
     return out
 
 
+def _news_chunk_detail(index, chunk_text, human_prob, ai_prob, article_id=None, title="", article_prediction=None, article_prediction_int=None):
+    confidence, uncertainty = _confidence_uncertainty_from_prob(ai_prob)
+    prediction = "AI" if ai_prob >= 0.5 else "Human"
+    chunk_index = int(index) + 1
+    return {
+        "chunk_id": f"chunk:{chunk_index}",
+        "chunk_index": chunk_index,
+        "article_id": article_id,
+        "parent_article_id": article_id,
+        "title": title,
+        "chunk_text": chunk_text,
+        "text": chunk_text,
+        "label": f"F{chunk_index}",
+        "human": round(float(human_prob) * 100, 2),
+        "ai": round(float(ai_prob) * 100, 2),
+        "human_probability": float(human_prob),
+        "ai_probability": float(ai_prob),
+        "prediction": prediction,
+        "prediction_int": 1 if prediction == "AI" else 0,
+        "confidence": _percent_or_none(confidence),
+        "uncertainty": _percent_or_none(uncertainty),
+        "parent_article_prediction": article_prediction,
+        "parent_article_prediction_int": article_prediction_int
+    }
+
+
+def _news_chunks_from_scores(chunks, human_scores, ai_scores, article_id=None, title="", article_prediction=None, article_prediction_int=None):
+    details = []
+    for index, chunk_text in enumerate(chunks or []):
+        if index >= len(human_scores or []) or index >= len(ai_scores or []):
+            continue
+        details.append(_news_chunk_detail(
+            index,
+            chunk_text,
+            float(human_scores[index]),
+            float(ai_scores[index]),
+            article_id=article_id,
+            title=title,
+            article_prediction=article_prediction,
+            article_prediction_int=article_prediction_int
+        ))
+    return details
+
+
 
 #------------- 
 def _confidence_uncertainty_from_prob(p_positive):
@@ -163,6 +208,126 @@ def _machine_probability_from_proba(model, proba_row):
         return float(proba_row[1])
     except Exception:
         return None
+
+
+GROUND_TRUTH_COLUMN_NAMES = (
+    "MachineGen", "machinegen", "label", "Label", "target", "Target",
+    "ground_truth", "Ground_Truth", "groundTruth", "is_ai", "isAI",
+    "class", "Class", "y", "Y"
+)
+
+
+def _normalize_binary_label(value):
+    # يوحد كل صيغ التصنيف إلى 0 للبشري و 1 للنص المولد آليا.
+    if value is None:
+        return None
+
+    if isinstance(value, bool):
+        return 1 if value else 0
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        try:
+            if float(value) == 0.0:
+                return 0
+            if float(value) == 1.0:
+                return 1
+        except Exception:
+            return None
+
+    text = str(value).strip().lower()
+    if not text:
+        return None
+
+    text = text.replace("_", " ").replace("-", " ")
+    text = " ".join(text.split())
+
+    human_labels = {"0", "human", "h", "real", "genuine", "authentic", "not ai"}
+    ai_labels = {
+        "1", "ai", "machine", "machine generated", "ai generated",
+        "ai written", "machine written", "synthetic", "bot", "llm", "generated"
+    }
+
+    if text in human_labels:
+        return 0
+    if text in ai_labels:
+        return 1
+
+    return None
+
+
+def _extract_ground_truth_from_payload(payload):
+    if not isinstance(payload, dict):
+        return None
+    for column in GROUND_TRUTH_COLUMN_NAMES:
+        if column in payload:
+            normalized = _normalize_binary_label(payload.get(column))
+            if normalized is not None:
+                return normalized
+    return None
+
+
+def _label_text_from_int(value):
+    normalized = _normalize_binary_label(value)
+    if normalized == 0:
+        return "Human"
+    if normalized == 1:
+        return "AI"
+    return ""
+
+
+def _compute_standard_metrics(y_true, y_pred):
+    # يحسب المقاييس فقط للصفوف التي لديها ground truth صالح.
+    valid_true = []
+    valid_pred = []
+
+    for true_value, pred_value in zip(y_true or [], y_pred or []):
+        true_norm = _normalize_binary_label(true_value)
+        pred_norm = _normalize_binary_label(pred_value)
+        if true_norm is None or pred_norm is None:
+            continue
+        valid_true.append(true_norm)
+        valid_pred.append(pred_norm)
+
+    if not valid_true:
+        return {
+            "available": False,
+            "reason": "Ground truth labels are missing or invalid."
+        }
+
+    try:
+        from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_score, recall_score
+
+        cm = confusion_matrix(valid_true, valid_pred, labels=[0, 1]).tolist()
+        tn, fp = int(cm[0][0]), int(cm[0][1])
+        fn, tp = int(cm[1][0]), int(cm[1][1])
+
+        human_support = sum(1 for value in valid_true if value == 0)
+        ai_support = sum(1 for value in valid_true if value == 1)
+
+        return {
+            "available": True,
+            "accuracy": float(accuracy_score(valid_true, valid_pred)),
+            "precision_macro": float(precision_score(valid_true, valid_pred, labels=[0, 1], average="macro", zero_division=0)),
+            "recall_macro": float(recall_score(valid_true, valid_pred, labels=[0, 1], average="macro", zero_division=0)),
+            "f1_macro": float(f1_score(valid_true, valid_pred, labels=[0, 1], average="macro", zero_division=0)),
+            "precision_ai": float(precision_score(valid_true, valid_pred, labels=[1], average="macro", zero_division=0)),
+            "recall_ai": float(recall_score(valid_true, valid_pred, labels=[1], average="macro", zero_division=0)),
+            "f1_ai": float(f1_score(valid_true, valid_pred, labels=[1], average="macro", zero_division=0)),
+            "confusion_matrix": [[tn, fp], [fn, tp]],
+            "false_positive_rate": float(fp / (fp + tn)) if (fp + tn) else 0.0,
+            "false_negative_rate": float(fn / (fn + tp)) if (fn + tp) else 0.0,
+            "support": {
+                "total_labeled": len(valid_true),
+                "human": human_support,
+                "ai": ai_support
+            }
+        }
+    except Exception as e:
+        app.logger.warning("Standard metrics failed: %s", e)
+        return {
+            "available": False,
+            "reason": "Could not compute metrics on the server."
+        }
 
 
 def _active_learning_limit(total_count):
@@ -229,7 +394,340 @@ def _is_logistic_model_key(model_key):
     Active Learning يطبق على Logistic Regression فقط.
     """
     normalized = _safe_str(model_key).lower()
+    return normalized in ("logistic", "logreg", CONV_LOGREG_KEY, "logistic regression") or "logistic" in normalized
+
+
+def _uses_frozen_active_learning(model_key):
+    """
+    Frozen review targets are created for supported detector models.
+    """
+    normalized = _safe_str(model_key).strip().lower()
+    return normalized in ("logistic", "logreg", CONV_LOGREG_KEY, CONV_RNN_KEY, "rnn")
+
+
+def _active_learning_retraining_supported(model_key):
+    """
+    Active Learning retraining is currently supported only for Logistic Regression.
+    """
+    normalized = _safe_str(model_key).strip().lower()
     return normalized in ("logistic", "logreg", CONV_LOGREG_KEY)
+
+
+def _active_learning_model_version(project_id, selected_model_key):
+    """
+    Keeps one model-version slot for the current active-learning phase.
+    """
+    return "v1"
+
+
+def _active_learning_selection_run_id():
+    """
+    Creates a unique id for one frozen target selection run.
+    """
+    stamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    return f"sel_{stamp}_{uuid.uuid4().hex[:8]}"
+
+
+def _safe_target_key(sample_id):
+    """
+    Converts sample ids into Firebase-safe keys while keeping the original id in the record.
+    """
+    raw = _safe_str(sample_id) or "unknown_sample"
+    cleaned = re.sub(r'[.#$\[\]/]', "_", raw) or "unknown_sample"
+    digest = hashlib.md5(raw.encode("utf-8")).hexdigest()[:8]
+    return f"{cleaned}__{digest}"
+
+
+def _active_learning_targets_path(project_id, model_version, selection_run_id):
+    return f"active_learning_targets/{_safe_str(project_id)}/{_safe_str(model_version)}/{_safe_str(selection_run_id)}"
+
+
+def _active_learning_current_path(project_id, model_version):
+    return f"active_learning_current/{_safe_str(project_id)}/{_safe_str(model_version)}"
+
+
+def _review_targets_path(project_id, model_version, selection_run_id):
+    return f"review_targets/{_safe_str(project_id)}/{_safe_str(model_version)}/{_safe_str(selection_run_id)}"
+
+
+def _review_targets_current_path(project_id, model_version):
+    return f"review_targets_current/{_safe_str(project_id)}/{_safe_str(model_version)}"
+
+
+def _get_current_active_learning_selection(project_id, model_version):
+    pointer = rtdb.reference(_review_targets_current_path(project_id, model_version)).get()
+    if not isinstance(pointer, dict):
+        pointer = rtdb.reference(_active_learning_current_path(project_id, model_version)).get()
+    return pointer if isinstance(pointer, dict) else None
+
+
+def _load_frozen_active_learning_targets(project_id, model_version):
+    pointer = _get_current_active_learning_selection(project_id, model_version)
+    if not pointer:
+        return None
+
+    selection_run_id = _safe_str(pointer.get("selection_run_id"))
+    if not selection_run_id:
+        return None
+
+    target_set = rtdb.reference(_review_targets_path(project_id, model_version, selection_run_id)).get()
+    storage_family = "review_targets"
+    if not isinstance(target_set, dict) or not isinstance(target_set.get("targets"), dict):
+        target_set = rtdb.reference(_active_learning_targets_path(project_id, model_version, selection_run_id)).get()
+        storage_family = "active_learning_targets"
+    if not isinstance(target_set, dict) or not isinstance(target_set.get("targets"), dict):
+        return None
+
+    target_set.setdefault("selection_run_id", selection_run_id)
+    target_set.setdefault("selected_model_key", pointer.get("selected_model_key"))
+    target_set.setdefault("project_type", pointer.get("project_type"))
+    target_set.setdefault("target_purpose", "review")
+    target_set.setdefault("active_learning_enabled", _active_learning_retraining_supported(target_set.get("selected_model_key")))
+    target_set.setdefault("retraining_supported", _active_learning_retraining_supported(target_set.get("selected_model_key")))
+    target_set["_storage_family"] = storage_family
+    return target_set
+
+
+def _freeze_active_learning_targets_if_missing(project_id, project_type, selected_model_key, model_version, candidates, assigned_examiner_ids=None):
+    """
+    Freezes the shared review target set once, then returns the stored selection.
+    """
+    if not _uses_frozen_active_learning(selected_model_key):
+        return None
+
+    existing = _load_frozen_active_learning_targets(project_id, model_version)
+    existing_targets = _frozen_target_values(existing)
+    existing_is_news_chunk_level = (
+        project_type == "news"
+        and existing_targets
+        and all(_safe_str(target.get("target_unit")) == "chunk" for target in existing_targets if isinstance(target, dict))
+    )
+    incoming_has_news_chunks = (
+        project_type == "news"
+        and any(isinstance(item, dict) and item.get("chunk_index") is not None for item in (candidates or []))
+    )
+    if existing and (project_type != "news" or existing_is_news_chunk_level or not incoming_has_news_chunks):
+        return existing
+
+    safe_candidates = [item for item in (candidates or []) if isinstance(item, dict) and _safe_str(item.get("sample_id"))]
+    safe_candidates.sort(key=lambda item: (_active_learning_sort_value(item), _safe_str(item.get("sample_id"))))
+
+    limit = _active_learning_limit(len(safe_candidates))
+    selected = safe_candidates[:limit]
+    now = _now_utc_iso()
+    selection_run_id = _active_learning_selection_run_id()
+    assigned_ids = assigned_examiner_ids if isinstance(assigned_examiner_ids, list) else []
+
+    active_learning_enabled = _active_learning_retraining_supported(selected_model_key)
+    targets = {}
+    for rank, candidate in enumerate(selected, start=1):
+        sample_id = _safe_str(candidate.get("sample_id"))
+        target_key = _safe_target_key(sample_id)
+        target = {
+            "active_learning_selected": True,
+            "target_purpose": "review",
+            "active_learning_enabled": active_learning_enabled,
+            "retraining_supported": active_learning_enabled,
+            "target_status": "pending",
+            "selection_run_id": selection_run_id,
+            "selection_rank": rank,
+            "selection_score": _owner_decimal(candidate.get("uncertainty")) or 0.0,
+            "selection_strategy": "least_confidence_margin",
+            "selected_at": now,
+            "model_version": model_version,
+            "selected_model_key": selected_model_key,
+            "sample_id": sample_id,
+            "source_id": _safe_str(candidate.get("source_id") or sample_id),
+            "project_type": project_type,
+            "target_unit": candidate.get("target_unit") or ("chunk" if project_type == "news" and candidate.get("chunk_index") is not None else "sample"),
+            "result_path": _safe_str(candidate.get("result_path")),
+            "prediction": candidate.get("prediction"),
+            "prediction_int": candidate.get("prediction_int"),
+            "ground_truth": candidate.get("ground_truth"),
+            "confidence": _owner_decimal(candidate.get("confidence")) or 0.0,
+            "uncertainty": _owner_decimal(candidate.get("uncertainty")) or 0.0,
+            "reviewed_by": None,
+            "reviewed_at": None,
+            "feedback_count": 0,
+            "assigned_examiner_ids": assigned_ids
+        }
+
+        for extra_key in (
+            "article_id", "title", "text", "chunk_id", "chunk_index", "chunk_text",
+            "parent_article_id", "parent_article_prediction", "parent_article_prediction_int",
+            "row_id", "dialogue_id", "conversation_id", "task_id", "turn_index", "safe_key"
+        ):
+            if candidate.get(extra_key) is not None:
+                target[extra_key] = candidate.get(extra_key)
+
+        targets[target_key] = target
+
+    target_set = {
+        "project_id": project_id,
+        "project_type": project_type,
+        "target_purpose": "review",
+        "active_learning_enabled": active_learning_enabled,
+        "retraining_supported": active_learning_enabled,
+        "model_version": model_version,
+        "selected_model_key": selected_model_key,
+        "selection_run_id": selection_run_id,
+        "selection_strategy": "least_confidence_margin",
+        "selection_formula": "uncertainty = abs(p_ai - 0.5)",
+        "selection_percent": ACTIVE_LEARNING_PERCENT,
+        "max_samples": ACTIVE_LEARNING_MAX_SAMPLES,
+        "source_total": len(safe_candidates),
+        "selected_total": len(targets),
+        "selected_at": now,
+        "status": "frozen",
+        "assigned_examiner_ids": assigned_ids,
+        "targets": targets
+    }
+
+    pointer = {
+        "selection_run_id": selection_run_id,
+        "selected_model_key": selected_model_key,
+        "project_type": project_type,
+        "created_at": now,
+        "status": "frozen"
+    }
+
+    rtdb.reference(_review_targets_path(project_id, model_version, selection_run_id)).set(_owner_json_value(target_set))
+    rtdb.reference(_review_targets_current_path(project_id, model_version)).set(_owner_json_value(pointer))
+    rtdb.reference(_active_learning_targets_path(project_id, model_version, selection_run_id)).set(_owner_json_value(target_set))
+    rtdb.reference(_active_learning_current_path(project_id, model_version)).set(_owner_json_value(pointer))
+    return target_set
+
+
+def _frozen_target_values(selection):
+    targets = (selection or {}).get("targets") or {}
+    return list(targets.values()) if isinstance(targets, dict) else []
+
+
+def _frozen_target_sample_ids(selection):
+    return {_safe_str(item.get("sample_id")) for item in _frozen_target_values(selection) if _safe_str(item.get("sample_id"))}
+
+
+def _frozen_active_learning_info(selection, enabled=True, unit="items"):
+    targets = _frozen_target_values(selection)
+    reviewed = sum(1 for item in targets if item.get("target_status") == "reviewed" or int(item.get("feedback_count") or 0) > 0)
+    selected_model_key = (selection or {}).get("selected_model_key")
+    active_learning_enabled = bool((selection or {}).get("active_learning_enabled", _active_learning_retraining_supported(selected_model_key)))
+    retraining_supported = bool((selection or {}).get("retraining_supported", active_learning_enabled))
+    return {
+        "enabled": active_learning_enabled,
+        "review_targets_enabled": bool(enabled),
+        "active_learning_enabled": active_learning_enabled,
+        "retraining_supported": retraining_supported,
+        "percent": ACTIVE_LEARNING_PERCENT,
+        "max_samples": ACTIVE_LEARNING_MAX_SAMPLES,
+        "source_total": int((selection or {}).get("source_total") or 0),
+        "selected": len(targets),
+        "reviewed": reviewed,
+        "total": len(targets),
+        "unit": unit
+    }
+
+
+def _mark_frozen_active_learning_target_reviewed(project_id, model_version, sample_id, examiner_uid, submitted_at, match=None):
+    """
+    Marks the frozen target as reviewed after the existing feedback write succeeds.
+    """
+    selection = _load_frozen_active_learning_targets(project_id, model_version)
+    if not selection:
+        return False
+
+    targets = selection.get("targets") or {}
+    if not isinstance(targets, dict):
+        return False
+
+    target_key = _safe_target_key(sample_id)
+    if target_key not in targets and isinstance(match, dict):
+        for key, target in targets.items():
+            if not isinstance(target, dict):
+                continue
+            matched = True
+            for match_key, match_value in match.items():
+                if _safe_str(target.get(match_key)) != _safe_str(match_value):
+                    matched = False
+                    break
+            if matched:
+                target_key = key
+                break
+
+    if target_key not in targets:
+        return False
+
+    update_payload = {
+        "target_status": "reviewed",
+        "reviewed_by": examiner_uid,
+        "reviewed_at": submitted_at,
+        "feedback_count": 1
+    }
+    selection_run_id = selection.get("selection_run_id")
+    rtdb.reference(_review_targets_path(project_id, model_version, selection_run_id)).child("targets").child(target_key).update(update_payload)
+    rtdb.reference(_active_learning_targets_path(project_id, model_version, selection_run_id)).child("targets").child(target_key).update(update_payload)
+    return True
+
+
+def _update_news_labeling_status_from_frozen_targets(project_id, model_version):
+    """
+    Updates news labeling tasks from the shared frozen target progress.
+    """
+    selection = _load_frozen_active_learning_targets(project_id, model_version)
+    targets = _frozen_target_values(selection)
+    if not targets:
+        return None
+
+    reviewed = sum(1 for target in targets if target.get("target_status") == "reviewed" or int(target.get("feedback_count") or 0) > 0)
+    total = len(targets)
+    new_status = "completed" if reviewed >= total else ("progress" if reviewed > 0 else "pending")
+
+    for doc in db.collection("tasks").where("project_ID", "==", project_id).where("task_type", "==", "labeling").stream():
+        task_data = doc.to_dict() or {}
+        conversation_type = _safe_str(task_data.get("conversation_type")).strip().lower()
+        if conversation_type:
+            continue
+        if _safe_str(task_data.get("status")).strip().lower() != new_status:
+            db.collection("tasks").document(doc.id).update({"status": new_status})
+
+    return new_status
+
+
+def _model_selection_task_guard(task_id, project_id=None, reject_completed=False):
+    """
+    Validates a model-selection task before detection or final selection.
+    """
+    if not session.get("idToken"):
+        return None, None, (jsonify({"error": "Unauthorized"}), 401)
+
+    uid = session.get("uid")
+    task_id = _safe_str(task_id)
+    if not task_id:
+        return None, None, (jsonify({"error": "task_id is required"}), 400)
+
+    task_ref = db.collection("tasks").document(task_id)
+    task_doc = task_ref.get()
+    if not task_doc.exists:
+        return None, None, (jsonify({"error": "Task not found"}), 404)
+
+    task_data = task_doc.to_dict() or {}
+    if project_id and task_data.get("project_ID") != project_id:
+        return None, None, (jsonify({"error": "Task does not belong to this project"}), 400)
+
+    if task_data.get("task_type") != "model_selection":
+        return None, None, (jsonify({"error": "Task is not model_selection"}), 400)
+
+    examiner_ids = task_data.get("examiner_ids") or []
+    if len(examiner_ids) != 1:
+        return None, None, (jsonify({"error": "Model Selection task requires exactly 1 examiner"}), 400)
+
+    if uid not in examiner_ids:
+        return None, None, (jsonify({"error": "Forbidden"}), 403)
+
+    if reject_completed and (task_data.get("selected_model") or _safe_str(task_data.get("status")).lower() == "completed"):
+        return None, None, (jsonify({"error": "Model already selected for this task"}), 409)
+
+    return task_ref, task_data, None
 
 
 def _apply_active_learning_turn_selection(items, enabled=True):
@@ -306,6 +804,201 @@ def _apply_active_learning_turn_selection(items, enabled=True):
         "total": len(selected_keys),
         "unit": "turns"
     }
+
+
+def _news_active_learning_candidates(project_id, selected_model_key, details):
+    candidates = []
+    for index, item in enumerate(details or []):
+        if not isinstance(item, dict):
+            continue
+        article_id = _safe_str(item.get("article_id") or item.get("id"))
+        if not article_id:
+            continue
+        chunks = item.get("chunks") if isinstance(item.get("chunks"), list) else []
+        if chunks:
+            for chunk_pos, chunk in enumerate(chunks):
+                if not isinstance(chunk, dict):
+                    continue
+                chunk_index = int(chunk.get("chunk_index") or chunk_pos + 1)
+                sample_id = _make_active_learning_sample_id("news", article_id=article_id, chunk_index=chunk_index)
+                candidates.append({
+                    "sample_id": sample_id,
+                    "source_id": f"{article_id}:chunk:{chunk_index}",
+                    "article_id": article_id,
+                    "parent_article_id": article_id,
+                    "chunk_id": chunk.get("chunk_id") or f"chunk:{chunk_index}",
+                    "chunk_index": chunk_index,
+                    "target_unit": "chunk",
+                    "title": item.get("title", ""),
+                    "text": chunk.get("chunk_text") or chunk.get("text") or item.get("content", ""),
+                    "chunk_text": chunk.get("chunk_text") or chunk.get("text") or "",
+                    "prediction": chunk.get("prediction"),
+                    "prediction_int": _first_present(chunk.get("prediction_int"), _label_to_machinegen(chunk.get("prediction"))),
+                    "ground_truth": item.get("ground_truth"),
+                    "confidence": chunk.get("confidence"),
+                    "uncertainty": chunk.get("uncertainty"),
+                    "project_type": "news",
+                    "parent_article_prediction": item.get("prediction"),
+                    "parent_article_prediction_int": _first_present(item.get("prediction_int"), _label_to_machinegen(item.get("prediction"))),
+                    "result_path": f"analysis_results/{project_id}/{selected_model_key}/details/{index}/chunks/{chunk_pos}"
+                })
+            continue
+
+        candidates.append({
+            "sample_id": _make_active_learning_sample_id("news", article_id=article_id),
+            "source_id": article_id,
+            "article_id": article_id,
+            "target_unit": "article",
+            "title": item.get("title", ""),
+            "text": item.get("content", ""),
+            "prediction": item.get("prediction"),
+            "prediction_int": _first_present(item.get("prediction_int"), _label_to_machinegen(item.get("prediction"))),
+            "ground_truth": item.get("ground_truth"),
+            "confidence": item.get("confidence"),
+            "uncertainty": item.get("uncertainty"),
+            "project_type": "news",
+            "result_path": f"analysis_results/{project_id}/{selected_model_key}/details/{index}"
+        })
+    return candidates
+
+
+def _uploaded_conversation_active_learning_candidates(project_id, selected_model_key, run_id, run_ref):
+    dialogue_turns = run_ref.child("dialogue_turns").get() or {}
+    key_map = run_ref.child("dialogue_key_map").get() or {}
+    reverse_key_map = {v: k for k, v in key_map.items()} if isinstance(key_map, dict) else {}
+    candidates = []
+
+    for safe_key, turns_raw in (dialogue_turns.items() if isinstance(dialogue_turns, dict) else []):
+        turns = list(turns_raw.values()) if isinstance(turns_raw, dict) else (turns_raw if isinstance(turns_raw, list) else [])
+        dialogue_id = reverse_key_map.get(safe_key, safe_key)
+        for idx, turn in enumerate(turns):
+            if not isinstance(turn, dict):
+                continue
+            turn_index = idx + 1
+            row_id = _safe_str(turn.get("row_id") or turn.get("source_row_id"))
+            sample_id = _make_active_learning_sample_id(
+                "uploaded_conversation",
+                row_id=row_id,
+                dialogue_id=dialogue_id,
+                turn_index=turn_index
+            )
+            candidates.append({
+                "sample_id": sample_id,
+                "source_id": row_id or f"{dialogue_id}:{turn_index}",
+                "row_id": row_id,
+                "dialogue_id": dialogue_id,
+                "safe_key": safe_key,
+                "turn_index": turn_index,
+                "text": turn.get("text", ""),
+                "prediction": turn.get("prediction"),
+                "prediction_int": _first_present(turn.get("prediction_int"), _label_to_machinegen(turn.get("prediction"))),
+                "ground_truth": _first_present(turn.get("ground_truth"), turn.get("gt")),
+                "confidence": turn.get("confidence"),
+                "uncertainty": turn.get("uncertainty"),
+                "project_type": "uploaded_conversation",
+                "result_path": f"analysis_results/conversations/{selected_model_key}/{project_id}/runs/{run_id}/dialogue_turns/{safe_key}/{idx}"
+            })
+    return candidates
+
+
+def _generated_conversation_active_learning_candidates(project_id, selected_model_key, raw):
+    candidates = []
+    for node_key, node_val in (raw.items() if isinstance(raw, dict) else []):
+        if not isinstance(node_val, dict):
+            continue
+        meta = node_val.get("meta", {}) or {}
+        conversation_id = meta.get("task_id") or node_key
+        turns_raw = node_val.get("turns", {}) or {}
+        turns = list(turns_raw.values()) if isinstance(turns_raw, dict) else (turns_raw if isinstance(turns_raw, list) else [])
+        for idx, turn in enumerate(turns):
+            if not isinstance(turn, dict):
+                continue
+            turn_index = int(turn.get("turn_index", idx + 1) or idx + 1)
+            sample_id = _make_active_learning_sample_id(
+                "generated_conversation",
+                conversation_id=conversation_id,
+                turn_index=turn_index
+            )
+            candidates.append({
+                "sample_id": sample_id,
+                "source_id": f"{conversation_id}:{turn_index}",
+                "task_id": node_key,
+                "conversation_id": conversation_id,
+                "turn_index": turn_index,
+                "text": turn.get("text", ""),
+                "prediction": turn.get("prediction"),
+                "prediction_int": _first_present(turn.get("prediction_int"), _label_to_machinegen(turn.get("prediction"))),
+                "ground_truth": _first_present(turn.get("ground_truth"), turn.get("gt")),
+                "confidence": turn.get("confidence"),
+                "uncertainty": turn.get("uncertainty"),
+                "project_type": "generated_conversation",
+                "result_path": f"{ANALYSIS_ROOT}/{selected_model_key}/{project_id}/{node_key}/turns/{idx}"
+            })
+    return candidates
+
+
+def _generated_conversation_base_ref(project_id, model_key):
+    return rtdb.reference(f"{ANALYSIS_ROOT}/{model_key}/{project_id}")
+
+
+def _generated_conversation_results_payload(project_id, model_key, run_id=None):
+    base_ref = _generated_conversation_base_ref(project_id, model_key)
+    selected_run_id = _safe_str(run_id) or _safe_str(base_ref.child("latest_run_id").get())
+    if selected_run_id:
+        run_payload = base_ref.child("runs").child(selected_run_id).get()
+        if isinstance(run_payload, dict):
+            return run_payload
+
+    legacy_payload = base_ref.get() or {}
+    if isinstance(legacy_payload, dict) and "runs" not in legacy_payload:
+        return legacy_payload
+    return {}
+
+
+def _generated_conversation_node_ref(project_id, model_key, conversation_id):
+    base_ref = _generated_conversation_base_ref(project_id, model_key)
+    run_id = _safe_str(base_ref.child("latest_run_id").get())
+    if run_id:
+        return base_ref.child("runs").child(run_id).child(conversation_id)
+    return base_ref.child(conversation_id)
+
+
+def _apply_frozen_active_learning_turn_selection(items, selection, project_type):
+    targets = _frozen_target_values(selection)
+    target_pairs = set()
+    for target in targets:
+        if project_type == "uploaded_conversation":
+            target_pairs.add((_safe_str(target.get("dialogue_id")), int(target.get("turn_index") or 0)))
+        else:
+            target_pairs.add((_safe_str(target.get("conversation_id")), int(target.get("turn_index") or 0)))
+
+    focused_items = []
+    reviewed_turns = 0
+    for item in items:
+        conversation_id = _safe_str(item.get("conversation_id"))
+        selected_count = 0
+        reviewed_count = 0
+        for turn in item.get("turns") or []:
+            key = (conversation_id, int(turn.get("turn_index", 0) or 0))
+            is_selected = key in target_pairs
+            turn["active_learning_selected"] = is_selected
+            if is_selected:
+                selected_count += 1
+                if turn.get("turn_locked"):
+                    reviewed_count += 1
+
+        if selected_count > 0:
+            item["active_learning_selected_turns"] = selected_count
+            item["active_learning_reviewed_turns"] = reviewed_count
+            item["conversation_locked"] = reviewed_count >= selected_count
+            item["has_feedback"] = reviewed_count > 0
+            focused_items.append(item)
+            reviewed_turns += reviewed_count
+
+    focused_items.sort(key=lambda item: item.get("order_index", 10**9))
+    info = _frozen_active_learning_info(selection, True, "turns")
+    info["reviewed"] = reviewed_turns
+    return focused_items, info
 
 
 def get_current_user_doc():
@@ -1393,6 +2086,9 @@ def api_update_project(project_id):
     desc = data.get("description", "").strip()
     category = data.get("category")
     domains = data.getlist("domain")
+
+    if task_data.get("task_type") == "model_selection" and len(new_examiners) != 1:
+        return jsonify({"error": "Model Selection task requires exactly 1 examiner"}), 400
 
     update_data = {
         "project_name": name,
@@ -3299,6 +3995,8 @@ def analyze_all_articles(project_id):
         results = []
         human_count = 0
         ai_count = 0
+        y_true = []
+        y_pred = []
 
         # نحلل كل مقالة
         for push_id, article_data in snapshot.items():
@@ -3313,7 +4011,9 @@ def analyze_all_articles(project_id):
             
             content = (payload.get("Article") or 
                       payload.get("article") or 
-                      payload.get("content") or "")
+                      payload.get("content") or
+                      payload.get("text") or
+                      payload.get("Text") or "")
             
             full_text = f"{title}. {content}" if title else content
 
@@ -3341,12 +4041,27 @@ def analyze_all_articles(project_id):
           
             #4 النتيجة النهائية
             prediction = "AI" if final_ai > final_human else "Human"
+            prediction_int = 1 if prediction == "AI" else 0
+            ground_truth = _extract_ground_truth_from_payload(payload)
             confidence, uncertainty = _confidence_uncertainty_from_prob(final_ai)
+            chunk_details = _news_chunks_from_scores(
+                chunks,
+                human_scores,
+                ai_scores,
+                article_id=push_id,
+                title=title[:100] if title else "",
+                article_prediction=prediction,
+                article_prediction_int=prediction_int
+            )
             
             if prediction == "Human":
                 human_count += 1
             else:
                 ai_count += 1
+
+            if ground_truth is not None:
+                y_true.append(ground_truth)
+                y_pred.append(prediction_int)
 
             results.append({
                 "confidence": _percent_or_none(confidence),
@@ -3355,19 +4070,17 @@ def analyze_all_articles(project_id):
     "title": title[:100] if title else "",
     "content": full_text[:500] if full_text else "",
     "prediction": prediction,
+    "prediction_int": prediction_int,
+    "ground_truth": ground_truth,
+    "ground_truth_label": _label_text_from_int(ground_truth),
     "human_percentage": round(final_human * 100, 2),
     "ai_percentage": round(final_ai * 100, 2),
-    "chunks": [
-        {
-            "label": f"F{i+1}",
-            "human": round(float(human_scores[i]) * 100, 2),
-            "ai": round(float(ai_scores[i]) * 100, 2)
-        }
-        for i in range(len(chunks))
-    ]
+    "chunks": chunk_details
 })
 
         # نحفظ النتائج في Firestore
+        metrics = _compute_standard_metrics(y_true, y_pred)
+
         analysis_doc = {
             "project_id": project_id,
             "dataset_id": dataset_id,
@@ -3377,6 +4090,7 @@ def analyze_all_articles(project_id):
             "ai_count": ai_count,
             "human_percentage": round((human_count / len(results)) * 100, 2),
             "ai_percentage": round((ai_count / len(results)) * 100, 2),
+            "metrics": metrics,
             "analyzed_at": datetime.utcnow().isoformat() + "Z",
             "analyzed_by": uid
         }
@@ -3395,9 +4109,9 @@ def analyze_all_articles(project_id):
         results_ref = rtdb.reference(f"analysis_results/{project_id}/{selected_model}")
         results_ref.set({
             "summary": analysis_doc,
+            "metrics": metrics,
             "details": results
         })
-
 
         return jsonify({
             "message": "Analysis complete",
@@ -3434,7 +4148,8 @@ def model_selection_task_page(task_id):
         abort(403)
     
     # نتأكد إن الـ Examiner مسند له
-    if uid not in task_data.get("examiner_ids", []):
+    examiner_ids = task_data.get("examiner_ids", [])
+    if len(examiner_ids) != 1 or uid not in examiner_ids:
         abort(403)
     
     # نجيب اسم المستخدم
@@ -3485,13 +4200,9 @@ def api_run_model(task_id):
         return jsonify({"error": "Unauthorized"}), 401
 
     uid = session.get("uid")
-    
-    # نجيب Task
-    task_doc = db.collection("tasks").document(task_id).get()
-    if not task_doc.exists:
-        return jsonify({"error": "Task not found"}), 404
-    
-    task_data = task_doc.to_dict()
+    task_ref, task_data, guard_error = _model_selection_task_guard(task_id, reject_completed=True)
+    if guard_error:
+        return guard_error
     
     # نتأكد من الصلاحية
     if uid not in task_data.get("examiner_ids", []):
@@ -3522,6 +4233,8 @@ def api_run_model(task_id):
         results = []
         human_count = 0
         ai_count = 0
+        y_true = []
+        y_pred = []
         
         # نحلل كل مقالة
         for push_id, article_data in snapshot.items():
@@ -3530,19 +4243,22 @@ def api_run_model(task_id):
             
             payload = article_data.get("payload", {})
             
-            title = (payload.get("title") or 
-                    payload.get("Title") or "")
-            
-            content = (payload.get("Article") or 
-                      payload.get("article") or "")
-            
+            title = (payload.get("title") or
+        payload.get("Title") or
+        payload.get("headline") or "")
+
+            content = (payload.get("Article") or
+          payload.get("article") or
+          payload.get("content") or
+          payload.get("text") or
+          payload.get("Text") or "")
+
             full_text = f"{title}. {content}" if title else content
             
             chunks = split_into_3_chunks(full_text)
             
             human_scores = []
             ai_scores = []
-            chunk_details = []
             
             for i, chunk in enumerate(chunks):
                 if model_type == "rnn":
@@ -3555,23 +4271,32 @@ def api_run_model(task_id):
                 
                 human_scores.append(h_score)
                 ai_scores.append(a_score)
-                
-                chunk_details.append({
-                    "label": f"F{i+1}",
-                    "human": round(h_score * 100, 2),
-                    "ai": round(a_score * 100, 2)
-                })
             
             final_human = sum(human_scores) / len(human_scores)
             final_ai = sum(ai_scores) / len(ai_scores)
             
             prediction = "AI" if final_ai > final_human else "Human"
+            prediction_int = 1 if prediction == "AI" else 0
+            ground_truth = _extract_ground_truth_from_payload(payload)
             confidence, uncertainty = _confidence_uncertainty_from_prob(final_ai)
+            chunk_details = _news_chunks_from_scores(
+                chunks,
+                human_scores,
+                ai_scores,
+                article_id=push_id,
+                title=title[:100] if title else "Untitled",
+                article_prediction=prediction,
+                article_prediction_int=prediction_int
+            )
             
             if prediction == "Human":
                 human_count += 1
             else:
                 ai_count += 1
+
+            if ground_truth is not None:
+                y_true.append(ground_truth)
+                y_pred.append(prediction_int)
             
             results.append({
                 "confidence": _percent_or_none(confidence),
@@ -3580,19 +4305,25 @@ def api_run_model(task_id):
                 "title": title[:100] if title else "Untitled",
                 "content": content[:500] if content else "",  # ✅ أول 500 حرف
                 "prediction": prediction,
+                "prediction_int": prediction_int,
+                "ground_truth": ground_truth,
+                "ground_truth_label": _label_text_from_int(ground_truth),
                 "human_percentage": round(final_human * 100, 2),
                 "ai_percentage": round(final_ai * 100, 2),
                 "chunks": chunk_details  # ✅ تفاصيل الـ Chunks
             })
         
         # ملخص النتائج
+        metrics = _compute_standard_metrics(y_true, y_pred)
+
         summary = {
             "model_type": model_type,
             "total_articles": len(results),
             "human_count": human_count,
             "ai_count": ai_count,
             "human_percentage": round((human_count / len(results)) * 100, 2) if results else 0,
-            "ai_percentage": round((ai_count / len(results)) * 100, 2) if results else 0
+            "ai_percentage": round((ai_count / len(results)) * 100, 2) if results else 0,
+            "metrics": metrics
         }
         
         return jsonify({
@@ -3613,15 +4344,9 @@ def api_select_model(task_id):
 
     uid = session.get("uid")
 
-    task_ref = db.collection("tasks").document(task_id)
-    task_doc = task_ref.get()
-    if not task_doc.exists:
-        return jsonify({"error": "Task not found"}), 404
-
-    task_data = task_doc.to_dict()
-
-    if uid not in task_data.get("examiner_ids", []):
-        return jsonify({"error": "Forbidden"}), 403
+    task_ref, task_data, guard_error = _model_selection_task_guard(task_id, reject_completed=True)
+    if guard_error:
+        return guard_error
 
     data = request.get_json() or {}
     selected_model = (data.get("model") or "logistic").lower()
@@ -3655,20 +4380,21 @@ def api_select_model(task_id):
             results = []
             human_count = 0
             ai_count = 0
+            y_true = []
+            y_pred = []
 
             for push_id, article_data in snapshot.items():
                 if not isinstance(article_data, dict):
                     continue
 
                 payload = article_data.get("payload", {})
-                title = payload.get("title") or payload.get("Title") or ""
-                content = payload.get("Article") or payload.get("article") or ""
+                title = payload.get("title") or payload.get("Title") or payload.get("headline") or ""
+                content = payload.get("Article") or payload.get("article") or payload.get("content") or payload.get("text") or payload.get("Text") or ""
                 full_text = f"{title}. {content}" if title else content
 
                 chunks = split_into_3_chunks(full_text)
                 human_scores = []
                 ai_scores = []
-                chunk_details = []
 
                 for i, chunk in enumerate(chunks):
                     if selected_model == "rnn":
@@ -3680,21 +4406,31 @@ def api_select_model(task_id):
                     a = float(probabilities[1])
                     human_scores.append(h)
                     ai_scores.append(a)
-                    chunk_details.append({
-                        "label": f"F{i+1}",
-                        "human": round(h * 100, 2),
-                        "ai": round(a * 100, 2)
-                    })
 
                 final_human = sum(human_scores) / len(human_scores)
                 final_ai = sum(ai_scores) / len(ai_scores)
                 prediction = "AI" if final_ai > final_human else "Human"
+                prediction_int = 1 if prediction == "AI" else 0
+                ground_truth = _extract_ground_truth_from_payload(payload)
                 confidence, uncertainty = _confidence_uncertainty_from_prob(final_ai)
+                chunk_details = _news_chunks_from_scores(
+                    chunks,
+                    human_scores,
+                    ai_scores,
+                    article_id=push_id,
+                    title=title[:100],
+                    article_prediction=prediction,
+                    article_prediction_int=prediction_int
+                )
 
                 if prediction == "Human":
                     human_count += 1
                 else:
                     ai_count += 1
+
+                if ground_truth is not None:
+                    y_true.append(ground_truth)
+                    y_pred.append(prediction_int)
 
                 results.append({
                     "confidence": _percent_or_none(confidence),
@@ -3703,6 +4439,9 @@ def api_select_model(task_id):
                     "title": title[:100],
                     "content": content[:500],
                     "prediction": prediction,
+                    "prediction_int": prediction_int,
+                    "ground_truth": ground_truth,
+                    "ground_truth_label": _label_text_from_int(ground_truth),
                     "human_percentage": round(final_human * 100, 2),
                     "ai_percentage": round(final_ai * 100, 2),
                     "chunks": chunk_details
@@ -3710,6 +4449,7 @@ def api_select_model(task_id):
 
             # نحفظ في RTDB - نظف project_id من الأحرف الممنوعة
             safe_pid = project_id.replace(".", "_").replace("#", "_").replace("$", "_").replace("[", "_").replace("]", "_")
+            metrics = _compute_standard_metrics(y_true, y_pred)
             results_ref = rtdb.reference(f"analysis_results/{safe_pid}/{selected_model}")
             results_ref.set({
                 "summary": {
@@ -3717,9 +4457,20 @@ def api_select_model(task_id):
                     "total_articles": len(results),
                     "human_count": human_count,
                     "ai_count": ai_count,
+                    "metrics": metrics,
                 },
+                "metrics": metrics,
                 "details": results
             })
+            model_version = _active_learning_model_version(project_id, selected_model)
+            _freeze_active_learning_targets_if_missing(
+                project_id,
+                "news",
+                selected_model,
+                model_version,
+                _news_active_learning_candidates(project_id, selected_model, results),
+                task_data.get("examiner_ids") or []
+            )
             app.logger.info("=== Analysis saved to RTDB: analysis_results/%s/%s ===", safe_pid, selected_model)
 
     except Exception as e:
@@ -4000,17 +4751,18 @@ def api_get_task_articles(task_id):
         summary = results_data.get("summary", {})
 
         # نجيب الـ feedbacks الموجودة
+        dataset_rows = rtdb.reference(f"datasets/uploaded_news/{dataset_id}").get() or {}
+        detail_map = {
+            _safe_str(item.get("article_id") or item.get("id")): item
+            for item in details
+            if isinstance(item, dict)
+        }
+
         articles_with_feedback = []
         for article in details:
             article_id = article.get("article_id")
-            feedback = None
-
-            try:
-                feedback_ref = rtdb.reference(f"datasets/uploaded_news/{dataset_id}/{article_id}/feedback")
-                feedback = feedback_ref.get()
-            except Exception:
-                pass
-
+            source = dataset_rows.get(article_id, {}) if isinstance(dataset_rows, dict) else {}
+            feedback = source.get("feedback") if isinstance(source, dict) else None
             articles_with_feedback.append({
                 "article_id": article_id,
                 "title": article.get("title", ""),
@@ -4025,27 +4777,90 @@ def api_get_task_articles(task_id):
                 "feedback": feedback
             })
 
-        active_learning_enabled = _is_logistic_model_key(selected_model)
-        active_learning_total = len(articles_with_feedback)
+        active_learning_enabled = _uses_frozen_active_learning(selected_model)
+        news_candidates = _news_active_learning_candidates(project_id, selected_model, details)
+        active_learning_total = len(news_candidates) if active_learning_enabled else len(articles_with_feedback)
         active_learning_limit = _active_learning_limit(active_learning_total) if active_learning_enabled else active_learning_total
 
         if active_learning_enabled:
-            selected_articles = sorted(
-                articles_with_feedback,
-                key=lambda item: (_active_learning_sort_value(item), item.get("article_id", ""))
-            )[:active_learning_limit]
-            selected_ids = {item.get("article_id") for item in selected_articles}
-            for item in articles_with_feedback:
-                item["active_learning_selected"] = item.get("article_id") in selected_ids
-            articles_with_feedback = [item for item in articles_with_feedback if item.get("active_learning_selected")]
-            articles_with_feedback.sort(key=lambda item: (_active_learning_sort_value(item), item.get("article_id", "")))
-
+            model_version = _active_learning_model_version(project_id, selected_model)
+            frozen_selection = _freeze_active_learning_targets_if_missing(
+                project_id,
+                "news",
+                selected_model,
+                model_version,
+                news_candidates,
+                task_data.get("examiner_ids") or []
+            )
+            chunk_targets = [
+                target for target in _frozen_target_values(frozen_selection)
+                if _safe_str(target.get("target_unit")) == "chunk"
+            ]
+            if chunk_targets:
+                chunk_rows = []
+                for target in sorted(chunk_targets, key=lambda item: int(item.get("selection_rank") or 0)):
+                    article_id = _safe_str(target.get("article_id") or target.get("parent_article_id"))
+                    detail = detail_map.get(article_id, {})
+                    source = dataset_rows.get(article_id, {}) if isinstance(dataset_rows, dict) else {}
+                    chunk_index = int(target.get("chunk_index") or 0)
+                    chunk = _news_chunk_by_index(detail, chunk_index) or target
+                    chunk_feedbacks = _news_chunk_feedbacks(source, chunk_index)
+                    feedback = next(iter(chunk_feedbacks.values())) if isinstance(chunk_feedbacks, dict) and chunk_feedbacks else None
+                    chunks = []
+                    for pos, source_chunk in enumerate(detail.get("chunks") or [], start=1):
+                        if not isinstance(source_chunk, dict):
+                            continue
+                        current_index = int(source_chunk.get("chunk_index") or pos)
+                        chunks.append({
+                            **source_chunk,
+                            "active_learning_selected": current_index == chunk_index,
+                            "has_feedback": bool(_news_first_chunk_feedback(source, current_index))
+                        })
+                    chunk_rows.append({
+                        "article_id": article_id,
+                        "title": detail.get("title", target.get("title", "")),
+                        "content": detail.get("content", ""),
+                        "prediction": detail.get("prediction", target.get("parent_article_prediction")),
+                        "prediction_int": _first_present(detail.get("prediction_int"), target.get("parent_article_prediction_int")),
+                        "human_percentage": detail.get("human_percentage", 0),
+                        "ai_percentage": detail.get("ai_percentage", 0),
+                        "confidence": chunk.get("confidence", target.get("confidence")),
+                        "uncertainty": chunk.get("uncertainty", target.get("uncertainty")),
+                        "chunks": chunks,
+                        "selected_chunk": {
+                            **chunk,
+                            "chunk_index": chunk_index,
+                            "chunk_text": chunk.get("chunk_text") or chunk.get("text") or target.get("chunk_text") or target.get("text"),
+                            "selection_rank": target.get("selection_rank"),
+                            "sample_id": target.get("sample_id")
+                        },
+                        "target_unit": "chunk",
+                        "chunk_index": chunk_index,
+                        "sample_id": target.get("sample_id"),
+                        "active_learning_selected": True,
+                        "has_feedback": feedback is not None,
+                        "feedback": feedback
+                    })
+                articles_with_feedback = chunk_rows
+            else:
+                selected_ids = {
+                    _safe_str(target.get("article_id") or target.get("source_id"))
+                    for target in _frozen_target_values(frozen_selection)
+                }
+                for item in articles_with_feedback:
+                    item["active_learning_selected"] = _safe_str(item.get("article_id")) in selected_ids
+                articles_with_feedback = [item for item in articles_with_feedback if item.get("active_learning_selected")]
+            articles_with_feedback.sort(key=lambda item: (_active_learning_sort_value(item), item.get("article_id", ""), int(item.get("chunk_index") or 0)))
+            active_learning_limit = len(articles_with_feedback)
         return jsonify({
             "articles": articles_with_feedback,
             "summary": summary,
             "selected_model": selected_model,
             "active_learning": {
-                "enabled": active_learning_enabled,
+                "enabled": _active_learning_retraining_supported(selected_model),
+                "review_targets_enabled": active_learning_enabled,
+                "active_learning_enabled": _active_learning_retraining_supported(selected_model),
+                "retraining_supported": _active_learning_retraining_supported(selected_model),
                 "percent": ACTIVE_LEARNING_PERCENT,
                 "max_samples": ACTIVE_LEARNING_MAX_SAMPLES,
                 "selected": len(articles_with_feedback),
@@ -4067,6 +4882,13 @@ def api_submit_article_feedback(article_id):
     data = request.get_json() or {}
     agreed_with_model = bool(data.get("agreed_with_model", False))
     dataset_id = data.get("dataset_id")
+    chunk_index = data.get("chunk_index")
+    target_unit = "chunk" if chunk_index is not None and str(chunk_index).strip() != "" else "article"
+    if target_unit == "chunk":
+        try:
+            chunk_index = int(chunk_index)
+        except Exception:
+            return jsonify({"error": "Invalid chunk_index"}), 400
 
     if not dataset_id:
         return jsonify({"error": "Dataset ID is required"}), 400
@@ -4080,35 +4902,85 @@ def api_submit_article_feedback(article_id):
             return jsonify({"error": "Explanation is required"}), 400
 
     try:
-        feedback_ref = rtdb.reference(
-            f"datasets/uploaded_news/{dataset_id}/{article_id}/feedback"
-        )
+        if target_unit == "chunk":
+            feedback_ref = rtdb.reference(
+                f"datasets/uploaded_news/{dataset_id}/{article_id}/chunk_feedback/{chunk_index}"
+            )
+        else:
+            feedback_ref = rtdb.reference(
+                f"datasets/uploaded_news/{dataset_id}/{article_id}/feedback"
+            )
         if feedback_ref.get():
-            return jsonify({"error": "Feedback already exists for this article"}), 400
+            return jsonify({"error": "Feedback already exists for this target"}), 400
 
         user_doc = db.collection("users").document(uid).get()
         first_name = user_doc.to_dict().get("profile", {}).get("firstName", "")
         last_name  = user_doc.to_dict().get("profile", {}).get("lastName", "")
         examiner_name = f"{first_name} {last_name}".strip() or "Examiner"
 
-        if agreed_with_model:
-            feedback_data = {
-                "examiner_uid":      uid,
-                "examiner_name":     examiner_name,
-                "agreed_with_model": True,
-                "submitted_at":      datetime.utcnow().isoformat() + "Z"
-            }
-        else:
-            feedback_data = {
-                "examiner_uid":      uid,
-                "examiner_name":     examiner_name,
-                "agreed_with_model": False,
-                "label":             data.get("label"),
-                "explanation":       data.get("explanation", "").strip(),
-                "submitted_at":      datetime.utcnow().isoformat() + "Z"
-            }
+        try:
+            project_id, project = _project_by_dataset_id(dataset_id)
+            if project_id:
+                detection_snapshot = _find_detection_snapshot_for_feedback(
+                    "news",
+                    project_id,
+                    project=project,
+                    dataset_id=dataset_id,
+                    article_id=article_id,
+                    chunk_index=chunk_index if target_unit == "chunk" else None
+                )
+            else:
+                detection_snapshot = {}
+        except Exception:
+            project_id, project, detection_snapshot = None, None, {}
 
-        feedback_ref.set(feedback_data)
+        feedback_data = {
+            "examiner_uid": uid,
+            "examiner_name": examiner_name,
+            "agreed_with_model": agreed_with_model,
+            "label": None if agreed_with_model else data.get("label"),
+            "explanation": "" if agreed_with_model else data.get("explanation", "").strip(),
+            "submitted_at": datetime.utcnow().isoformat() + "Z",
+            "article_id": article_id,
+            "target_unit": target_unit,
+            "chunk_index": chunk_index if target_unit == "chunk" else None,
+            "chunk_id": detection_snapshot.get("chunk_id"),
+            "chunk_text": detection_snapshot.get("chunk_text"),
+            "model_prediction": detection_snapshot.get("model_prediction_label") or detection_snapshot.get("model_prediction"),
+            "corrected_label": detection_snapshot.get("model_prediction_label") if agreed_with_model else data.get("label"),
+            "feedback_explanation": "" if agreed_with_model else data.get("explanation", "").strip(),
+            "confidence": detection_snapshot.get("confidence"),
+            "uncertainty": detection_snapshot.get("uncertainty")
+        }
+
+        if target_unit == "chunk":
+            feedback_ref.child(uid).set(feedback_data)
+        else:
+            feedback_ref.set(feedback_data)
+
+        try:
+            if project_id:
+                sample_id = _make_active_learning_sample_id(
+                    "news",
+                    article_id=article_id,
+                    chunk_index=chunk_index if target_unit == "chunk" else None
+                )
+                _write_active_learning_feedback(project_id, sample_id, detection_snapshot, feedback_data)
+                selected_model_key = detection_snapshot.get("selected_model_key") or "logistic"
+                if _uses_frozen_active_learning(selected_model_key):
+                    model_version = _active_learning_model_version(project_id, selected_model_key)
+                    _mark_frozen_active_learning_target_reviewed(
+                        project_id,
+                        model_version,
+                        sample_id,
+                        uid,
+                        feedback_data.get("submitted_at"),
+                        {"article_id": article_id, "chunk_index": chunk_index} if target_unit == "chunk" else {"article_id": article_id}
+                    )
+                    _update_news_labeling_status_from_frozen_targets(project_id, model_version)
+        except Exception as normalized_error:
+            app.logger.exception("Failed to write normalized news feedback: %s", normalized_error)
+
         return jsonify({"message": "Feedback submitted successfully"}), 200
 
     except Exception as e:
@@ -4130,6 +5002,14 @@ def show_results():
 
     user_doc = get_current_user_doc()
     user_name = get_user_full_name(user_doc) if user_doc else "Examiner"
+    if task_id and mode == "model_selection":
+        task_doc = db.collection("tasks").document(task_id).get()
+        if not task_doc.exists:
+            abort(404)
+        task_data = task_doc.to_dict() or {}
+        examiner_ids = task_data.get("examiner_ids") or []
+        if task_data.get("task_type") != "model_selection" or len(examiner_ids) != 1 or session.get("uid") not in examiner_ids:
+            abort(403)
 
     return render_template(
         "results.con.html",
@@ -4201,6 +5081,10 @@ def _gt_label_from_sender(sender_type, conversation_type):
     return "Human"
 
 
+def _gt_int_from_sender(sender_type, conversation_type):
+    return _normalize_binary_label(_gt_label_from_sender(sender_type, conversation_type))
+
+
 def _sender_label(sender_type, conversation_type):
     st = (sender_type or "").lower()
     if conversation_type == "human-ai":
@@ -4222,15 +5106,22 @@ def api_run_analysis_project(project_id):
             return jsonify({"error": "Unauthorized"}), 401
         uid = session.get("uid")
 
-
-
         proj_doc = db.collection("projects").document(project_id).get()
         if not proj_doc.exists:
             return jsonify({"error": "Project not found"}), 404
 
+        ms_task_ref, ms_task_data, guard_error = _model_selection_task_guard(
+            task_id_from_query,
+            project_id=project_id,
+            reject_completed=True
+        )
+        if guard_error:
+            return guard_error
+
         tasks = db.collection("tasks").where("project_ID", "==", project_id).stream()
-        out_ref = rtdb.reference(f"{ANALYSIS_ROOT}/{model_key}/{project_id}")
-        out_ref.delete()
+        run_id = uuid.uuid4().hex[:12]
+        base_ref = _generated_conversation_base_ref(project_id, model_key)
+        out_ref = base_ref.child("runs").child(run_id)
 
         analyzed_conversations = 0
         analyzed_turns = 0
@@ -4285,6 +5176,8 @@ def api_run_analysis_project(project_id):
                 p_machine = None
                 conf = None
                 uncertainty = None
+                prediction_int = _normalize_binary_label(label)
+                ground_truth = _gt_int_from_sender(m.get("sender_type"), conv_type)
                 if probs is not None:
                     if selected_model == CONV_RNN_KEY:
                         p_machine = float(probs[i - 1][1])
@@ -4296,7 +5189,10 @@ def api_run_analysis_project(project_id):
                     "text": m["text"],
                     "prev_text": prev_texts[i - 1],
                     "prediction": label,
+                    "prediction_int": prediction_int,
                     "gt": _gt_label_from_sender(m.get("sender_type"), conv_type),
+                    "ground_truth": ground_truth,
+                    "ground_truth_label": _label_text_from_int(ground_truth),
                     "sender": _sender_label(m.get("sender_type"), conv_type),
                     "p_machine": p_machine,
                     "confidence": conf,
@@ -4307,23 +5203,16 @@ def api_run_analysis_project(project_id):
             return jsonify({
                 "error": "No conversation messages found for this project. Complete a conversation task first."
             }), 400
-        if task_id_from_query:
-            ms_task_ref = db.collection("tasks").document(task_id_from_query)
-            ms_task_doc = ms_task_ref.get()
-            if ms_task_doc.exists:
-                ms_data = ms_task_doc.to_dict() or {}
-                if ms_data.get("project_ID") == project_id and ms_data.get("task_type") == "model_selection":
-                    ms_task_ref.update({
-                        "selected_model": selected_model,
-                        "selected_model_name": selected_model_name,
-                        "selected_by": uid,
-                        "selected_at": datetime.utcnow().isoformat() + "Z",
-                        "status": "completed"
-                    })
+
+        selected_at = datetime.utcnow().isoformat() + "Z"
+        base_ref.child("latest_run_id").set(run_id)
+        base_ref.child("latest_model_key").set(model_key)
+        base_ref.child("latest_analyzed_at").set(selected_at)
 
         return jsonify({
             "success": True,
             "model": selected_model,
+            "run_id": run_id,
             "ran_at": datetime.utcnow().isoformat() + "Z",
             "analyzed_conversations": analyzed_conversations,
             "analyzed_turns": analyzed_turns
@@ -4346,7 +5235,7 @@ def api_analysis_project(project_id):
     if not session.get("idToken"):
         return jsonify({"error": "Unauthorized"}), 401
 
-    raw = rtdb.reference(f"{ANALYSIS_ROOT}/{model_key}/{project_id}").get() or {}
+    raw = _generated_conversation_results_payload(project_id, model_key) or {}
     results = []
 
     y_true = []
@@ -4359,11 +5248,11 @@ def api_analysis_project(project_id):
         turns.sort(key=lambda x: x.get("turn_index", 0))
 
         for t in turns:
-            gt = str(t.get("gt", "")).strip().lower()
-            pr = str(t.get("prediction", "")).strip().lower()
-            if gt in ("ai", "human") and pr in ("ai", "human"):
-                y_true.append(1 if gt == "ai" else 0)
-                y_pred.append(1 if pr == "ai" else 0)
+            gt = _first_present(t.get("ground_truth"), t.get("gt"))
+            pr = _first_present(t.get("prediction_int"), t.get("prediction"))
+            if _normalize_binary_label(gt) is not None and _normalize_binary_label(pr) is not None:
+                y_true.append(gt)
+                y_pred.append(pr)
 
         results.append({
             "task_id": task_id,
@@ -4372,40 +5261,14 @@ def api_analysis_project(project_id):
             "turns": turns
         })
 
-    tp = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 1)
-    tn = sum(1 for t, p in zip(y_true, y_pred) if t == 0 and p == 0)
-    fp = sum(1 for t, p in zip(y_true, y_pred) if t == 0 and p == 1)
-    fn = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 0)
-
-    total = len(y_true)
-    accuracy = ((tp + tn) / total) if total else 0.0
-
-    def prf_for_class(c):
-        tp_c = sum(1 for t, p in zip(y_true, y_pred) if t == c and p == c)
-        fp_c = sum(1 for t, p in zip(y_true, y_pred) if t != c and p == c)
-        fn_c = sum(1 for t, p in zip(y_true, y_pred) if t == c and p != c)
-
-        prec = (tp_c / (tp_c + fp_c)) if (tp_c + fp_c) else 0.0
-        rec = (tp_c / (tp_c + fn_c)) if (tp_c + fn_c) else 0.0
-        f1 = (2 * prec * rec / (prec + rec)) if (prec + rec) else 0.0
-        return prec, rec, f1
-
-    prec_h, rec_h, f1_h = prf_for_class(0)
-    prec_ai, rec_ai, f1_ai = prf_for_class(1)
-
-    metrics = {
-        "accuracy": accuracy,
-        "precision_macro": (prec_h + prec_ai) / 2.0,
-        "recall_macro": (rec_h + rec_ai) / 2.0,
-        "f1_macro": (f1_h + f1_ai) / 2.0,
-    }
-
+    metrics = _compute_standard_metrics(y_true, y_pred)
+    values = _owner_confusion_values(metrics.get("confusion_matrix")) if metrics.get("available") else None
     confusion_matrix = {
-        "true_negative": tn,
-        "false_positive": fp,
-        "false_negative": fn,
-        "true_positive": tp,
-    }
+        "true_negative": values["tn"],
+        "false_positive": values["fp"],
+        "false_negative": values["fn"],
+        "true_positive": values["tp"],
+    } if values else None
 
     return jsonify({
         "count": len(results),
@@ -4434,29 +5297,50 @@ def api_conversation_select_model_task():
     if not project_id or not task_id:
         return jsonify({"error": "project_id and task_id are required"}), 400
 
-    task_ref = db.collection("tasks").document(task_id)
-    task_doc = task_ref.get()
-    if not task_doc.exists:
-        return jsonify({"error": "Task not found"}), 404
-
-    task_data = task_doc.to_dict() or {}
-    if task_data.get("project_ID") != project_id:
-        return jsonify({"error": "Task does not belong to this project"}), 400
-    if task_data.get("task_type") != "model_selection":
-        return jsonify({"error": "Task is not model_selection"}), 400
-    if uid not in (task_data.get("examiner_ids") or []):
-        return jsonify({"error": "Forbidden"}), 403
+    task_ref, task_data, guard_error = _model_selection_task_guard(task_id, project_id=project_id, reject_completed=True)
+    if guard_error:
+        return guard_error
 
     now_iso = datetime.utcnow().isoformat() + "Z"
     model_name = "RNN" if selected_model == "rnn" else "Logistic Regression"
 
+    project = get_project_basic_info(project_id) or {}
+    result_type = detect_project_result_type(project)
+    selected_key_for_results = CONV_RNN_KEY if selected_model == "rnn" else CONV_LOGREG_KEY
+    model_version = _active_learning_model_version(project_id, selected_key_for_results)
+    analysis_run_id = None
+    freeze_candidates = []
+
+    if result_type == "uploaded_conversation":
+        run_id, run_ref, _ = _uploaded_conversation_run(project_id, selected_key_for_results)
+        if not run_ref:
+            return jsonify({"error": "Analysis results are not ready for the selected model"}), 400
+        analysis_run_id = run_id
+        freeze_candidates = _uploaded_conversation_active_learning_candidates(project_id, selected_key_for_results, run_id, run_ref)
+    elif result_type == "generated_conversation":
+        analysis_run_id = _safe_str(_generated_conversation_base_ref(project_id, selected_key_for_results).child("latest_run_id").get())
+        raw = _generated_conversation_results_payload(project_id, selected_key_for_results)
+        if not isinstance(raw, dict) or not raw:
+            return jsonify({"error": "Analysis results are not ready for the selected model"}), 400
+        freeze_candidates = _generated_conversation_active_learning_candidates(project_id, selected_key_for_results, raw)
+
     task_ref.update({
-        "selected_model": selected_model,  # ✅ نحفظ المفتاح نفسه: logreg / rnn
+        "selected_model": selected_model,
         "selected_model_name": model_name,
         "selected_by": uid,
         "selected_at": now_iso,
+        "analysis_run_id": analysis_run_id,
         "status": "completed"
     })
+
+    _freeze_active_learning_targets_if_missing(
+        project_id,
+        result_type,
+        selected_key_for_results,
+        model_version,
+        freeze_candidates,
+        task_data.get("examiner_ids") or []
+    )
 
     return jsonify({
         "message": "Conversation model selected and saved",
@@ -4586,8 +5470,7 @@ def api_conversation_feedback_list(task_id):
         }), 200
 
     # نجيب نتائج التحليل من نفس موديل الاختيار
-    root_ref = rtdb.reference(f"{ANALYSIS_ROOT}/{model_key}/{project_id}")
-    raw = root_ref.get() or {}
+    raw = _generated_conversation_results_payload(project_id, model_key) or {}
     if not isinstance(raw, dict) or not raw:
         return jsonify({
             "waiting": True,
@@ -4758,8 +5641,24 @@ def api_conversation_feedback_list(task_id):
 
     items.sort(key=lambda x: x["order_index"])
 
-    active_learning_enabled = _is_logistic_model_key(model_key)
-    items, active_learning_info = _apply_active_learning_turn_selection(items, active_learning_enabled)
+    active_learning_enabled = _uses_frozen_active_learning(model_key)
+    if active_learning_enabled:
+        model_version = _active_learning_model_version(project_id, model_key)
+        frozen_selection = _freeze_active_learning_targets_if_missing(
+            project_id,
+            "generated_conversation",
+            model_key,
+            model_version,
+            _generated_conversation_active_learning_candidates(project_id, model_key, raw),
+            task_data.get("examiner_ids") or []
+        )
+        items, active_learning_info = _apply_frozen_active_learning_turn_selection(
+            items,
+            frozen_selection,
+            "generated_conversation"
+        )
+    else:
+        items, active_learning_info = _apply_active_learning_turn_selection(items, False)
 
     total_conversations = len(items)
     reviewed_conversations = sum(1 for x in items if x.get("conversation_locked"))
@@ -4831,7 +5730,7 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
         if not selected_model:
             return jsonify({"error": "Model selection is not completed yet"}), 400
 
-        conv_ref = rtdb.reference(f"{ANALYSIS_ROOT}/{model_key}/{project_id}/{conversation_id}")
+        conv_ref = _generated_conversation_node_ref(project_id, model_key, conversation_id)
         conv_node = conv_ref.get() or {}
         if isinstance(conv_node, list):
             conv_node = conv_node[0] if conv_node and isinstance(conv_node[0], dict) else {}
@@ -4899,6 +5798,35 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
 
         conv_ref.child("turn_feedbacks").child(str(turn_index)).child(uid).set(payload)
 
+        try:
+            detection_snapshot = _find_detection_snapshot_for_feedback(
+                "generated_conversation",
+                project_id,
+                task_id=task_id,
+                conversation_id=conversation_id,
+                turn_index=turn_index,
+                target_turn=target_turn
+            )
+            sample_id = _make_active_learning_sample_id(
+                "generated_conversation",
+                task_id=task_id,
+                conversation_id=conversation_id,
+                turn_index=turn_index
+            )
+            _write_active_learning_feedback(project_id, sample_id, detection_snapshot, payload)
+            if _uses_frozen_active_learning(model_key):
+                model_version = _active_learning_model_version(project_id, model_key)
+                _mark_frozen_active_learning_target_reviewed(
+                    project_id,
+                    model_version,
+                    sample_id,
+                    uid,
+                    payload.get("submitted_at"),
+                    {"conversation_id": conversation_id, "turn_index": turn_index}
+                )
+        except Exception as normalized_error:
+            app.logger.exception("Failed to write normalized generated conversation feedback: %s", normalized_error)
+
         return jsonify({
             "message": "Turn feedback saved successfully",
             "conversation_id": conversation_id,
@@ -4940,24 +5868,361 @@ def _uploaded_feedback_model_key(model_key):
 
 
 def _label_to_int(label):
+    return _normalize_binary_label(label)
+
+
+def _is_ai_label(label):
     value = _safe_str(label).strip().lower()
-    if value in ("ai", "machine", "machine-generated", "1"):
-        return 1
-    if value in ("human", "0"):
-        return 0
-    return None
+    return _normalize_binary_label(label) == 1 or value in ("ai-generated", "ai generated", "true")
+
+
+def _make_active_learning_sample_id(project_type, article_id=None, row_id=None, task_id=None, conversation_id=None, dialogue_id=None, turn_index=None, chunk_index=None):
+    if project_type == "news":
+        parts = ["news"]
+        if article_id:
+            parts.extend(["article", article_id])
+        if chunk_index is not None and chunk_index != "":
+            parts.extend(["chunk", chunk_index])
+        return re.sub(r'[.#$\[\]/]', "_", ":".join(_safe_str(part) for part in parts if _safe_str(part)))
+
+    parts = [project_type]
+    if article_id:
+        parts.append(f"article:{article_id}")
+    if chunk_index is not None and chunk_index != "":
+        parts.append(f"chunk:{chunk_index}")
+    if row_id:
+        parts.append(f"row:{row_id}")
+    if task_id:
+        parts.append(f"task:{task_id}")
+    if conversation_id:
+        parts.append(f"conversation:{conversation_id}")
+    if dialogue_id:
+        parts.append(f"dialogue:{dialogue_id}")
+    if turn_index is not None and turn_index != "":
+        parts.append(f"turn:{turn_index}")
+    return _rtdb_safe_key("|".join(_safe_str(part) for part in parts if _safe_str(part)))
+
+
+def _project_by_dataset_id(dataset_id):
+    docs = list(db.collection("projects").where("dataset_id", "==", dataset_id).limit(1).stream())
+    if not docs:
+        return None, None
+    project = docs[0].to_dict() or {}
+    project_id = project.get("project_id") or project.get("project_ID") or docs[0].id
+    project["project_id"] = project_id
+    return project_id, project
+
+
+def _find_detection_snapshot_for_feedback(project_type, project_id, **kwargs):
+    project = kwargs.get("project") or get_project_basic_info(project_id) or {}
+    tasks = get_project_tasks(project_id)
+    selected = _get_project_selected_model(project_id, project, tasks)
+    model_key = selected.get("key") or ("logistic" if project_type == "news" else CONV_LOGREG_KEY)
+    model_name = selected.get("name") or ("RNN" if model_key == "rnn" else "Logistic Regression")
+    snapshot = {
+        "project_id": project_id,
+        "project_type": project_type,
+        "dataset_id": project.get("dataset_id") or kwargs.get("dataset_id") or "",
+        "selected_model_key": model_key,
+        "selected_model_name": model_name,
+        "model_version": selected.get("version") or "v1"
+    }
+
+    if project_type == "news":
+        article_id = _safe_str(kwargs.get("article_id"))
+        chunk_index = kwargs.get("chunk_index")
+        dataset_id = snapshot["dataset_id"]
+        source = rtdb.reference(f"datasets/uploaded_news/{dataset_id}/{article_id}").get() or {}
+        payload = source.get("payload") if isinstance(source, dict) and isinstance(source.get("payload"), dict) else source
+        if not isinstance(payload, dict):
+            payload = {}
+
+        results_data = _news_results_payload(project_id, model_key) or {}
+        details = results_data.get("details") or results_data.get("results") or []
+        details = list(details.values()) if isinstance(details, dict) else (details if isinstance(details, list) else [])
+        detection = next((item for item in details if _safe_str((item or {}).get("article_id") or (item or {}).get("id")) == article_id), {}) or {}
+        title, text = _text_from_news_payload(payload, detection)
+        chunk = _news_chunk_by_index(detection, chunk_index) if chunk_index is not None else None
+        if chunk:
+            text = chunk.get("chunk_text") or chunk.get("text") or text
+        snapshot.update({
+            "source_id": article_id,
+            "article_id": article_id,
+            "chunk_index": int(chunk.get("chunk_index") or chunk_index) if chunk else None,
+            "chunk_id": chunk.get("chunk_id") if chunk else None,
+            "chunk_text": chunk.get("chunk_text") if chunk else None,
+            "target_unit": "chunk" if chunk else "article",
+            "title": title,
+            "parent_article_title": title,
+            "text": text,
+            "original_label": _first_present(payload.get("MachineGen"), payload.get("label"), payload.get("target"), payload.get("ground_truth")),
+            "model_prediction": chunk.get("prediction") if chunk else detection.get("prediction"),
+            "model_prediction_label": chunk.get("prediction") if chunk else detection.get("prediction"),
+            "parent_article_prediction": detection.get("prediction"),
+            "confidence": _owner_decimal(chunk.get("confidence") if chunk else detection.get("confidence")),
+            "uncertainty": _owner_decimal(chunk.get("uncertainty") if chunk else detection.get("uncertainty"))
+        })
+        if chunk:
+            snapshot["source_id"] = f"{article_id}:chunk:{snapshot.get('chunk_index')}"
+        return snapshot
+
+    if project_type == "uploaded_conversation":
+        target_turn = kwargs.get("target_turn") or {}
+        dialogue_id = kwargs.get("dialogue_id")
+        turn_index = kwargs.get("turn_index")
+        snapshot.update({
+            "source_id": _first_present(target_turn.get("row_id"), target_turn.get("source_row_id"), f"{dialogue_id}:{turn_index}"),
+            "row_id": _safe_str(target_turn.get("row_id") or target_turn.get("source_row_id")),
+            "dialogue_id": dialogue_id,
+            "turn_index": turn_index,
+            "text": target_turn.get("text"),
+            "prev_text": _first_present(target_turn.get("previous_text"), target_turn.get("prev_text")),
+            "original_label": _first_present(target_turn.get("ground_truth"), target_turn.get("gt")),
+            "model_prediction": target_turn.get("prediction"),
+            "model_prediction_label": "AI" if _is_ai_label(target_turn.get("prediction")) else "Human",
+            "confidence": _owner_decimal(target_turn.get("confidence")),
+            "uncertainty": _owner_decimal(target_turn.get("uncertainty"))
+        })
+        return snapshot
+
+    target_turn = kwargs.get("target_turn") or {}
+    task_id = kwargs.get("task_id")
+    conversation_id = kwargs.get("conversation_id")
+    turn_index = kwargs.get("turn_index")
+    snapshot.update({
+        "source_id": f"{conversation_id}:{turn_index}",
+        "task_id": task_id,
+        "conversation_id": conversation_id,
+        "turn_index": turn_index,
+        "text": target_turn.get("text"),
+        "prev_text": _first_present(target_turn.get("previous_text"), target_turn.get("prev_text")),
+        "original_label": _first_present(target_turn.get("gt"), target_turn.get("ground_truth")),
+        "model_prediction": target_turn.get("prediction"),
+        "model_prediction_label": "AI" if _is_ai_label(target_turn.get("prediction")) else "Human",
+        "confidence": _owner_decimal(target_turn.get("confidence")),
+        "uncertainty": _owner_decimal(target_turn.get("uncertainty"))
+    })
+    return snapshot
+
+
+def _write_active_learning_feedback(project_id, sample_id, detection_snapshot, feedback_data):
+    snapshot = detection_snapshot or {}
+    feedback = feedback_data or {}
+    agreed_with_model = bool(feedback.get("agreed_with_model", False))
+    model_label = snapshot.get("model_prediction_label") or snapshot.get("model_prediction")
+    submitted_label = feedback.get("label")
+    corrected_label_text = model_label if agreed_with_model else submitted_label
+    corrected_label = _label_to_machinegen(corrected_label_text)
+
+    record = {
+        "project_id": project_id,
+        "sample_id": sample_id,
+        "project_type": snapshot.get("project_type"),
+        "dataset_id": snapshot.get("dataset_id"),
+        "source_id": snapshot.get("source_id"),
+        "target_unit": snapshot.get("target_unit"),
+        "article_id": snapshot.get("article_id"),
+        "chunk_index": snapshot.get("chunk_index"),
+        "chunk_id": snapshot.get("chunk_id"),
+        "chunk_text": snapshot.get("chunk_text"),
+        "parent_article_title": snapshot.get("parent_article_title") or snapshot.get("title"),
+        "parent_article_prediction": snapshot.get("parent_article_prediction"),
+        "row_id": snapshot.get("row_id"),
+        "task_id": snapshot.get("task_id"),
+        "conversation_id": snapshot.get("conversation_id"),
+        "dialogue_id": snapshot.get("dialogue_id"),
+        "turn_index": snapshot.get("turn_index"),
+        "title": snapshot.get("title"),
+        "text": snapshot.get("text"),
+        "prev_text": snapshot.get("prev_text"),
+        "original_label": snapshot.get("original_label"),
+        "model_prediction": _label_to_machinegen(model_label),
+        "model_prediction_label": model_label,
+        "corrected_label": corrected_label,
+        "corrected_label_text": corrected_label_text,
+        "MachineGen": corrected_label,
+        "confidence": snapshot.get("confidence"),
+        "uncertainty": snapshot.get("uncertainty"),
+        "selected_model_key": snapshot.get("selected_model_key"),
+        "selected_model_name": snapshot.get("selected_model_name"),
+        "model_version": snapshot.get("model_version") or "v1",
+        "examiner_uid": feedback.get("examiner_uid"),
+        "examiner_name": feedback.get("examiner_name"),
+        "agreed_with_model": agreed_with_model,
+        "feedback_explanation": _safe_str(feedback.get("explanation") or feedback.get("feedback_explanation")),
+        "submitted_at": feedback.get("submitted_at") or _now_utc_iso(),
+        "used_for_retraining": False,
+        "training_export_id": None
+    }
+    rtdb.reference(f"active_learning_feedback/{project_id}/{sample_id}").set(_owner_json_value(record))
+    return record
+
+
+def _feedback_explanation_item(row):
+    if not isinstance(row, dict):
+        return None
+    explanation = _safe_str(row.get("feedback_explanation") or row.get("explanation"))
+    if not explanation:
+        return None
+    text = _safe_str(row.get("text"))
+    prediction = _safe_str(row.get("model_prediction_label") or row.get("model_prediction") or row.get("prediction"))
+    corrected_label = _safe_str(row.get("corrected_label_text") or row.get("corrected_label") or row.get("label"))
+    agreed_with_model = row.get("agreed_with_model")
+    if agreed_with_model is None and prediction and corrected_label:
+        agreed_with_model = prediction.strip().lower() == corrected_label.strip().lower()
+
+    return {
+        "sample_id": _safe_str(row.get("sample_id") or row.get("source_id")),
+        "project_type": _safe_str(row.get("project_type")),
+        "title": _safe_str(row.get("title") or row.get("dialogue_id") or row.get("conversation_id") or row.get("task_id")),
+        "text_preview": text[:220],
+        "prediction": prediction,
+        "corrected_label": corrected_label,
+        "examiner_uid": _safe_str(row.get("examiner_uid") or row.get("uid") or row.get("examiner_id")),
+        "examiner_name": _safe_str(row.get("examiner_name") or row.get("name")) or "Examiner",
+        "feedback_explanation": explanation,
+        "submitted_at": _safe_str(row.get("submitted_at")),
+        "confidence": _owner_decimal(row.get("confidence")),
+        "uncertainty": _owner_decimal(row.get("uncertainty")),
+        "agreed_with_model": bool(agreed_with_model),
+        "correction_changed_prediction": bool(prediction and corrected_label and prediction.strip().lower() != corrected_label.strip().lower()),
+        "participation_status": _safe_str(row.get("participation_status")),
+        "examiner_rating": row.get("examiner_rating")
+    }
+
+
+def _normalized_feedback_explanations(project_id, limit=20):
+    raw = rtdb.reference(f"active_learning_feedback/{project_id}").get() or {}
+    rows = list(raw.values()) if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
+    items = []
+    for row in rows:
+        item = _feedback_explanation_item(row)
+        if item:
+            items.append(item)
+    items.sort(key=lambda item: item.get("submitted_at", ""), reverse=True)
+    return items[:limit]
+
+
+def _old_feedback_explanations(project_id, project, result_type, limit=20):
+    items = []
+    try:
+        if result_type == "news":
+            dataset_id = project.get("dataset_id") or ""
+            rows = rtdb.reference(f"datasets/uploaded_news/{dataset_id}").get() or {}
+            selected = _get_project_selected_model(project_id, project, get_project_tasks(project_id))
+            details = (_news_results_payload(project_id, selected.get("key") or "logistic") or {}).get("details") or []
+            details = list(details.values()) if isinstance(details, dict) else (details if isinstance(details, list) else [])
+            detail_map = {_safe_str(item.get("article_id") or item.get("id")): item for item in details if isinstance(item, dict)}
+            for article_id, source in (rows.items() if isinstance(rows, dict) else []):
+                source = source if isinstance(source, dict) else {}
+                payload = source.get("payload") if isinstance(source.get("payload"), dict) else source
+                detail = detail_map.get(_safe_str(article_id), {})
+                title, text = _text_from_news_payload(payload if isinstance(payload, dict) else {}, detail)
+                feedbacks = _feedback_items(source.get("feedback") or {})
+                feedbacks.extend(_feedback_items(source.get("examiner_feedbacks") or {}))
+                for feedback in feedbacks:
+                    item = _feedback_explanation_item({
+                        "sample_id": _make_active_learning_sample_id("news", article_id=article_id),
+                        "project_type": "news",
+                        "title": title,
+                        "text": text,
+                        "model_prediction_label": detail.get("prediction"),
+                        "corrected_label_text": feedback.get("label") if feedback.get("agreed_with_model") is False else detail.get("prediction"),
+                        "examiner_uid": feedback.get("examiner_uid"),
+                        "examiner_name": feedback.get("examiner_name"),
+                        "feedback_explanation": feedback.get("explanation"),
+                        "submitted_at": feedback.get("submitted_at"),
+                        "confidence": detail.get("confidence"),
+                        "uncertainty": detail.get("uncertainty")
+                    })
+                    if item:
+                        items.append(item)
+        elif result_type == "uploaded_conversation":
+            selected = _get_project_selected_model(project_id, project, get_project_tasks(project_id))
+            model_key = _uploaded_feedback_model_key(selected.get("key") or CONV_LOGREG_KEY)
+            _, run_ref, _ = _uploaded_conversation_run(project_id, model_key)
+            if run_ref:
+                all_turns = run_ref.child("dialogue_turns").get() or {}
+                feedback_root = run_ref.child("turn_feedbacks").get() or {}
+                for safe_key, turns_raw in (all_turns.items() if isinstance(all_turns, dict) else []):
+                    turns = _turns_to_list(turns_raw)
+                    for idx, turn in enumerate(turns):
+                        if not isinstance(turn, dict):
+                            continue
+                        ui_turn_index = idx + 1
+                        turn_feedbacks = feedback_root.get(safe_key, {}).get(str(ui_turn_index), {}) if isinstance(feedback_root, dict) else {}
+                        for feedback in _feedback_items(turn_feedbacks):
+                            item = _feedback_explanation_item({
+                                "sample_id": _make_active_learning_sample_id("uploaded_conversation", row_id=turn.get("row_id") or turn.get("source_row_id"), dialogue_id=turn.get("dialogue_id") or safe_key, turn_index=ui_turn_index),
+                                "project_type": "uploaded_conversation",
+                                "dialogue_id": turn.get("dialogue_id") or safe_key,
+                                "text": turn.get("text"),
+                                "model_prediction_label": "AI" if _is_ai_label(turn.get("prediction")) else "Human",
+                                "corrected_label_text": feedback.get("label") if feedback.get("agreed_with_model") is False else ("AI" if _is_ai_label(turn.get("prediction")) else "Human"),
+                                "examiner_uid": feedback.get("examiner_uid"),
+                                "examiner_name": feedback.get("examiner_name"),
+                                "feedback_explanation": feedback.get("explanation"),
+                                "submitted_at": feedback.get("submitted_at"),
+                                "confidence": turn.get("confidence"),
+                                "uncertainty": turn.get("uncertainty")
+                            })
+                            if item:
+                                items.append(item)
+        elif result_type == "generated_conversation":
+            selected = _get_project_selected_model(project_id, project, get_project_tasks(project_id))
+            raw = _generated_conversation_results_payload(project_id, selected.get("key") or CONV_LOGREG_KEY) or {}
+            for task_id, node in (raw.items() if isinstance(raw, dict) else []):
+                if not isinstance(node, dict):
+                    continue
+                turns = _turns_to_list(node.get("turns") or {})
+                feedback_root = node.get("turn_feedbacks") or {}
+                for turn in turns:
+                    if not isinstance(turn, dict):
+                        continue
+                    turn_index = int(turn.get("turn_index", 0) or 0)
+                    turn_feedbacks = feedback_root.get(str(turn_index), {}) if isinstance(feedback_root, dict) else {}
+                    for feedback in _feedback_items(turn_feedbacks):
+                        item = _feedback_explanation_item({
+                            "sample_id": _make_active_learning_sample_id("generated_conversation", task_id=task_id, conversation_id=task_id, turn_index=turn_index),
+                            "project_type": "generated_conversation",
+                            "conversation_id": task_id,
+                            "text": turn.get("text"),
+                            "model_prediction_label": "AI" if _is_ai_label(turn.get("prediction")) else "Human",
+                            "corrected_label_text": feedback.get("label") if feedback.get("agreed_with_model") is False else ("AI" if _is_ai_label(turn.get("prediction")) else "Human"),
+                            "examiner_uid": feedback.get("examiner_uid"),
+                            "examiner_name": feedback.get("examiner_name"),
+                            "feedback_explanation": feedback.get("explanation"),
+                            "submitted_at": feedback.get("submitted_at"),
+                            "confidence": turn.get("confidence"),
+                            "uncertainty": turn.get("uncertainty")
+                        })
+                        if item:
+                            items.append(item)
+    except Exception as e:
+        app.logger.exception("Failed to build fallback feedback explanations: %s", e)
+    items.sort(key=lambda item: item.get("submitted_at", ""), reverse=True)
+    return items[:limit]
+
+
+def _owner_feedback_explanations(project_id, project, result_type, limit=20):
+    items = _normalized_feedback_explanations(project_id, limit)
+    if items:
+        return items
+    return _old_feedback_explanations(project_id, project, result_type, limit)
 
 
 def _project_logistic_task_model(project_id):
     for task in db.collection("tasks").where("project_ID", "==", project_id).stream():
         data = task.to_dict() or {}
-        if data.get("task_type") == "model_selection" and _is_logistic_model_key(data.get("selected_model")):
+        if data.get("task_type") == "model_selection" and data.get("selected_model"):
             return data.get("selected_model")
     return None
 
 
 def _export_news_active_learning_rows(project_id, proj_data):
-    selected_model = _project_logistic_task_model(project_id) or "logistic"
+    selected_model = _project_logistic_task_model(project_id)
+    if not _uses_frozen_active_learning(selected_model):
+        return []
     dataset_id = proj_data.get("dataset_id")
     if not dataset_id:
         return []
@@ -4968,50 +6233,67 @@ def _export_news_active_learning_rows(project_id, proj_data):
     if not isinstance(details, list):
         details = list(details.values()) if isinstance(details, dict) else []
 
-    selected = sorted(
-        details,
-        key=lambda item: (_active_learning_sort_value(item), item.get("article_id", ""))
-    )[:_active_learning_limit(len(details))]
-    selected_ids = {item.get("article_id") for item in selected}
-
     dataset_rows = rtdb.reference(f"datasets/uploaded_news/{dataset_id}").get() or {}
-    detail_map = {item.get("article_id"): item for item in selected if isinstance(item, dict)}
+    detail_map = {
+        _safe_str(item.get("article_id") or item.get("id")): item
+        for item in details
+        if isinstance(item, dict)
+    }
+    model_version = _active_learning_model_version(project_id, selected_model)
+    frozen_selection = _freeze_active_learning_targets_if_missing(
+        project_id,
+        "news",
+        selected_model,
+        model_version,
+        _news_active_learning_candidates(project_id, selected_model, details)
+    )
     rows = []
 
-    for article_id in selected_ids:
+    for target in sorted(_frozen_target_values(frozen_selection), key=lambda item: int(item.get("selection_rank") or 0)):
+        article_id = _safe_str(target.get("article_id") or target.get("parent_article_id") or target.get("source_id"))
+        if ":chunk:" in article_id:
+            article_id = article_id.split(":chunk:", 1)[0]
         source = dataset_rows.get(article_id) or {}
         payload = source.get("payload", {}) if isinstance(source, dict) else {}
-        feedback = source.get("feedback", {}) if isinstance(source, dict) else {}
         detail = detail_map.get(article_id, {})
-
-        if not isinstance(feedback, dict) or not feedback:
-            continue
-
-        label = feedback.get("label") if not feedback.get("agreed_with_model") else detail.get("prediction")
-        label_int = _label_to_int(label)
-        if label_int is None:
-            continue
-
         title = payload.get("title") or payload.get("Title") or detail.get("title", "")
         article = payload.get("Article") or payload.get("article") or payload.get("content") or detail.get("content", "")
+        target_unit = _safe_str(target.get("target_unit") or "article")
+        chunk_index = target.get("chunk_index")
+        chunk = _news_chunk_by_index(detail, chunk_index) if target_unit == "chunk" else None
+        feedback = _news_first_chunk_feedback(source, chunk_index) if target_unit == "chunk" else (source.get("feedback", {}) if isinstance(source, dict) else {})
+        model_prediction = (chunk or {}).get("prediction") if chunk else detail.get("prediction")
+        label = feedback.get("label") if isinstance(feedback, dict) and not feedback.get("agreed_with_model") else model_prediction
+        label_int = _label_to_int(label)
 
         rows.append({
             "project_id": project_id,
             "dataset_id": dataset_id,
             "article_id": article_id,
+            "sample_id": target.get("sample_id"),
+            "selection_run_id": target.get("selection_run_id"),
+            "selection_rank": target.get("selection_rank"),
+            "target_status": target.get("target_status"),
+            "target_unit": target_unit,
+            "chunk_index": chunk_index,
+            "chunk_id": target.get("chunk_id"),
+            "active_learning_selected": True,
             "title": title,
             "Article": article,
-            "text": f"{title}. {article}" if title else article,
+            "text": (chunk or {}).get("chunk_text") or target.get("chunk_text") or target.get("text") or (f"{title}. {article}" if title else article),
+            "parent_article_prediction": detail.get("prediction"),
+            "model_prediction": model_prediction,
             "MachineGen": label_int,
             "label": label_int,
-            "feedback_label": label,
-            "agreed_with_model": bool(feedback.get("agreed_with_model", False)),
-            "confidence": detail.get("confidence"),
-            "uncertainty": detail.get("uncertainty"),
-            "examiner_uid": feedback.get("examiner_uid"),
-            "submitted_at": feedback.get("submitted_at")
+            "feedback_label": feedback.get("label") if isinstance(feedback, dict) else None,
+            "agreed_with_model": bool(feedback.get("agreed_with_model", False)) if isinstance(feedback, dict) else None,
+            "confidence": (chunk or {}).get("confidence") if chunk else detail.get("confidence"),
+            "uncertainty": (chunk or {}).get("uncertainty") if chunk else detail.get("uncertainty"),
+            "examiner_uid": feedback.get("examiner_uid") if isinstance(feedback, dict) else None,
+            "submitted_at": feedback.get("submitted_at") if isinstance(feedback, dict) else None
         })
 
+    return rows
     return rows
 
 
@@ -5024,10 +6306,23 @@ def _first_turn_feedback(feedback_root, turn_index):
     return next(iter(turn_feedbacks.values()))
 
 
-def _export_generated_conversation_active_learning_rows(project_id):
-    raw = rtdb.reference(f"{ANALYSIS_ROOT}/{CONV_LOGREG_KEY}/{project_id}").get() or {}
+def _export_generated_conversation_active_learning_rows(project_id, model_key=CONV_LOGREG_KEY):
+    raw = _generated_conversation_results_payload(project_id, model_key) or {}
     if not isinstance(raw, dict):
         return []
+
+    model_version = _active_learning_model_version(project_id, model_key)
+    frozen_selection = _freeze_active_learning_targets_if_missing(
+        project_id,
+        "generated_conversation",
+        model_key,
+        model_version,
+        _generated_conversation_active_learning_candidates(project_id, model_key, raw)
+    )
+    target_ids = {
+        _safe_str(target.get("source_id") or f"{target.get('conversation_id')}:{target.get('turn_index')}"): target
+        for target in _frozen_target_values(frozen_selection)
+    }
 
     rows = []
     for node_key, node_val in raw.items():
@@ -5042,35 +6337,39 @@ def _export_generated_conversation_active_learning_rows(project_id):
             if not isinstance(turn, dict):
                 continue
             turn_index = int(turn.get("turn_index", 0) or 0)
+            target = target_ids.get(f"{conversation_id}:{turn_index}")
+            if not target:
+                continue
             feedback = _first_turn_feedback(feedback_root, turn_index)
-            if not feedback:
-                continue
-            label_int = _label_to_int(feedback.get("label"))
-            if label_int is None:
-                continue
+            label_int = _label_to_int(feedback.get("label")) if feedback else None
 
             rows.append({
                 "project_id": project_id,
+                "sample_id": target.get("sample_id"),
+                "selection_run_id": target.get("selection_run_id"),
+                "selection_rank": target.get("selection_rank"),
+                "target_status": target.get("target_status"),
+                "active_learning_selected": True,
                 "conversation_id": conversation_id,
                 "turn_index": turn_index,
                 "text": turn.get("text", ""),
                 "prev_text": turn.get("prev_text", ""),
                 "MachineGen": label_int,
                 "label": label_int,
-                "feedback_label": feedback.get("label"),
-                "agreed_with_model": bool(feedback.get("agreed_with_model", False)),
+                "feedback_label": feedback.get("label") if feedback else None,
+                "agreed_with_model": bool(feedback.get("agreed_with_model", False)) if feedback else None,
                 "confidence": turn.get("confidence"),
                 "uncertainty": turn.get("uncertainty"),
-                "examiner_uid": feedback.get("examiner_uid"),
-                "submitted_at": feedback.get("submitted_at")
+                "examiner_uid": feedback.get("examiner_uid") if feedback else None,
+                "submitted_at": feedback.get("submitted_at") if feedback else None
             })
 
-    rows.sort(key=lambda item: (_active_learning_sort_value(item), item.get("conversation_id", ""), item.get("turn_index", 0)))
+    rows.sort(key=lambda item: int(item.get("selection_rank") or 0))
     return rows
 
 
-def _export_uploaded_conversation_active_learning_rows(project_id):
-    run_id, run_ref, _ = _uploaded_conversation_run(project_id, CONV_LOGREG_KEY)
+def _export_uploaded_conversation_active_learning_rows(project_id, model_key=CONV_LOGREG_KEY):
+    run_id, run_ref, _ = _uploaded_conversation_run(project_id, model_key)
     if not run_ref:
         return []
 
@@ -5078,6 +6377,18 @@ def _export_uploaded_conversation_active_learning_rows(project_id):
     feedback_root = run_ref.child("turn_feedbacks").get() or {}
     key_map = run_ref.child("dialogue_key_map").get() or {}
     reverse_key_map = {v: k for k, v in key_map.items()} if isinstance(key_map, dict) else {}
+    model_version = _active_learning_model_version(project_id, model_key)
+    frozen_selection = _freeze_active_learning_targets_if_missing(
+        project_id,
+        "uploaded_conversation",
+        model_key,
+        model_version,
+        _uploaded_conversation_active_learning_candidates(project_id, model_key, run_id, run_ref)
+    )
+    target_keys = {
+        (_safe_str(target.get("safe_key")), int(target.get("turn_index") or 0)): target
+        for target in _frozen_target_values(frozen_selection)
+    }
 
     rows = []
     for safe_key, turns_raw in (dialogue_turns.items() if isinstance(dialogue_turns, dict) else []):
@@ -5089,31 +6400,35 @@ def _export_uploaded_conversation_active_learning_rows(project_id):
             if not isinstance(turn, dict):
                 continue
             turn_index = idx + 1
+            target = target_keys.get((safe_key, turn_index))
+            if not target:
+                continue
             feedback = _first_turn_feedback(dialogue_feedbacks, turn_index)
-            if not feedback:
-                continue
-            label_int = _label_to_int(feedback.get("label"))
-            if label_int is None:
-                continue
+            label_int = _label_to_int(feedback.get("label")) if feedback else None
 
             rows.append({
                 "project_id": project_id,
                 "run_id": run_id,
+                "sample_id": target.get("sample_id"),
+                "selection_run_id": target.get("selection_run_id"),
+                "selection_rank": target.get("selection_rank"),
+                "target_status": target.get("target_status"),
+                "active_learning_selected": True,
                 "dialogue_id": dialogue_id,
                 "turn_index": turn.get("turn_index", turn_index),
                 "text": turn.get("text", ""),
                 "prev_text": turn.get("previous_text", ""),
                 "MachineGen": label_int,
                 "label": label_int,
-                "feedback_label": feedback.get("label"),
-                "agreed_with_model": bool(feedback.get("agreed_with_model", False)),
+                "feedback_label": feedback.get("label") if feedback else None,
+                "agreed_with_model": bool(feedback.get("agreed_with_model", False)) if feedback else None,
                 "confidence": turn.get("confidence"),
                 "uncertainty": turn.get("uncertainty"),
-                "examiner_uid": feedback.get("examiner_uid"),
-                "submitted_at": feedback.get("submitted_at")
+                "examiner_uid": feedback.get("examiner_uid") if feedback else None,
+                "submitted_at": feedback.get("submitted_at") if feedback else None
             })
 
-    rows.sort(key=lambda item: (_active_learning_sort_value(item), item.get("dialogue_id", ""), item.get("turn_index", 0)))
+    rows.sort(key=lambda item: int(item.get("selection_rank") or 0))
     return rows
 
 
@@ -5139,10 +6454,15 @@ def _owner_empty_summary():
 
 def _owner_empty_metrics():
     return {
+        "available": False,
+        "reason": "Ground truth labels are missing or invalid.",
         "accuracy": None,
         "precision_macro": None,
         "recall_macro": None,
         "f1_macro": None,
+        "precision_ai": None,
+        "recall_ai": None,
+        "f1_ai": None,
         "confusion_matrix": None
     }
 
@@ -5164,8 +6484,7 @@ def _owner_decimal(value):
 
 
 def _owner_prediction_is_ai(value):
-    label = _safe_str(value).strip().lower()
-    return label in ("ai", "machine", "machine-generated", "1")
+    return _normalize_binary_label(value) == 1
 
 
 def _owner_model_key_for_results(model_key, result_type):
@@ -5248,39 +6567,7 @@ def _owner_iter_feedbacks(feedback_node):
 
 
 def _owner_metrics_from_pairs(y_true, y_pred):
-    if not y_true or len(y_true) != len(y_pred):
-        return _owner_empty_metrics()
-
-    tp = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 1)
-    tn = sum(1 for t, p in zip(y_true, y_pred) if t == 0 and p == 0)
-    fp = sum(1 for t, p in zip(y_true, y_pred) if t == 0 and p == 1)
-    fn = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 0)
-
-    def prf(class_value):
-        tp_c = sum(1 for t, p in zip(y_true, y_pred) if t == class_value and p == class_value)
-        fp_c = sum(1 for t, p in zip(y_true, y_pred) if t != class_value and p == class_value)
-        fn_c = sum(1 for t, p in zip(y_true, y_pred) if t == class_value and p != class_value)
-        precision = (tp_c / (tp_c + fp_c)) if (tp_c + fp_c) else 0
-        recall = (tp_c / (tp_c + fn_c)) if (tp_c + fn_c) else 0
-        f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0
-        return precision, recall, f1
-
-    ph, rh, f1h = prf(0)
-    pa, ra, f1a = prf(1)
-    total = len(y_true)
-
-    return {
-        "accuracy": round((tp + tn) / total, 4) if total else None,
-        "precision_macro": round((ph + pa) / 2, 4),
-        "recall_macro": round((rh + ra) / 2, 4),
-        "f1_macro": round((f1h + f1a) / 2, 4),
-        "confusion_matrix": {
-            "true_negative": tn,
-            "false_positive": fp,
-            "false_negative": fn,
-            "true_positive": tp
-        }
-    }
+    return _compute_standard_metrics(y_true, y_pred)
 
 
 def _owner_samples_from_items(items, limit=10):
@@ -5391,27 +6678,49 @@ def normalize_news_results(project_id, project):
     uncertainty_values = []
     human_count = 0
     ai_count = 0
+    y_true = []
+    y_pred = []
 
     selected_ids = set()
-    limit = _active_learning_limit(len(details))
-    sorted_details = sorted(details, key=lambda item: (_active_learning_sort_value(item), _safe_str((item or {}).get("article_id"))))
-    for item in sorted_details[:limit]:
-        if isinstance(item, dict) and item.get("article_id"):
-            selected_ids.add(item.get("article_id"))
+    frozen_by_sample = {}
+    if _uses_frozen_active_learning(model_key):
+        model_version = _active_learning_model_version(project_id, model_key)
+        frozen_selection = _freeze_active_learning_targets_if_missing(
+            project_id,
+            "news",
+            model_key,
+            model_version,
+            _news_active_learning_candidates(project_id, model_key, details)
+        )
+        for target in _frozen_target_values(frozen_selection):
+            sample_key = _safe_str(target.get("sample_id"))
+            if sample_key:
+                selected_ids.add(sample_key)
+                frozen_by_sample[sample_key] = target
 
     reviewed_targets = 0
     corrected_labels = 0
     examiners = {}
+    reviewed_samples = set()
 
     for item in details:
         if not isinstance(item, dict):
             continue
         article_id = _safe_str(item.get("article_id") or item.get("id"))
         prediction = item.get("prediction")
+        prediction_int = _normalize_binary_label(_first_present(item.get("prediction_int"), prediction))
         if _owner_prediction_is_ai(prediction):
             ai_count += 1
         else:
             human_count += 1
+
+        payload = {}
+        if isinstance(dataset_rows, dict) and article_id in dataset_rows and isinstance(dataset_rows[article_id], dict):
+            payload = _news_source_payload(dataset_rows[article_id])
+        ground_truth = _first_present(item.get("ground_truth"), _extract_ground_truth_from_payload(payload))
+        if ground_truth is not None and prediction_int is not None:
+            y_true.append(ground_truth)
+            y_pred.append(prediction_int)
 
         confidence = _owner_decimal(item.get("confidence"))
         uncertainty = _owner_decimal(item.get("uncertainty"))
@@ -5420,16 +6729,31 @@ def normalize_news_results(project_id, project):
         if uncertainty is not None:
             uncertainty_values.append(uncertainty)
 
+        source = dataset_rows.get(article_id, {}) if isinstance(dataset_rows, dict) and article_id in dataset_rows and isinstance(dataset_rows[article_id], dict) else {}
         feedback = {}
         if isinstance(dataset_rows, dict) and article_id in dataset_rows and isinstance(dataset_rows[article_id], dict):
             feedback = dataset_rows[article_id].get("feedback") or {}
         feedbacks = _owner_iter_feedbacks(feedback)
-        if article_id in selected_ids and feedbacks:
-            reviewed_targets += 1
         for fb in feedbacks:
             _owner_feedback_bucket(examiners, fb)
             if fb.get("agreed_with_model") is False:
                 corrected_labels += 1
+        for target in frozen_by_sample.values():
+            if _safe_str(target.get("article_id")) != article_id:
+                continue
+            sample_id = _safe_str(target.get("sample_id"))
+            chunk_index = target.get("chunk_index")
+            if _safe_str(target.get("target_unit")) == "chunk":
+                chunk_feedbacks = _owner_iter_feedbacks(_news_chunk_feedbacks(source, chunk_index))
+                frozen_reviewed = target.get("target_status") == "reviewed" or int(target.get("feedback_count") or 0) > 0
+                if chunk_feedbacks or frozen_reviewed:
+                    reviewed_samples.add(sample_id)
+                for fb in chunk_feedbacks:
+                    _owner_feedback_bucket(examiners, fb)
+                    if fb.get("agreed_with_model") is False:
+                        corrected_labels += 1
+            elif feedbacks or target.get("target_status") == "reviewed" or int(target.get("feedback_count") or 0) > 0:
+                reviewed_samples.add(sample_id)
 
         normalized.append({
             "id": article_id,
@@ -5437,10 +6761,14 @@ def normalize_news_results(project_id, project):
             "title": item.get("title", ""),
             "content": item.get("content", ""),
             "prediction": prediction,
+            "prediction_int": prediction_int,
+            "ground_truth": ground_truth,
             "confidence": confidence,
             "uncertainty": uncertainty,
-            "review_target": article_id in selected_ids
+            "review_target": any(_safe_str(target.get("article_id")) == article_id for target in frozen_by_sample.values())
         })
+
+    reviewed_targets = len(reviewed_samples)
 
     summary = _owner_empty_summary()
     summary.update({
@@ -5454,10 +6782,13 @@ def normalize_news_results(project_id, project):
         "corrected_labels": corrected_labels
     })
 
+    stored_metrics = results_data.get("metrics") or (results_data.get("summary") or {}).get("metrics")
+    metrics = stored_metrics if isinstance(stored_metrics, dict) and "available" in stored_metrics else _owner_metrics_from_pairs(y_true, y_pred)
+
     return {
         "selected_model": selected_model,
         "summary": summary,
-        "metrics": _owner_empty_metrics(),
+        "metrics": metrics,
         "examiners": list(examiners.values()),
         "most_uncertain_samples": _owner_samples_from_items(normalized),
         "warnings": warnings
@@ -5540,8 +6871,21 @@ def normalize_uploaded_conversation_results(project_id, project):
                 "turn_index": int(turn.get("turn_index", 0) or 0)
             })
 
-    sorted_turns = sorted(all_turns, key=lambda item: (_active_learning_sort_value(item), item.get("id", "")))
-    review_target_keys = {(item.get("safe_key"), item.get("turn_index")) for item in sorted_turns[:_active_learning_limit(len(all_turns))]}
+    frozen_by_key = {}
+    review_target_keys = set()
+    if _uses_frozen_active_learning(model_key):
+        model_version = _active_learning_model_version(project_id, model_key)
+        frozen_selection = _freeze_active_learning_targets_if_missing(
+            project_id,
+            "uploaded_conversation",
+            model_key,
+            model_version,
+            _uploaded_conversation_active_learning_candidates(project_id, model_key, run_id, run_ref)
+        )
+        for target in _frozen_target_values(frozen_selection):
+            key = (_safe_str(target.get("safe_key")), int(target.get("turn_index") or 0))
+            review_target_keys.add(key)
+            frozen_by_key[key] = target
     for item in all_turns:
         item["review_target"] = (item.get("safe_key"), item.get("turn_index")) in review_target_keys
 
@@ -5553,22 +6897,31 @@ def normalize_uploaded_conversation_results(project_id, project):
             continue
         for turn_index, feedbacks_raw in turns_feedback.items():
             feedbacks = _owner_iter_feedbacks(feedbacks_raw)
-            if (safe_key, int(turn_index or 0)) in review_target_keys and feedbacks:
+            target_key = (safe_key, int(turn_index or 0))
+            frozen_target = frozen_by_key.get(target_key, {})
+            frozen_reviewed = frozen_target.get("target_status") == "reviewed" or int(frozen_target.get("feedback_count") or 0) > 0
+            if target_key in review_target_keys and (feedbacks or frozen_reviewed):
                 reviewed_targets += 1
             for fb in feedbacks:
                 _owner_feedback_bucket(examiners, fb)
                 if fb.get("agreed_with_model") is False:
                     corrected_labels += 1
 
-    macro = summary_raw.get("macro_metrics") or {}
-    metrics = {
-        "accuracy": macro.get("accuracy"),
-        "precision_macro": macro.get("precision_macro"),
-        "recall_macro": macro.get("recall_macro"),
-        "f1_macro": macro.get("f1_macro"),
-        "confusion_matrix": summary_raw.get("confusion_matrix")
-    }
-    if not any(value is not None for value in metrics.values()):
+    metrics = summary_raw.get("metrics") if isinstance(summary_raw.get("metrics"), dict) else None
+    if not metrics:
+        macro = summary_raw.get("macro_metrics") or {}
+        metrics = {
+            "available": bool(macro),
+            "accuracy": macro.get("accuracy"),
+            "precision_macro": macro.get("precision_macro"),
+            "recall_macro": macro.get("recall_macro"),
+            "f1_macro": macro.get("f1_macro"),
+            "precision_ai": macro.get("precision_ai"),
+            "recall_ai": macro.get("recall_ai"),
+            "f1_ai": macro.get("f1_ai"),
+            "confusion_matrix": summary_raw.get("confusion_matrix")
+        }
+    if not metrics.get("available"):
         metrics = _owner_metrics_from_pairs(y_true, y_pred)
 
     summary = _owner_empty_summary()
@@ -5600,10 +6953,10 @@ def normalize_generated_conversation_results(project_id, project):
     selected_model = _owner_task_selected_model(tasks, "generated_conversation")
     model_key = selected_model.get("key") or CONV_LOGREG_KEY
 
-    raw = rtdb.reference(f"{ANALYSIS_ROOT}/{model_key}/{project_id}").get()
+    raw = _generated_conversation_results_payload(project_id, model_key)
     if not raw and model_key != CONV_LOGREG_KEY:
         model_key = CONV_LOGREG_KEY
-        raw = rtdb.reference(f"{ANALYSIS_ROOT}/{model_key}/{project_id}").get()
+        raw = _generated_conversation_results_payload(project_id, model_key)
     if not isinstance(raw, dict) or not raw:
         warnings.append("Generated conversation analysis result path is missing.")
         raw = {}
@@ -5636,7 +6989,7 @@ def normalize_generated_conversation_results(project_id, project):
             else:
                 human_count += 1
 
-            gt_int = _label_to_int(turn.get("gt"))
+            gt_int = _normalize_binary_label(_first_present(turn.get("ground_truth"), turn.get("gt")))
             if gt_int is not None:
                 y_true.append(gt_int)
                 y_pred.append(pred_int)
@@ -5655,6 +7008,8 @@ def normalize_generated_conversation_results(project_id, project):
                 "task_name": task_name,
                 "text": turn.get("text"),
                 "prediction": prediction,
+                "prediction_int": pred_int,
+                "ground_truth": gt_int,
                 "confidence": confidence,
                 "uncertainty": uncertainty,
                 "turn_index": turn_index
@@ -5666,8 +7021,22 @@ def normalize_generated_conversation_results(project_id, project):
             for fb in _owner_iter_feedbacks(turn_feedbacks):
                 _owner_feedback_bucket(examiners, fb)
 
-    sorted_turns = sorted(all_turns, key=lambda item: (_active_learning_sort_value(item), item.get("id", "")))
-    review_target_ids = {item.get("id") for item in sorted_turns[:_active_learning_limit(len(all_turns))]}
+    frozen_by_id = {}
+    review_target_ids = set()
+    if _uses_frozen_active_learning(model_key):
+        model_version = _active_learning_model_version(project_id, model_key)
+        frozen_selection = _freeze_active_learning_targets_if_missing(
+            project_id,
+            "generated_conversation",
+            model_key,
+            model_version,
+            _generated_conversation_active_learning_candidates(project_id, model_key, raw)
+        )
+        for target in _frozen_target_values(frozen_selection):
+            target_id = _safe_str(target.get("source_id") or f"{target.get('conversation_id')}:{target.get('turn_index')}")
+            if target_id:
+                review_target_ids.add(target_id)
+                frozen_by_id[target_id] = target
     for item in all_turns:
         item["review_target"] = item.get("id") in review_target_ids
 
@@ -5681,7 +7050,10 @@ def normalize_generated_conversation_results(project_id, project):
             continue
         for turn_index, feedbacks_raw in feedback_root.items():
             feedbacks = _owner_iter_feedbacks(feedbacks_raw)
-            if f"{task_id}:{turn_index}" in review_target_ids and feedbacks:
+            target_id = f"{task_id}:{turn_index}"
+            frozen_target = frozen_by_id.get(target_id, {})
+            frozen_reviewed = frozen_target.get("target_status") == "reviewed" or int(frozen_target.get("feedback_count") or 0) > 0
+            if target_id in review_target_ids and (feedbacks or frozen_reviewed):
                 reviewed_targets += 1
             for fb in feedbacks:
                 if fb.get("agreed_with_model") is False:
@@ -5947,7 +7319,7 @@ def _owner_generated_feedback_events(project_id, examiners):
         model_keys.append(CONV_LOGREG_KEY)
 
     for mk in model_keys:
-        raw = rtdb.reference(f"{ANALYSIS_ROOT}/{mk}/{project_id}").get() or {}
+        raw = _generated_conversation_results_payload(project_id, mk) or {}
         if not isinstance(raw, dict) or not raw:
             continue
 
@@ -6171,6 +7543,17 @@ def build_owner_results_summary(project_id):
     if any(examiner.get("labeling_assigned", 0) > 0 for examiner in examiners):
         warnings.append("Feedback targets are shared across assigned labeling examiners; pending count is an estimate.")
 
+    examiner_lookup = {item.get("examiner_id"): item for item in examiners if item.get("examiner_id")}
+    feedback_explanations = _owner_feedback_explanations(project_id, project, result_type)
+    for item in feedback_explanations:
+        examiner = examiner_lookup.get(item.get("examiner_uid")) or {}
+        item["participation_status"] = item.get("participation_status") or examiner.get("participation_status", "unknown")
+        item["examiner_rating"] = item.get("examiner_rating") or examiner.get("rating")
+        prediction = _safe_str(item.get("prediction")).strip().lower()
+        corrected = _safe_str(item.get("corrected_label")).strip().lower()
+        item["correction_changed_prediction"] = bool(prediction and corrected and prediction != corrected)
+        item["agreed_with_model"] = not item["correction_changed_prediction"]
+
     project_public = {
         "project_id": project.get("project_id", ""),
         "project_name": project.get("project_name", ""),
@@ -6179,18 +7562,27 @@ def build_owner_results_summary(project_id):
         "generated_from_scratch": bool(project.get("generated_from_scratch", False)),
         "status": project.get("status", "")
     }
+    selected_model_payload = normalized.get("selected_model") or {}
+    selected_model_key = selected_model_payload.get("key") or selected_model_payload.get("name")
+    review_workflow = {
+        "review_targets_enabled": _uses_frozen_active_learning(selected_model_key),
+        "active_learning_enabled": _active_learning_retraining_supported(selected_model_key),
+        "retraining_supported": _active_learning_retraining_supported(selected_model_key)
+    }
 
     return {
         "ok": True,
         "project": project_public,
         "result_type": result_type,
-        "selected_model": normalized.get("selected_model"),
+        "selected_model": selected_model_payload,
+        "review_workflow": review_workflow,
         "summary": summary_data,
         "counts": counts,
         "metrics": normalized.get("metrics", _owner_empty_metrics()),
         "examiners": examiners,
         "tasks": tasks,
         "most_uncertain_samples": normalized.get("most_uncertain_samples", []),
+        "feedback_explanations": feedback_explanations,
         "warnings": list(dict.fromkeys(warnings))
     }
 
@@ -6217,6 +7609,76 @@ def api_project_results_summary(project_id):
         return jsonify({"error": "Failed to build results summary"}), 500
 
 
+@app.route("/api/project/<project_id>/active_learning_feedback_summary", methods=["GET"])
+def api_active_learning_feedback_summary(project_id):
+    if not session.get("idToken"):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    project = get_project_basic_info(project_id)
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    if project.get("owner_id") != session.get("uid"):
+        return jsonify({"error": "Forbidden"}), 403
+
+    rows_raw = rtdb.reference(f"active_learning_feedback/{project_id}").get() or {}
+    rows = list(rows_raw.values()) if isinstance(rows_raw, dict) else (rows_raw if isinstance(rows_raw, list) else [])
+
+    total_feedback_rows = 0
+    logistic_feedback_rows = 0
+    used_for_retraining = 0
+    corrected_labels = 0
+    recent_explanations = []
+    by_examiner = {}
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        total_feedback_rows += 1
+        if _is_logistic_model_key(row.get("selected_model_key") or row.get("selected_model_name")):
+            logistic_feedback_rows += 1
+        if bool(row.get("used_for_retraining", False)):
+            used_for_retraining += 1
+        if row.get("agreed_with_model") is False:
+            corrected_labels += 1
+
+        explanation = _safe_str(row.get("feedback_explanation"))
+        if explanation:
+            recent_explanations.append({
+                "sample_id": _safe_str(row.get("sample_id")),
+                "examiner_name": _safe_str(row.get("examiner_name")) or "Examiner",
+                "corrected_label_text": _safe_str(row.get("corrected_label_text")),
+                "feedback_explanation": explanation,
+                "submitted_at": _safe_str(row.get("submitted_at"))
+            })
+
+        examiner_uid = _safe_str(row.get("examiner_uid")) or "unknown"
+        if examiner_uid not in by_examiner:
+            by_examiner[examiner_uid] = {
+                "examiner_uid": examiner_uid,
+                "examiner_name": row.get("examiner_name") or "Examiner",
+                "feedback_rows": 0,
+                "corrected_labels": 0
+            }
+        by_examiner[examiner_uid]["feedback_rows"] += 1
+        if row.get("agreed_with_model") is False:
+            by_examiner[examiner_uid]["corrected_labels"] += 1
+
+    recent_explanations.sort(key=lambda item: item.get("submitted_at", ""), reverse=True)
+
+    return jsonify({
+        "ok": True,
+        "project_id": project_id,
+        "total_feedback_rows": total_feedback_rows,
+        "logistic_feedback_rows": logistic_feedback_rows,
+        "used_for_retraining": used_for_retraining,
+        "unused_for_retraining": max(0, total_feedback_rows - used_for_retraining),
+        "corrected_labels": corrected_labels,
+        "explanations_count": len(recent_explanations),
+        "recent_explanations": recent_explanations[:10],
+        "by_examiner": sorted(by_examiner.values(), key=lambda item: (item.get("examiner_name", ""), item.get("examiner_uid", "")))
+    }), 200
+
+
 # =========================
 # Owner Final Dataset Export Helpers
 # =========================
@@ -6227,7 +7689,7 @@ NEWS_EXPORT_COLUMNS = [
     "project_id", "dataset_id", "article_id", "title", "text", "prediction",
     "prediction_int", "human_probability", "ai_probability", "confidence",
     "uncertainty", "selected_model", "model_version",
-    "active_learning_selected", "original_ground_truth", "source_type",
+    "active_learning_selected", "chunks_json", "ground_truth", "original_ground_truth", "source_type",
     "examiner_uid", "examiner_name", "agreed_with_model", "corrected_label",
     "corrected_MachineGen", "feedback_explanation", "submitted_at",
     "used_for_retraining"
@@ -6246,7 +7708,7 @@ UPLOADED_CONVERSATION_EXPORT_COLUMNS = [
 GENERATED_CONVERSATION_EXPORT_COLUMNS = [
     "project_id", "task_id", "conversation_id", "conversation_type",
     "turn_index", "sender", "text", "previous_text", "prediction",
-    "prediction_int", "p_machine", "confidence", "uncertainty",
+    "prediction_int", "ground_truth", "p_machine", "confidence", "uncertainty",
     "selected_model", "model_version", "active_learning_selected",
     "examiner_uid", "examiner_name", "agreed_with_model", "corrected_label",
     "corrected_MachineGen", "feedback_explanation", "submitted_at",
@@ -6255,11 +7717,14 @@ GENERATED_CONVERSATION_EXPORT_COLUMNS = [
 
 
 def _label_to_machinegen(label):
+    normalized = _normalize_binary_label(label)
+    if normalized is not None:
+        return normalized
     value = _safe_str(label).strip().lower()
-    if value in ("ai", "ai-generated", "ai generated", "machine", "machine-generated", "machine generated", "1", "true"):
-        return 1
-    if value in ("human", "human-written", "human written", "0", "false"):
+    if value in ("human-written", "human written", "false"):
         return 0
+    if value in ("true", "ai-generated", "ai generated"):
+        return 1
     return None
 
 
@@ -6305,6 +7770,351 @@ def _owner_export_filename(project, stage, fmt):
     name = _safe_str(project.get("project_name") or project.get("project_id") or "project").lower()
     name = re.sub(r"[^a-z0-9]+", "_", name).strip("_") or "project"
     return f"trustlens_{name}_{stage}.{fmt}"
+
+
+def _owner_report_filename(project):
+    name = _safe_str(project.get("project_name") or project.get("project_id") or "project").lower()
+    name = re.sub(r"[^a-z0-9]+", "_", name).strip("_") or "project"
+    return f"trustlens_{name}_report.pdf"
+
+
+def _owner_confusion_values(confusion_matrix):
+    if not confusion_matrix:
+        return None
+    try:
+        if isinstance(confusion_matrix, list) and len(confusion_matrix) == 2:
+            return {
+                "tn": int(confusion_matrix[0][0] or 0),
+                "fp": int(confusion_matrix[0][1] or 0),
+                "fn": int(confusion_matrix[1][0] or 0),
+                "tp": int(confusion_matrix[1][1] or 0)
+            }
+        if isinstance(confusion_matrix, dict):
+            return {
+                "tn": int(confusion_matrix.get("true_negative") or confusion_matrix.get("tn") or 0),
+                "fp": int(confusion_matrix.get("false_positive") or confusion_matrix.get("fp") or 0),
+                "fn": int(confusion_matrix.get("false_negative") or confusion_matrix.get("fn") or 0),
+                "tp": int(confusion_matrix.get("true_positive") or confusion_matrix.get("tp") or 0)
+            }
+    except Exception:
+        return None
+    return None
+
+
+def _owner_performance_details(metrics):
+    values = _owner_confusion_values((metrics or {}).get("confusion_matrix"))
+    if not values:
+        return {
+            "false_positive_rate": None,
+            "false_negative_rate": None,
+            "total_errors": None,
+            "correct_predictions": None,
+            "confusion": None
+        }
+
+    tn = values["tn"]
+    fp = values["fp"]
+    fn = values["fn"]
+    tp = values["tp"]
+    return {
+        "false_positive_rate": round(fp / (fp + tn), 4) if (fp + tn) else None,
+        "false_negative_rate": round(fn / (fn + tp), 4) if (fn + tp) else None,
+        "total_errors": fp + fn,
+        "correct_predictions": tp + tn,
+        "confusion": values
+    }
+
+
+def _owner_report_recommendation(summary_data, metrics, selected_model):
+    is_logistic = _is_logistic_model_key((selected_model or {}).get("key") or (selected_model or {}).get("name"))
+    if not is_logistic:
+        return "Frozen review targets are enabled for standard review; retraining is not supported for this model."
+    if isinstance(metrics, dict) and metrics.get("available") is False:
+        return "Model performance metrics need valid ground truth labels before F1-based decisions can be made."
+
+    feedback_targets = int((summary_data or {}).get("review_targets") or 0)
+    reviewed_targets = int((summary_data or {}).get("reviewed_targets") or 0)
+    if reviewed_targets < feedback_targets:
+        return "More examiner feedback is recommended before stopping."
+    return "Review the reported F1, support, and confusion matrix before making a final owner decision."
+
+
+def _owner_metric_text(value):
+    number = _owner_decimal(value)
+    if number is None:
+        return "-"
+    return f"{number * 100:.1f}%"
+
+
+def _owner_plain_text(value, fallback="-"):
+    text = _safe_str(value).strip()
+    return text if text else fallback
+
+
+def _owner_report_owner_info(uid):
+    name = ""
+    email = ""
+    try:
+        user_doc = db.collection("users").document(uid).get()
+        if user_doc.exists:
+            data = user_doc.to_dict() or {}
+            profile = data.get("profile", {}) or {}
+            name = f"{profile.get('firstName','')} {profile.get('lastName','')}".strip()
+            email = data.get("email", "")
+    except Exception:
+        pass
+    return name or "Project Owner", email or "-"
+
+
+def _owner_report_dataset_source(project):
+    if bool(project.get("generated_from_scratch", False)):
+        return "Generated from scratch"
+    if project.get("dataset_id"):
+        return "Uploaded dataset"
+    return "No dataset"
+
+
+def _owner_build_pdf_report(summary_payload, owner_name, owner_email):
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="ReportTitle", parent=styles["Title"], alignment=TA_CENTER, textColor=colors.HexColor("#155cfb"), fontSize=22, leading=28))
+    styles.add(ParagraphStyle(name="SectionTitle", parent=styles["Heading2"], textColor=colors.HexColor("#0e162b"), fontSize=14, leading=18, spaceBefore=10))
+    styles.add(ParagraphStyle(name="SmallText", parent=styles["BodyText"], fontSize=8, leading=10))
+
+    project = summary_payload.get("project") or {}
+    summary_data = summary_payload.get("summary") or {}
+    counts = summary_payload.get("counts") or {}
+    selected = summary_payload.get("selected_model") or {}
+    metrics = summary_payload.get("metrics") or {}
+    performance = _owner_performance_details(metrics)
+    confusion = performance.get("confusion")
+    is_logistic = _is_logistic_model_key(selected.get("key") or selected.get("name"))
+    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+    recommendation = _owner_report_recommendation(summary_data, metrics, selected)
+
+    def paragraph(text, style="BodyText"):
+        return Paragraph(escape(_safe_str(text)), styles[style])
+
+    def section(title):
+        return Paragraph(escape(title), styles["SectionTitle"])
+
+    def table(data, widths=None):
+        wrapped = []
+        for row in data:
+            wrapped.append([Paragraph(escape(_owner_plain_text(cell)), styles["SmallText"]) for cell in row])
+        result = Table(wrapped, colWidths=widths, hAlign="LEFT")
+        result.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef5ff")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#0e162b")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d0d5dd")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fbff")]),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        return result
+
+    story = [
+        Paragraph("TrustLens Professional Report", styles["ReportTitle"]),
+        paragraph("AI-generated text detection project report", "BodyText"),
+        Spacer(1, 0.18 * inch),
+        section("A) Cover / Project Summary"),
+        table([
+            ["Field", "Value"],
+            ["Project name", project.get("project_name")],
+            ["Project category", "Conversation" if "conversation" in _safe_str(project.get("category")).lower() else "News"],
+            ["Result type", summary_payload.get("result_type")],
+            ["Dataset source", _owner_report_dataset_source(project)],
+            ["Selected model", selected.get("name")],
+            ["Model version", selected.get("version") or "v1"],
+            ["Project status", project.get("status")],
+            ["Generated date/time", generated_at],
+            ["Owner", owner_name],
+            ["Owner email", owner_email],
+        ], [2.0 * inch, 4.5 * inch]),
+        Spacer(1, 0.12 * inch),
+        section("B) Detection Summary"),
+        table([
+            ["Metric", "Value"],
+            ["Total articles", counts.get("total_articles")],
+            ["Total dialogues", counts.get("total_dialogues")],
+            ["Total conversation tasks", counts.get("total_conversation_tasks")],
+            ["Total turns analyzed", counts.get("total_turns_analyzed")],
+            ["Human count", summary_data.get("human_count")],
+            ["AI count", summary_data.get("ai_count")],
+            ["Average confidence", _owner_metric_text(summary_data.get("avg_confidence"))],
+            ["Average uncertainty", _owner_metric_text(summary_data.get("avg_uncertainty"))],
+            ["Feedback targets", counts.get("feedback_targets")],
+            ["Reviewed feedback targets", counts.get("reviewed_feedback_targets")],
+            ["Corrected labels", summary_data.get("corrected_labels")],
+        ], [2.4 * inch, 4.1 * inch]),
+        Spacer(1, 0.12 * inch),
+        section("C) Performance Evaluation"),
+    ]
+
+    has_metrics = metrics.get("available") is True or (
+        "available" not in metrics and any(metrics.get(key) is not None for key in ("accuracy", "precision_macro", "recall_macro", "f1_macro"))
+    )
+    if has_metrics:
+        story.extend([
+            table([
+                ["Metric", "Value"],
+                ["Accuracy", _owner_metric_text(metrics.get("accuracy"))],
+                ["Precision Macro", _owner_metric_text(metrics.get("precision_macro"))],
+                ["Recall Macro", _owner_metric_text(metrics.get("recall_macro"))],
+                ["F1 Macro", _owner_metric_text(metrics.get("f1_macro"))],
+                ["AI F1", _owner_metric_text(metrics.get("f1_ai"))],
+                ["False Positive Rate", _owner_metric_text(performance.get("false_positive_rate"))],
+                ["False Negative Rate", _owner_metric_text(performance.get("false_negative_rate"))],
+                ["Labeled support", (metrics.get("support") or {}).get("total_labeled")],
+                ["Human support", (metrics.get("support") or {}).get("human")],
+                ["AI support", (metrics.get("support") or {}).get("ai")],
+            ], [2.4 * inch, 4.1 * inch])
+        ])
+        if confusion:
+            story.extend([
+                Spacer(1, 0.08 * inch),
+                table([
+                    ["Confusion Matrix", "Predicted Human", "Predicted AI/Machine"],
+                    ["Actual Human", confusion["tn"], confusion["fp"]],
+                    ["Actual AI/Machine", confusion["fn"], confusion["tp"]],
+                ], [2.0 * inch, 2.2 * inch, 2.2 * inch])
+            ])
+    else:
+        story.append(paragraph(metrics.get("reason") or "Performance metrics are not available because ground truth labels are missing or invalid."))
+
+    story.extend([
+        Spacer(1, 0.12 * inch),
+        section("D) Error Analysis"),
+    ])
+    if confusion:
+        story.extend([
+            table([
+                ["Item", "Value"],
+                ["True positives", confusion["tp"]],
+                ["True negatives", confusion["tn"]],
+                ["False positives", confusion["fp"]],
+                ["False negatives", confusion["fn"]],
+                ["Total errors", performance.get("total_errors")],
+                ["Correct predictions", performance.get("correct_predictions")],
+            ], [2.4 * inch, 4.1 * inch]),
+            Spacer(1, 0.08 * inch),
+            paragraph("False Positive means human text incorrectly predicted as AI/Machine-generated. False Negative means AI/Machine-generated text incorrectly predicted as Human. This interpretation follows the stored confusion matrix order [[TN, FP], [FN, TP]].")
+        ])
+    else:
+        story.append(paragraph("Error analysis is not available because the confusion matrix is missing."))
+
+    story.extend([
+        Spacer(1, 0.12 * inch),
+        section("E) Active Learning Summary"),
+    ])
+    if is_logistic:
+        story.extend([
+            table([
+                ["Field", "Value"],
+                ["Active Learning Enabled", "Yes"],
+                ["Strategy", "Uncertainty sampling / least confident samples"],
+                ["Formula", "uncertainty = abs(probability - 0.5)"],
+                ["Average uncertainty", _owner_metric_text(summary_data.get("avg_uncertainty"))],
+                ["Review targets", summary_data.get("review_targets")],
+                ["Reviewed targets", summary_data.get("reviewed_targets")],
+                ["Corrected labels", summary_data.get("corrected_labels")],
+                ["Most uncertain sample count", len(summary_payload.get("most_uncertain_samples") or [])],
+            ], [2.4 * inch, 4.1 * inch]),
+            Spacer(1, 0.08 * inch),
+            paragraph("Lower uncertainty value means the probability is closer to 0.5, so the model is less certain and the sample is more useful for feedback review. This report only summarizes detection and feedback.")
+        ])
+    else:
+        story.append(paragraph("This report includes standard detection and feedback results for the selected model."))
+
+    samples = (summary_payload.get("most_uncertain_samples") or [])[:10]
+    story.extend([Spacer(1, 0.12 * inch), section("F) Most Uncertain Samples")])
+    if samples:
+        sample_rows = [["ID", "Title/Dialog", "Text preview", "Prediction", "Confidence", "Uncertainty", "Review Target"]]
+        for sample in samples:
+            sample_id = _owner_plain_text(sample.get("id"))
+            sample_rows.append([
+                sample_id[:6] + "..." + sample_id[-5:] if len(sample_id) > 14 else sample_id,
+                sample.get("title") or sample.get("dialogue_id") or "-",
+                _safe_str(sample.get("text"))[:120],
+                sample.get("prediction"),
+                _owner_metric_text(sample.get("confidence")),
+                _owner_metric_text(sample.get("uncertainty")),
+                "Yes" if sample.get("review_target") else "No",
+            ])
+        story.append(table(sample_rows, [0.75 * inch, 1.0 * inch, 2.1 * inch, 0.8 * inch, 0.75 * inch, 0.75 * inch, 0.75 * inch]))
+    else:
+        story.append(paragraph("No uncertain samples are available yet."))
+
+    examiners = summary_payload.get("examiners") or []
+    story.extend([Spacer(1, 0.12 * inch), section("G) Examiner Participation")])
+    story.append(paragraph(f"Total examiners connected to the project: {len(examiners)}"))
+    if examiners:
+        examiner_rows = [["Name", "Email", "Invitation", "Tasks", "Feedback", "Corrected", "Pending", "Status"]]
+        for examiner in examiners:
+            examiner_rows.append([
+                examiner.get("examiner_name"),
+                examiner.get("email"),
+                examiner.get("invitation_status"),
+                examiner.get("assigned_task_count"),
+                examiner.get("feedback_submitted"),
+                examiner.get("corrected_labels"),
+                examiner.get("pending_feedback_estimate"),
+                examiner.get("participation_status"),
+            ])
+        story.append(table(examiner_rows, [1.0 * inch, 1.25 * inch, 0.75 * inch, 0.5 * inch, 0.65 * inch, 0.65 * inch, 0.6 * inch, 1.0 * inch]))
+    else:
+        story.append(paragraph("No examiner participation data is available yet."))
+
+    explanations = (summary_payload.get("feedback_explanations") or [])[:10]
+    story.extend([Spacer(1, 0.12 * inch), section("Examiner Feedback Explanations")])
+    if explanations:
+        explanation_rows = [["Examiner", "Prediction", "Corrected", "Text preview", "Explanation"]]
+        for item in explanations:
+            explanation_rows.append([
+                item.get("examiner_name"),
+                item.get("prediction"),
+                item.get("corrected_label"),
+                _safe_str(item.get("text_preview"))[:100],
+                item.get("feedback_explanation"),
+            ])
+        story.append(table(explanation_rows, [1.0 * inch, 0.85 * inch, 0.85 * inch, 2.0 * inch, 1.8 * inch]))
+    else:
+        story.append(paragraph("No examiner feedback explanations were submitted."))
+
+    story.extend([
+        Spacer(1, 0.12 * inch),
+        section("H) Final Recommendation / Owner Decision Support"),
+        paragraph(recommendation)
+    ])
+
+    warnings = summary_payload.get("warnings") or []
+    if warnings:
+        story.extend([Spacer(1, 0.12 * inch), section("Notes")])
+        for warning in warnings:
+            story.append(paragraph(f"- {warning}"))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 
 def _safe_json_export_response(payload, filename):
@@ -6354,7 +8164,7 @@ def _feedback_fields(feedback, prediction):
             "agreed_with_model": None,
             "corrected_label": None,
             "corrected_MachineGen": None,
-            "feedback_explanation": None,
+            "feedback_explanation": "",
             "submitted_at": None,
             "used_for_retraining": False
         }
@@ -6373,7 +8183,7 @@ def _feedback_fields(feedback, prediction):
         "agreed_with_model": agreed,
         "corrected_label": corrected_label,
         "corrected_MachineGen": _label_to_machinegen(corrected_label),
-        "feedback_explanation": feedback.get("explanation") or feedback.get("feedback_explanation"),
+        "feedback_explanation": _safe_str(feedback.get("explanation") or feedback.get("feedback_explanation")),
         "submitted_at": feedback.get("submitted_at"),
         "used_for_retraining": False
     }
@@ -6426,6 +8236,60 @@ def _text_from_news_payload(payload, detail):
     return title, text
 
 
+def _news_chunk_by_index(detail, chunk_index):
+    try:
+        wanted = int(chunk_index)
+    except Exception:
+        return None
+    for pos, chunk in enumerate((detail or {}).get("chunks") or [], start=1):
+        if not isinstance(chunk, dict):
+            continue
+        current = int(chunk.get("chunk_index") or pos)
+        if current == wanted:
+            return chunk
+    return None
+
+
+def _news_chunk_feedbacks(source, chunk_index):
+    if not isinstance(source, dict) or chunk_index is None:
+        return {}
+    chunk_root = source.get("chunk_feedback") or source.get("chunk_feedbacks") or {}
+    if not isinstance(chunk_root, dict):
+        return {}
+    return chunk_root.get(str(chunk_index), {}) or {}
+
+
+def _news_first_chunk_feedback(source, chunk_index):
+    feedbacks = _news_chunk_feedbacks(source, chunk_index)
+    if not isinstance(feedbacks, dict) or not feedbacks:
+        return None
+    return next(iter(feedbacks.values()))
+
+
+def _news_chunks_export_payload(detail, source, active_ids):
+    chunks = []
+    article_id = _safe_str(detail.get("article_id") or detail.get("id"))
+    for pos, chunk in enumerate(detail.get("chunks") or [], start=1):
+        if not isinstance(chunk, dict):
+            continue
+        chunk_index = int(chunk.get("chunk_index") or pos)
+        sample_id = _make_active_learning_sample_id("news", article_id=article_id, chunk_index=chunk_index)
+        feedback = _news_first_chunk_feedback(source, chunk_index)
+        chunks.append({
+            "chunk_index": chunk_index,
+            "chunk_id": chunk.get("chunk_id") or f"chunk:{chunk_index}",
+            "chunk_text": chunk.get("chunk_text") or chunk.get("text") or "",
+            "prediction": chunk.get("prediction"),
+            "prediction_int": _first_present(chunk.get("prediction_int"), _label_to_machinegen(chunk.get("prediction"))),
+            "confidence": chunk.get("confidence"),
+            "uncertainty": chunk.get("uncertainty"),
+            "active_learning_selected": sample_id in active_ids,
+            "target_status": "reviewed" if feedback else "pending",
+            "feedback": feedback
+        })
+    return chunks
+
+
 def _export_news_dataset(project_id, project, stage):
     tasks = get_project_tasks(project_id)
     selected = _get_project_selected_model(project_id, project, tasks)
@@ -6446,12 +8310,19 @@ def _export_news_dataset(project_id, project, stage):
     }
 
     active_ids = set()
-    if _is_logistic_model_key(model_key):
-        selected_items = sorted(
-            details,
-            key=lambda item: (_active_learning_sort_value(item), _safe_str((item or {}).get("article_id") or (item or {}).get("id")))
-        )[:_active_learning_limit(len(details))]
-        active_ids = {_safe_str(item.get("article_id") or item.get("id")) for item in selected_items if isinstance(item, dict)}
+    if _uses_frozen_active_learning(model_key):
+        model_version = _active_learning_model_version(project_id, model_key)
+        frozen_selection = _freeze_active_learning_targets_if_missing(
+            project_id,
+            "news",
+            model_key,
+            model_version,
+            _news_active_learning_candidates(project_id, model_key, details)
+        )
+        active_ids = {
+            _safe_str(target.get("sample_id"))
+            for target in _frozen_target_values(frozen_selection)
+        }
 
     article_ids = list(dataset_rows.keys()) if isinstance(dataset_rows, dict) else []
     for article_id in detail_map.keys():
@@ -6479,14 +8350,20 @@ def _export_news_dataset(project_id, project, stage):
             "title": title,
             "text": text,
             "prediction": prediction,
-            "prediction_int": _label_to_machinegen(prediction),
+            "prediction_int": _first_present(detail.get("prediction_int"), _label_to_machinegen(prediction)),
             "human_probability": human_probability,
             "ai_probability": ai_probability,
             "confidence": _owner_decimal(detail.get("confidence")),
             "uncertainty": _owner_decimal(detail.get("uncertainty")),
             "selected_model": selected.get("name"),
             "model_version": selected.get("version") or "v1",
-            "active_learning_selected": article_id in active_ids,
+            "active_learning_selected": any(
+                _make_active_learning_sample_id("news", article_id=article_id, chunk_index=(chunk or {}).get("chunk_index") or pos) in active_ids
+                for pos, chunk in enumerate(detail.get("chunks") or [], start=1)
+                if isinstance(chunk, dict)
+            ) if detail.get("chunks") else article_id in active_ids,
+            "chunks_json": json.dumps(_news_chunks_export_payload(detail, source if isinstance(source, dict) else {}, active_ids), ensure_ascii=False),
+            "ground_truth": _first_present(detail.get("ground_truth"), _extract_ground_truth_from_payload(payload)),
             "original_ground_truth": _first_present(payload.get("MachineGen"), payload.get("label"), payload.get("target"), payload.get("ground_truth")),
             "source_type": "uploaded_news"
         }
@@ -6554,11 +8431,18 @@ def _export_uploaded_conversation_dataset(project_id, project, stage):
             all_turn_refs.append((safe_key, idx, turn))
 
     active_keys = set()
-    if _is_logistic_model_key(model_key):
-        sorted_refs = sorted(all_turn_refs, key=lambda ref: (_active_learning_sort_value(ref[2]), _safe_str(ref[2].get("row_id") or ref[2].get("id"))))
+    if _uses_frozen_active_learning(model_key):
+        model_version = _active_learning_model_version(project_id, model_key)
+        frozen_selection = _freeze_active_learning_targets_if_missing(
+            project_id,
+            "uploaded_conversation",
+            model_key,
+            model_version,
+            _uploaded_conversation_active_learning_candidates(project_id, model_key, run_id, run_ref)
+        )
         active_keys = {
-            (safe_key, int((turn or {}).get("turn_index", idx + 1) or idx + 1))
-            for safe_key, idx, turn in sorted_refs[:_active_learning_limit(len(sorted_refs))]
+            (_safe_str(target.get("safe_key")), int(target.get("turn_index") or 0))
+            for target in _frozen_target_values(frozen_selection)
         }
 
     rows = []
@@ -6589,7 +8473,7 @@ def _export_uploaded_conversation_dataset(project_id, project, stage):
             "selected_model": selected.get("name"),
             "model_version": selected.get("version") or "v1",
             "active_learning_selected": (safe_key, turn_index) in active_keys,
-            "ground_truth": _first_present(turn.get("ground_truth"), source_payload.get("ground_truth"), source_payload.get("label"), source_payload.get("target")),
+            "ground_truth": _first_present(turn.get("ground_truth"), _extract_ground_truth_from_payload(source_payload), source_payload.get("ground_truth"), source_payload.get("label"), source_payload.get("target")),
             "source_row_id": row_id
         }
 
@@ -6632,10 +8516,10 @@ def _export_generated_conversation_dataset(project_id, project, stage):
     tasks = get_project_tasks(project_id)
     selected = _get_project_selected_model(project_id, project, tasks)
     model_key = selected.get("key") or CONV_LOGREG_KEY
-    raw = rtdb.reference(f"{ANALYSIS_ROOT}/{model_key}/{project_id}").get()
+    raw = _generated_conversation_results_payload(project_id, model_key)
     if not raw and model_key != CONV_LOGREG_KEY:
         model_key = CONV_LOGREG_KEY
-        raw = rtdb.reference(f"{ANALYSIS_ROOT}/{model_key}/{project_id}").get()
+        raw = _generated_conversation_results_payload(project_id, model_key)
     if not isinstance(raw, dict):
         return [], GENERATED_CONVERSATION_EXPORT_COLUMNS
 
@@ -6650,11 +8534,18 @@ def _export_generated_conversation_dataset(project_id, project, stage):
                 all_turn_refs.append((task_id, idx, turn))
 
     active_ids = set()
-    if _is_logistic_model_key(model_key):
-        sorted_refs = sorted(all_turn_refs, key=lambda ref: (_active_learning_sort_value(ref[2]), f"{ref[0]}:{ref[2].get('turn_index', ref[1])}"))
+    if _uses_frozen_active_learning(model_key):
+        model_version = _active_learning_model_version(project_id, model_key)
+        frozen_selection = _freeze_active_learning_targets_if_missing(
+            project_id,
+            "generated_conversation",
+            model_key,
+            model_version,
+            _generated_conversation_active_learning_candidates(project_id, model_key, raw)
+        )
         active_ids = {
-            f"{task_id}:{int((turn or {}).get('turn_index', idx) or idx)}"
-            for task_id, idx, turn in sorted_refs[:_active_learning_limit(len(sorted_refs))]
+            _safe_str(target.get("source_id") or f"{target.get('conversation_id')}:{target.get('turn_index')}")
+            for target in _frozen_target_values(frozen_selection)
         }
 
     rows = []
@@ -6680,6 +8571,7 @@ def _export_generated_conversation_dataset(project_id, project, stage):
             "previous_text": _first_present(turn.get("previous_text"), turn.get("prev_text"), previous_cache[previous_key].get(idx, "")),
             "prediction": prediction,
             "prediction_int": _first_present(turn.get("prediction_int"), _label_to_machinegen(prediction)),
+            "ground_truth": _first_present(turn.get("ground_truth"), _normalize_binary_label(turn.get("gt"))),
             "p_machine": _owner_decimal(_first_present(turn.get("p_machine"), turn.get("ai_probability"), turn.get("probability"))),
             "confidence": _owner_decimal(turn.get("confidence")),
             "uncertainty": _owner_decimal(turn.get("uncertainty")),
@@ -6747,6 +8639,37 @@ def api_project_final_dataset_export(project_id):
         return jsonify({"error": "Failed to export final dataset"}), 500
 
 
+@app.route("/api/project/<project_id>/report.pdf", methods=["GET"])
+def api_project_pdf_report(project_id):
+    if not session.get("idToken"):
+        return jsonify({"error": "Forbidden"}), 403
+
+    project = get_project_basic_info(project_id)
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+    if project.get("owner_id") != session.get("uid"):
+        return jsonify({"error": "Forbidden"}), 403
+
+    try:
+        summary_payload = build_owner_results_summary(project_id)
+        if not summary_payload:
+            return jsonify({"error": "Project not found"}), 404
+
+        owner_name, owner_email = _owner_report_owner_info(session.get("uid"))
+        pdf_bytes = _owner_build_pdf_report(summary_payload, owner_name, owner_email)
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{_owner_report_filename(project)}"'}
+        )
+    except ImportError:
+        app.logger.exception("PDF report generation failed because reportlab is missing.")
+        return jsonify({"error": "PDF library is not installed. Install reportlab from requirements.txt."}), 500
+    except Exception as e:
+        app.logger.exception("PDF report generation failed: %s", e)
+        return jsonify({"error": "Failed to generate PDF report"}), 500
+
+
 @app.route("/api/project/<project_id>/active_learning_export", methods=["GET"])
 def api_project_active_learning_export(project_id):
     ctx, err = _ensure_project_access(project_id)
@@ -6758,19 +8681,22 @@ def api_project_active_learning_export(project_id):
     is_conversation = category in ("conversation", "conversations", "chat", "chats")
 
     if not is_conversation:
-        rows = _export_news_active_learning_rows(project_id, proj_data)
         project_type = "news"
+        selected_export_model = _owner_selected_model_for_read(project_id, project_type)
+        rows = _export_news_active_learning_rows(project_id, proj_data) if _uses_frozen_active_learning(selected_export_model) else []
     elif bool(proj_data.get("generated_from_scratch", False)):
-        rows = _export_generated_conversation_active_learning_rows(project_id)
         project_type = "generated_conversation"
+        selected_export_model = _owner_selected_model_for_read(project_id, project_type)
+        rows = _export_generated_conversation_active_learning_rows(project_id, selected_export_model) if _uses_frozen_active_learning(selected_export_model) else []
     else:
-        rows = _export_uploaded_conversation_active_learning_rows(project_id)
         project_type = "uploaded_conversation"
+        selected_export_model = _owner_selected_model_for_read(project_id, project_type)
+        rows = _export_uploaded_conversation_active_learning_rows(project_id, selected_export_model) if _uses_frozen_active_learning(selected_export_model) else []
 
     return jsonify({
         "project_id": project_id,
         "project_type": project_type,
-        "model_key": CONV_LOGREG_KEY if is_conversation else "logistic",
+        "model_key": selected_export_model,
         "exported_at": _now_utc_iso(),
         "rows": rows,
         "total_rows": len(rows)
@@ -6931,8 +8857,24 @@ def api_uploaded_conversation_feedback_list(task_id):
             "turns": clean_turns
         })
 
-    active_learning_enabled = _is_logistic_model_key(model_key)
-    items, active_learning_info = _apply_active_learning_turn_selection(items, active_learning_enabled)
+    active_learning_enabled = _uses_frozen_active_learning(model_key)
+    if active_learning_enabled:
+        model_version = _active_learning_model_version(project_id, model_key)
+        frozen_selection = _freeze_active_learning_targets_if_missing(
+            project_id,
+            "uploaded_conversation",
+            model_key,
+            model_version,
+            _uploaded_conversation_active_learning_candidates(project_id, model_key, run_id, run_ref),
+            task_data.get("examiner_ids") or []
+        )
+        items, active_learning_info = _apply_frozen_active_learning_turn_selection(
+            items,
+            frozen_selection,
+            "uploaded_conversation"
+        )
+    else:
+        items, active_learning_info = _apply_active_learning_turn_selection(items, False)
 
     total_dialogues = len(items)
     reviewed_dialogues = sum(1 for item in items if item.get("conversation_locked"))
@@ -7039,6 +8981,36 @@ def api_submit_uploaded_conversation_turn_feedback(task_id, dialogue_id, turn_in
         }
 
         feedback_ref.child(uid).set(payload)
+
+        try:
+            project = get_project_basic_info(project_id) or {}
+            detection_snapshot = _find_detection_snapshot_for_feedback(
+                "uploaded_conversation",
+                project_id,
+                project=project,
+                dialogue_id=dialogue_id,
+                turn_index=turn_index,
+                target_turn=target_turn
+            )
+            sample_id = _make_active_learning_sample_id(
+                "uploaded_conversation",
+                row_id=target_turn.get("row_id") or target_turn.get("source_row_id"),
+                dialogue_id=dialogue_id,
+                turn_index=turn_index
+            )
+            _write_active_learning_feedback(project_id, sample_id, detection_snapshot, payload)
+            if _uses_frozen_active_learning(model_key):
+                model_version = _active_learning_model_version(project_id, model_key)
+                _mark_frozen_active_learning_target_reviewed(
+                    project_id,
+                    model_version,
+                    sample_id,
+                    uid,
+                    payload.get("submitted_at"),
+                    {"dialogue_id": dialogue_id, "turn_index": turn_index}
+                )
+        except Exception as normalized_error:
+            app.logger.exception("Failed to write normalized uploaded conversation feedback: %s", normalized_error)
 
         return jsonify({
             "message": "Turn feedback saved successfully",
@@ -7169,8 +9141,7 @@ def api_examiner_feedback_count(project_id):
                     model_keys_to_try = [model_key] if model_key else [CONV_LOGREG_KEY, CONV_RNN_KEY]
 
                     for mk in model_keys_to_try:
-                        ref = rtdb.reference(f"{ANALYSIS_ROOT}/{mk}/{project_id}")
-                        raw = ref.get() or {}
+                        raw = _generated_conversation_results_payload(project_id, mk) or {}
 
                         if not isinstance(raw, dict) or not raw:
                             continue
@@ -7278,6 +9249,17 @@ def conversation_analysis_page_examiner(project_id):
     if not inv:
         abort(403)
 
+    if task_id:
+        task_doc = db.collection("tasks").document(task_id).get()
+        if not task_doc.exists:
+            abort(404)
+        task_data = task_doc.to_dict() or {}
+        examiner_ids = task_data.get("examiner_ids") or []
+        if task_data.get("project_ID") != project_id or task_data.get("task_type") != "model_selection":
+            abort(403)
+        if len(examiner_ids) != 1 or examiner_uid not in examiner_ids:
+            abort(403)
+
     user_doc = db.collection("users").document(examiner_uid).get()
     full_name = "User"
     if user_doc.exists:
@@ -7311,24 +9293,7 @@ def _as_int(x, default=0):
 
 
 def _normalize_gt(label):
-    if label is None:
-        return None
-
-    s = str(label).strip().lower()
-    if s == "":
-        return None
-
-    if s in ("0", "human", "h", "real", "genuine"):
-        return 0
-    if s in ("1", "ai", "machine", "machine-generated", "synthetic", "bot", "llm"):
-        return 1
-
-    if "human" in s:
-        return 0
-    if "ai" in s or "machine" in s or "llm" in s:
-        return 1
-
-    return None
+    return _normalize_binary_label(label)
 
 
 def _extract_conversation_fields(payload):
@@ -7349,7 +9314,7 @@ def _extract_conversation_fields(payload):
         or payload.get("utterance_id") or payload.get("Utterance_ID")
         or payload.get("message_index") or payload.get("messageIndex")
     )
-    turn_index = None if turn_index is None or str(turn_index).strip() == "" else _as_int(turn_index, default=0)
+    turn_index = None if turn_index is None or str(turn_index).strip() == "" else _as_int(turn_index, default=None)
 
     text = (
         payload.get("text") or payload.get("Text")
@@ -7370,15 +9335,7 @@ def _extract_conversation_fields(payload):
     )
     sender = _safe_str(sender)
 
-    gt = (
-        payload.get("ground_truth") or payload.get("Ground_Truth") or payload.get("groundTruth")
-        or payload.get("label") or payload.get("Label")
-        or payload.get("target") or payload.get("Target")
-        or payload.get("is_ai") or payload.get("isAI")
-        or payload.get("class") or payload.get("Class")
-        or payload.get("y") or payload.get("Y") or payload.get("MachineGen")
-    )
-    gt_norm = _normalize_gt(gt)
+    gt_norm = _extract_ground_truth_from_payload(payload)
 
     return dialogue_id, turn_index, text, gt_norm, sender
 
@@ -7560,7 +9517,7 @@ def get_project_conversation_dataset(project_id):
         temp_rows = []
         any_dialogue_id = False
 
-        for push_id, row_data in snapshot.items():
+        for row_order, (push_id, row_data) in enumerate(snapshot.items()):
             if not isinstance(row_data, dict):
                 continue
 
@@ -7577,6 +9534,7 @@ def get_project_conversation_dataset(project_id):
 
             temp_rows.append({
                 "id": push_id,
+                "row_order": row_order,
                 "dialogue_id": dialogue_id,
                 "turn_index": turn_index,
                 "text": text,
@@ -7608,13 +9566,13 @@ def get_project_conversation_dataset(project_id):
         for d_id, turns in dialogues_map.items():
             turns_sorted = sorted(
                 turns,
-                key=lambda x: (x.get("turn_index") is None, x.get("turn_index") or 0, x.get("id", ""))
+                key=lambda x: (x.get("turn_index") is None, x.get("turn_index") if x.get("turn_index") is not None else x.get("row_order", 0), x.get("row_order", 0))
             )
             for i, t in enumerate(turns_sorted):
                 if t.get("turn_index") is None:
                     t["turn_index"] = i
 
-            turns_sorted.sort(key=lambda x: (x.get("turn_index", 0), x.get("id", "")))
+            turns_sorted.sort(key=lambda x: (x.get("turn_index", 0), x.get("row_order", 0)))
 
             dialogues.append({
                 "dialogue_id": d_id,
@@ -7656,11 +9614,16 @@ def analyze_all_conversations(project_id):
     uid = ctx["uid"]
     proj_data = ctx["proj_data"]
 
+    req = request.get_json(silent=True) or {}
+    task_id = _safe_str(req.get("task_id") or req.get("taskId") or request.args.get("task_id") or request.args.get("taskId"))
+    task_ref, task_data, guard_error = _model_selection_task_guard(task_id, project_id=project_id, reject_completed=True)
+    if guard_error:
+        return guard_error
+
     dataset_id = proj_data.get("dataset_id")
     if not dataset_id:
         return jsonify({"error": "No dataset found"}), 404
 
-    req = request.get_json(silent=True) or {}
     model_key = _safe_str(req.get("model_key")) or "tfidf_logreg"
     if model_key in ("baseline_rnn", "conv_rnn"):
         model_key = CONV_RNN_KEY
@@ -7688,7 +9651,7 @@ def analyze_all_conversations(project_id):
         temp_rows = []
         any_dialogue_id = False
 
-        for push_id, row_data in snapshot.items():
+        for row_order, (push_id, row_data) in enumerate(snapshot.items()):
             if not isinstance(row_data, dict):
                 continue
 
@@ -7706,6 +9669,7 @@ def analyze_all_conversations(project_id):
 
             temp_rows.append({
                 "row_id": push_id,
+                "row_order": row_order,
                 "dialogue_id": dialogue_id,
                 "turn_index": turn_index,
                 "text": text,
@@ -7746,13 +9710,13 @@ def analyze_all_conversations(project_id):
         for d_id, turns in dialogues_map.items():
             turns_sorted = sorted(
                 turns,
-                key=lambda x: (x.get("turn_index") is None, x.get("turn_index") or 0, x.get("row_id", ""))
+                key=lambda x: (x.get("turn_index") is None, x.get("turn_index") if x.get("turn_index") is not None else x.get("row_order", 0), x.get("row_order", 0))
             )
             for i, t in enumerate(turns_sorted):
                 if t.get("turn_index") is None:
                     t["turn_index"] = i
 
-            turns_sorted.sort(key=lambda x: (x.get("turn_index", 0), x.get("row_id", "")))
+            turns_sorted.sort(key=lambda x: (x.get("turn_index", 0), x.get("row_order", 0)))
 
             d_h = 0
             d_m = 0
@@ -7842,17 +9806,17 @@ def analyze_all_conversations(project_id):
                      if not any_dialogue_id else "")
         }
 
-        metrics_block = {}
+        standard_metrics = _compute_standard_metrics(y_true, y_pred)
+        metrics_block = {
+            "metrics": standard_metrics,
+            "confusion_matrix": standard_metrics.get("confusion_matrix") if standard_metrics.get("available") else None,
+            "macro_metrics": standard_metrics if standard_metrics.get("available") else None
+        }
         if has_any_gt and len(y_true) == len(y_pred) and len(y_true) > 0:
             try:
                 from sklearn.metrics import (
-                    confusion_matrix, classification_report,
-                    f1_score, precision_score, recall_score, accuracy_score
+                    classification_report
                 )
-
-                cm_2d = confusion_matrix(y_true, y_pred, labels=[0, 1]).tolist()
-                if not (isinstance(cm_2d, list) and len(cm_2d) == 2 and len(cm_2d[0]) == 2 and len(cm_2d[1]) == 2):
-                    cm_2d = [[0, 0], [0, 0]]
 
                 report_dict = classification_report(
                     y_true, y_pred, labels=[0, 1],
@@ -7861,26 +9825,11 @@ def analyze_all_conversations(project_id):
                     zero_division=0
                 )
 
-                macro = {
-                    "accuracy": float(accuracy_score(y_true, y_pred)),
-                    "precision_macro": float(precision_score(y_true, y_pred, average="macro", zero_division=0)),
-                    "recall_macro": float(recall_score(y_true, y_pred, average="macro", zero_division=0)),
-                    "f1_macro": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
-                }
-
-                metrics_block = {
-                    "confusion_matrix": cm_2d,
-                    "classification_report": report_dict,
-                    "macro_metrics": macro
-                }
+                metrics_block["classification_report"] = report_dict
             except Exception as e:
                 app.logger.warning("Metrics skipped: %s", e)
-                metrics_block = {
-                    "confusion_matrix": None,
-                    "classification_report": None,
-                    "macro_metrics": None,
-                    "metrics_error": "Could not compute sklearn metrics on server."
-                }
+                metrics_block["classification_report"] = None
+                metrics_block["metrics_error"] = "Could not compute sklearn classification report on server."
 
         analysis_doc = {**summary, **metrics_block}
 
@@ -8033,7 +9982,8 @@ def export_conversation_enriched_dataset(project_id):
 
     flat = []
     for safe_key, turns in (dialogue_turns.items() if isinstance(dialogue_turns, dict) else []):
-        if not isinstance(turns, list):
+        turns = _turns_to_list(turns)
+        if not turns:
             continue
 
         original_id = rev_map.get(safe_key, safe_key)
