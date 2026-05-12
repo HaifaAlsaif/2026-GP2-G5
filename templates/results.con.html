@@ -1712,6 +1712,8 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
       <div class="metric-card"><div class="metric-title" data-i18n="recall_macro">Recall Macro</div><div class="metric-value" id="recVal">—</div></div>
     </div>
 
+    <div class="mini-line" id="evalNote" style="margin-top:-6px;margin-bottom:16px;">—</div>
+
     <div class="bottom-grid">
       <div class="box">
         <div style="font-size:14px;font-weight:600;margin-bottom:6px;" data-i18n="distribution">Distribution</div>
@@ -2322,19 +2324,45 @@ cmModal?.addEventListener("click", (e) => { if (e.target.matches("[data-close]")
 
   const cm = data.confusion_matrix || {};
   const metrics = data.metrics || {};
+  const standardMatrix = Array.isArray(metrics.confusion_matrix) ? metrics.confusion_matrix : null;
+  const matrix = standardMatrix ? {
+    true_negative: Number(standardMatrix[0]?.[0] || 0),
+    false_positive: Number(standardMatrix[0]?.[1] || 0),
+    false_negative: Number(standardMatrix[1]?.[0] || 0),
+    true_positive: Number(standardMatrix[1]?.[1] || 0)
+  } : cm;
+  const metricsAvailable = metrics.available !== false && (
+    metrics.available === true ||
+    ["accuracy", "precision_macro", "recall_macro", "f1_macro"].some((key) => metrics[key] === 0 || metrics[key])
+  );
 
-  setCmValue("cmTN", cm.true_negative ?? cm.tn ?? cm.TN);
-  setCmValue("cmFP", cm.false_positive ?? cm.fp ?? cm.FP);
-  setCmValue("cmFN", cm.false_negative ?? cm.fn ?? cm.FN);
-  setCmValue("cmTP", cm.true_positive ?? cm.tp ?? cm.TP);
+  setCmValue("cmTN", matrix.true_negative ?? matrix.tn ?? matrix.TN);
+  setCmValue("cmFP", matrix.false_positive ?? matrix.fp ?? matrix.FP);
+  setCmValue("cmFN", matrix.false_negative ?? matrix.fn ?? matrix.FN);
+  setCmValue("cmTP", matrix.true_positive ?? matrix.tp ?? matrix.TP);
 
   const toPct = (v) => (v === 0 || v) ? `${(Number(v) * 100).toFixed(2)}%` : "—";
   const to4 = (v) => (v === 0 || v) ? Number(v).toFixed(4) : "—";
 
-  document.getElementById("accVal").textContent = toPct(metrics.accuracy);
-  document.getElementById("f1Val").textContent = to4(metrics.f1_macro);
-  document.getElementById("precVal").textContent = to4(metrics.precision_macro);
-  document.getElementById("recVal").textContent = to4(metrics.recall_macro);
+  document.getElementById("accVal").textContent = metricsAvailable ? toPct(metrics.accuracy) : "—";
+  document.getElementById("f1Val").textContent = metricsAvailable ? to4(metrics.f1_macro) : "—";
+  document.getElementById("precVal").textContent = metricsAvailable ? to4(metrics.precision_macro) : "—";
+  document.getElementById("recVal").textContent = metricsAvailable ? to4(metrics.recall_macro) : "—";
+
+  const evalNote = document.getElementById("evalNote");
+  if (evalNote) {
+    if (!metricsAvailable) {
+      evalNote.textContent = metrics.reason || "Performance metrics are unavailable because ground truth labels are missing or invalid.";
+    } else {
+      const support = metrics.support || {};
+      const aiSupport = Number(support.ai || 0);
+      const humanSupport = Number(support.human || 0);
+      const imbalance = (aiSupport === 0 || humanSupport === 0)
+        ? " Class imbalance: only one ground truth class is present in this run."
+        : "";
+      evalNote.textContent = `AI F1: ${to4(metrics.f1_ai)} | Labeled: ${Number(support.total_labeled || 0)} | Human: ${humanSupport} | AI: ${aiSupport}.${imbalance}`;
+    }
+  }
 
   const results = data.results || [];
 

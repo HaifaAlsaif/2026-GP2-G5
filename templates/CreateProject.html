@@ -572,29 +572,32 @@ if (BASIC_MODE) {
           guideToggle=$("#guideToggle"), guideDetails=$("#guideDetails");
     const guideContent = {
       news: {
-        intro: "News datasets must include an article text column. Click Dataset structure for the accepted CSV columns.",
+        intro: "News datasets need text for detection. Labels are optional, but recommended when you want valid F1 and confusion matrix metrics.",
         html: `
           <h5>News Articles CSV</h5>
           <ul>
-            <li>Required text column: <strong>text</strong>, <strong>Text</strong>, <strong>content</strong>, or <strong>Content</strong>.</li>
-            <li>Optional title column: <strong>title</strong> or <strong>Title</strong>.</li>
-            <li>Optional label column can be included for reference, such as <strong>label</strong>.</li>
+            <li>Required for detection: <strong>Article</strong>, <strong>article</strong>, <strong>content</strong>, or <strong>text</strong>.</li>
+            <li>Recommended title column: <strong>title</strong>, <strong>Title</strong>, or <strong>headline</strong>.</li>
+            <li>Optional for F1, confusion matrix, and performance metrics: <strong>MachineGen</strong>, <strong>label</strong>, <strong>ground_truth</strong>, <strong>target</strong>, <strong>is_ai</strong>, <strong>class</strong>, or <strong>y</strong>.</li>
+            <li>Accepted label values: <strong>Human</strong> / <strong>AI</strong>, <strong>Human-written</strong> / <strong>AI-generated</strong>, or <strong>0</strong> / <strong>1</strong>.</li>
           </ul>
-          <pre class="guide-example">title,text,label
+          <pre class="guide-example">title,Article,label
 Article title,Full article text here,Human
 Another title,Generated article text here,AI</pre>
         `
       },
       conversation: {
-        intro: "Conversation datasets need turn-level rows. Click Dataset structure for the accepted dialogue columns.",
+        intro: "Conversation datasets need turn-level rows for detection. Labels are optional, but recommended for valid metrics.",
         html: `
           <h5>Conversations CSV</h5>
           <ul>
-            <li>Dialogue id: <strong>dialogue_id</strong>, <strong>conversation_id</strong>, <strong>chat_id</strong>, <strong>thread_id</strong>, <strong>session_id</strong>, or <strong>id</strong>.</li>
-            <li>Turn order: <strong>turn_index</strong>, <strong>turn_id</strong>, <strong>turn_number</strong>, <strong>utterance_id</strong>, or <strong>message_index</strong>.</li>
+            <li>Required dialogue id: <strong>dialogue_id</strong>, <strong>conversation_id</strong>, <strong>chat_id</strong>, <strong>thread_id</strong>, <strong>session_id</strong>, or <strong>id</strong>.</li>
             <li>Required text column: <strong>text</strong>, <strong>utterance</strong>, <strong>message</strong>, <strong>turn</strong>, <strong>content</strong>, <strong>reply</strong>, or <strong>msg</strong>.</li>
+            <li>Recommended turn order: <strong>turn_id</strong>, <strong>turn_index</strong>, <strong>turn_number</strong>, <strong>utterance_id</strong>, or <strong>message_index</strong>.</li>
             <li>Optional sender: <strong>sender</strong>, <strong>role</strong>, <strong>author</strong>, or <strong>from</strong>.</li>
-            <li>Optional ground truth: <strong>ground_truth</strong>, <strong>label</strong>, <strong>target</strong>, <strong>is_ai</strong>, <strong>class</strong>, <strong>y</strong>, or <strong>MachineGen</strong>.</li>
+            <li>Optional for F1, confusion matrix, and performance metrics: <strong>MachineGen</strong>, <strong>label</strong>, <strong>ground_truth</strong>, <strong>target</strong>, <strong>is_ai</strong>, <strong>class</strong>, or <strong>y</strong>.</li>
+            <li>Accepted label values: <strong>Human</strong> / <strong>AI</strong>, <strong>Human-written</strong> / <strong>AI-generated</strong>, or <strong>0</strong> / <strong>1</strong>.</li>
+            <li>Generated conversation projects do not need uploaded labels; ground truth is inferred from sender type.</li>
           </ul>
           <pre class="guide-example">dialogue_id,turn_index,sender,text,ground_truth
 conv1,1,human,Hello how are you?,human

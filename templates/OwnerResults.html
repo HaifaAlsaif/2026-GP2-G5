@@ -45,6 +45,8 @@
     .two-col{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,.65fr);gap:18px}.metric-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
     .examiner-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}.examiner-card{background:#fff;border:1px solid #e4ebf5;border-radius:14px;padding:16px;box-shadow:0 8px 18px rgba(15,23,42,.05)}.examiner-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:12px}.examiner-name{font-size:16px;font-weight:700;color:#0e162b}.examiner-email{font-size:13px;color:#717182;margin-top:2px}.examiner-id{font-size:12px;color:#717182;margin-top:6px}.examiner-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}.examiner-stat{background:#f8fbff;border:1px solid #e4ebf5;border-radius:10px;padding:9px}.examiner-stat strong{display:block;color:#0e162b;font-size:16px}.examiner-stat span{font-size:12px;color:#717182}
     .task-list{display:flex;flex-direction:column;gap:6px}.task-pill{display:inline-flex;width:max-content;max-width:260px;border-radius:8px;background:#f2f4f7;color:#344054;padding:4px 8px;font-size:12px}
+    .insight-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:16px 0}.insight-toolbar input,.insight-toolbar select{border:1px solid #d0d5dd;border-radius:10px;background:#fff;color:#344054;padding:10px 12px;font-size:14px;min-height:40px}.insight-toolbar input{min-width:min(360px,100%);flex:1}
+    .insight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}.insight-card{background:#fff;border:1px solid #e4ebf5;border-radius:14px;padding:16px;box-shadow:0 8px 18px rgba(15,23,42,.06);display:flex;flex-direction:column;gap:14px}.insight-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.insight-person{display:flex;gap:10px;align-items:center;min-width:0}.insight-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#00b8da 0%,#155cfb 100%);color:#fff;font-weight:700;flex:0 0 auto}.insight-name{font-weight:700;color:#0e162b}.insight-date{font-size:12px;color:#717182;margin-top:2px}.insight-section{border-top:1px solid #eef2f7;padding-top:12px}.insight-label{font-size:12px;color:#717182;margin-bottom:6px}.review-pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.review-box{background:#f8fbff;border:1px solid #e4ebf5;border-radius:10px;padding:10px;min-width:0}.review-box strong{display:block;font-size:14px;color:#0e162b;margin-top:4px}.sample-text{font-size:14px;color:#475467;line-height:1.45;max-height:68px;overflow:hidden}.sample-text.expanded{max-height:none}.link-btn{border:none;background:transparent;color:#155cfb;font-size:13px;cursor:pointer;padding:6px 0}.rating-strip{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#f8fbff;border:1px solid #e4ebf5;border-radius:10px;padding:10px;flex-wrap:wrap}.stars-text{font-size:13px;color:#b54708;font-weight:700}
     .download-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}.download-card{background:#f8fbff;border:1px solid #e4ebf5;border-radius:12px;padding:16px}.download-card h3{font-size:15px;color:#0e162b;margin-bottom:8px}.download-card p{font-size:13px;color:#717182;margin-bottom:12px}
     .loading{background:#fff;border:1px solid #e4ebf5;border-radius:16px;padding:30px;color:#717182;text-align:center}
     body.dark{background:radial-gradient(1200px 500px at 50% -20%,#163a78 0%,transparent 60%),linear-gradient(135deg,#071225 0%,#0b1b37 55%,#0d2747 100%);color:#eaf2ff}
@@ -52,6 +54,7 @@
     body.dark .tabs-nav,body.dark th,body.dark .summary-card,body.dark .meta-card,body.dark .matrix-cell,body.dark .download-card,body.dark .examiner-stat{background:#10213f;border-color:#2a4168}
     body.dark .hero-title,body.dark .meta-value,body.dark .summary-number,body.dark .matrix-value,body.dark .download-card h3,body.dark .user-info h3,body.dark .dropdown-item,body.dark .back-link,body.dark .examiner-name,body.dark .examiner-stat strong{color:#eaf2ff}
     body.dark .hero-subtitle,body.dark .meta-label,body.dark .summary-label,body.dark td,body.dark .text-preview,body.dark .download-card p,body.dark .user-info p,body.dark .examiner-email,body.dark .examiner-id,body.dark .examiner-stat span{color:#a9bdd8}body.dark th{color:#eaf2ff}body.dark .tab-btn{color:#a9bdd8}
+    body.dark .insight-card,body.dark .review-box,body.dark .rating-strip,body.dark .insight-toolbar input,body.dark .insight-toolbar select{background:#10213f;border-color:#2a4168;color:#eaf2ff}body.dark .insight-name,body.dark .review-box strong{color:#eaf2ff}body.dark .insight-date,body.dark .insight-label,body.dark .sample-text{color:#a9bdd8}
     @media(max-width:860px){.two-col{grid-template-columns:1fr}.hero-title{font-size:24px}.tab-panel{padding:16px}.main-container{padding:12px}.header{flex-wrap:wrap}.examiner-stats{grid-template-columns:1fr}}
   </style>
 </head>
@@ -98,6 +101,7 @@
         <nav id="tabsNav" class="tabs-nav"></nav>
         <section id="overview" class="tab-panel active"></section>
         <section id="detection" class="tab-panel"></section>
+        <section id="insights" class="tab-panel"></section>
         <section id="examiners" class="tab-panel"></section>
         <section id="performance" class="tab-panel"></section>
         <section id="downloads" class="tab-panel"></section>
@@ -111,6 +115,7 @@
 <script>
   const PROJECT_ID = "{{ project_id }}";
   let pageData = null;
+  const insightState = { filter: 'all', examiner: 'all', search: '' };
 
   function toggleUserDropdown(){ document.getElementById('userDropdown').classList.toggle('show'); }
   document.addEventListener('click', function(event){
@@ -128,6 +133,9 @@
   themeToggle.addEventListener('click', () => applyTheme(document.body.classList.contains('dark') ? 'light' : 'dark'));
 
   function value(v, fallback='-'){ return v === null || v === undefined || v === '' ? fallback : v; }
+  function esc(v){
+    return String(value(v, '')).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  }
   function pct(v){
     if (v === null || v === undefined || v === '') return '-';
     const n = Number(v);
@@ -176,6 +184,7 @@
     const tabs = [
       ['overview','Overview',true],
       ['detection','Detection Results',true],
+      ['insights','Examiner Insights',true],
       ['examiners','Examiner Participation',true],
       ['performance','Performance Evaluation',true],
       ['downloads','Downloads & Report',true],
@@ -264,14 +273,186 @@
         <td>${sample.review_target ? badge('Review Target','badge-blue') : badge('Context','badge-gray')}</td>
       </tr>
     `).join('');
+    const explanations = pageData.feedback_explanations || [];
+    const explanationRows = explanations.map(item => `
+      <tr>
+        <td class="text-preview">${esc(item.text_preview)}</td>
+        <td>${badge(esc(item.prediction), item.prediction && String(item.prediction).toLowerCase().includes('ai') ? 'badge-orange' : 'badge-green')}</td>
+        <td>${badge(esc(item.corrected_label), item.corrected_label && String(item.corrected_label).toLowerCase().includes('ai') ? 'badge-orange' : 'badge-green')}</td>
+        <td>${esc(item.examiner_name)}</td>
+        <td class="text-preview">${esc(item.feedback_explanation)}</td>
+        <td>${esc(item.submitted_at)}</td>
+        <td>${pct(item.confidence)}</td>
+        <td>${pct(item.uncertainty)}</td>
+      </tr>
+    `).join('');
     document.getElementById('detection').innerHTML = `
       <div class="notice notice-info">Detection values come from the stored model outputs used by results_summary. Confidence and uncertainty are displayed as percentages for readability; uncertainty is calculated using distance from 0.5, so lower values indicate samples that are better candidates for examiner feedback.</div>
       ${samples.length ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Title / Dialogue</th><th>Text Preview</th><th>Prediction</th><th>Confidence %</th><th>Uncertainty %</th><th>Review Target</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('No detection samples are available yet.')}
+      <h3 style="margin:22px 0 10px">Examiner Feedback Explanations</h3>
+      ${explanations.length ? `<div class="table-wrap"><table><thead><tr><th>Text Preview</th><th>Model Prediction</th><th>Corrected Label</th><th>Examiner</th><th>Explanation</th><th>Submitted At</th><th>Confidence</th><th>Uncertainty</th></tr></thead><tbody>${explanationRows}</tbody></table></div>` : empty('No examiner explanations submitted yet.')}
       <div class="button-row">
         <button class="action-btn action-secondary" onclick="downloadExport('csv','detection')">Download Detection CSV</button>
         <button class="action-btn action-secondary" onclick="openJsonExport('detection')">Download Detection JSON</button>
       </div>
     `;
+  }
+
+  function uncertaintyLevel(v){
+    const n = Number(v);
+    if (Number.isNaN(n)) return {label:'Unknown uncertainty', cls:'badge-gray'};
+    if (n <= 0.15) return {label:'High uncertainty', cls:'badge-red'};
+    if (n <= 0.30) return {label:'Medium uncertainty', cls:'badge-orange'};
+    return {label:'Low uncertainty', cls:'badge-green'};
+  }
+  function examinerInitials(name){
+    const parts = String(name || 'Examiner').trim().split(/\s+/).filter(Boolean);
+    return (parts[0]?.[0] || 'E') + (parts[1]?.[0] || '');
+  }
+  function insightItems(){
+    const search = insightState.search.trim().toLowerCase();
+    return (pageData.feedback_explanations || []).filter(item => {
+      const changed = !!item.correction_changed_prediction;
+      const uncertainty = Number(item.uncertainty);
+      const highUncertainty = !Number.isNaN(uncertainty) && uncertainty <= 0.15;
+      const lowUncertainty = !Number.isNaN(uncertainty) && uncertainty > 0.30;
+      if (insightState.filter === 'corrections' && !changed) return false;
+      if (insightState.filter === 'agreements' && changed) return false;
+      if (insightState.filter === 'high_uncertainty' && !highUncertainty) return false;
+      if (insightState.filter === 'low_uncertainty' && !lowUncertainty) return false;
+      if (insightState.examiner !== 'all' && item.examiner_uid !== insightState.examiner) return false;
+      if (!search) return true;
+      return [item.examiner_name, item.text_preview, item.feedback_explanation].some(value => String(value || '').toLowerCase().includes(search));
+    });
+  }
+  function renderInsightFilters(){
+    const explanations = pageData.feedback_explanations || [];
+    const examinerOptions = Array.from(new Map(explanations.map(item => [item.examiner_uid, item.examiner_name || 'Examiner'])).entries())
+      .filter(([uid]) => uid)
+      .sort((a,b) => String(a[1]).localeCompare(String(b[1])))
+      .map(([uid,name]) => `<option value="${esc(uid)}" ${insightState.examiner === uid ? 'selected' : ''}>${esc(name)}</option>`)
+      .join('');
+    return `
+      <div class="insight-toolbar">
+        <input id="insightSearch" type="search" placeholder="Search examiner, text, or explanation" value="${esc(insightState.search)}">
+        <select id="insightFilter">
+          <option value="all" ${insightState.filter === 'all' ? 'selected' : ''}>All feedback</option>
+          <option value="corrections" ${insightState.filter === 'corrections' ? 'selected' : ''}>Corrections only</option>
+          <option value="agreements" ${insightState.filter === 'agreements' ? 'selected' : ''}>Agreements only</option>
+          <option value="high_uncertainty" ${insightState.filter === 'high_uncertainty' ? 'selected' : ''}>High uncertainty</option>
+          <option value="low_uncertainty" ${insightState.filter === 'low_uncertainty' ? 'selected' : ''}>Low uncertainty</option>
+        </select>
+        <select id="insightExaminer">
+          <option value="all">All examiners</option>
+          ${examinerOptions}
+        </select>
+      </div>
+    `;
+  }
+  function bindInsightControls(){
+    const search = document.getElementById('insightSearch');
+    const filter = document.getElementById('insightFilter');
+    const examiner = document.getElementById('insightExaminer');
+    if (search) search.addEventListener('input', () => { insightState.search = search.value; renderInsights(); });
+    if (filter) filter.addEventListener('change', () => { insightState.filter = filter.value; renderInsights(); });
+    if (examiner) examiner.addEventListener('change', () => { insightState.examiner = examiner.value; renderInsights(); });
+  }
+  async function rateExaminerFromInsights(examinerId){
+    const examiner = (pageData.feedback_explanations || []).find(item => item.examiner_uid === examinerId) || {};
+    const examinerName = examiner.examiner_name || 'this examiner';
+    const rawStars = prompt(`Rate ${examinerName || 'this examiner'} from 1 to 5`);
+    if (rawStars === null) return;
+    const stars = Number(rawStars);
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) {
+      alert('Please enter a rating from 1 to 5.');
+      return;
+    }
+    const comment = prompt('Optional rating comment') || '';
+    try{
+      const response = await fetch(`/api/project/${encodeURIComponent(PROJECT_ID)}/rate_examiner`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({examiner_id: examinerId, stars, comment})
+      });
+      if (!response.ok) throw new Error('Rating failed');
+      alert('Rating saved.');
+      await loadResults();
+      document.querySelector('[data-tab="insights"]')?.click();
+    }catch(error){
+      alert('Unable to save rating. Please try again.');
+    }
+  }
+  function toggleInsightText(id){
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('expanded');
+  }
+  function renderInsights(){
+    const explanations = pageData.feedback_explanations || [];
+    const corrections = explanations.filter(item => item.correction_changed_prediction).length;
+    const agreements = explanations.length - corrections;
+    const highUncertainty = explanations.filter(item => {
+      const n = Number(item.uncertainty);
+      return !Number.isNaN(n) && n <= 0.15;
+    }).length;
+    const examinerCount = new Set(explanations.map(item => item.examiner_uid).filter(Boolean)).size;
+    const filtered = insightItems();
+    const cards = filtered.map((item, index) => {
+      const level = uncertaintyLevel(item.uncertainty);
+      const changed = !!item.correction_changed_prediction;
+      const rating = item.examiner_rating && item.examiner_rating.stars ? `${item.examiner_rating.stars} / 5` : 'Not rated yet';
+      const textId = `insightText_${index}`;
+      return `
+        <article class="insight-card">
+          <div class="insight-head">
+            <div class="insight-person">
+              <div class="insight-avatar">${esc(examinerInitials(item.examiner_name))}</div>
+              <div>
+                <div class="insight-name">${esc(item.examiner_name || 'Examiner')}</div>
+                <div class="insight-date">${esc(item.submitted_at || 'No date available')}</div>
+              </div>
+            </div>
+            ${badge(labelize(item.participation_status || 'unknown'), item.participation_status === 'completed' ? 'badge-green' : item.participation_status === 'not_started' ? 'badge-orange' : 'badge-blue')}
+          </div>
+          <div class="insight-section">
+            <div class="review-pairs">
+              <div class="review-box"><span class="insight-label">Original prediction</span><strong>${badge(esc(item.prediction), String(item.prediction || '').toLowerCase().includes('ai') ? 'badge-orange' : 'badge-green')}</strong></div>
+              <div class="review-box"><span class="insight-label">Corrected label</span><strong>${badge(esc(item.corrected_label), String(item.corrected_label || '').toLowerCase().includes('ai') ? 'badge-orange' : 'badge-green')}</strong></div>
+              <div class="review-box"><span class="insight-label">Confidence</span><strong>${pct(item.confidence)}</strong></div>
+              <div class="review-box"><span class="insight-label">Uncertainty</span><strong>${pct(item.uncertainty)} ${badge(level.label, level.cls)}</strong></div>
+            </div>
+            <div class="hero-badges" style="margin-top:10px">
+              ${changed ? badge('Correction Changed Prediction','badge-red') : badge('Prediction Confirmed','badge-green')}
+              ${item.agreed_with_model ? badge('Agreed with model','badge-green') : badge('Disagreed with model','badge-orange')}
+            </div>
+          </div>
+          <div class="insight-section">
+            <div class="insight-label">Sample Preview</div>
+            <div id="${textId}" class="sample-text">${esc(item.text_preview || 'No preview available.')}</div>
+            ${String(item.text_preview || '').length > 120 ? `<button class="link-btn" onclick="toggleInsightText('${textId}')">Expand / collapse</button>` : ''}
+          </div>
+          <div class="insight-section">
+            <div class="insight-label">Examiner Explanation</div>
+            <div class="text-preview">${esc(item.feedback_explanation || 'No explanation provided.')}</div>
+          </div>
+          <div class="rating-strip">
+            <span class="stars-text">Current rating: ${esc(rating)}</span>
+            <button class="action-btn action-secondary" onclick="rateExaminerFromInsights('${esc(item.examiner_uid)}')">Rate Examiner</button>
+          </div>
+        </article>
+      `;
+    }).join('');
+    document.getElementById('insights').innerHTML = `
+      <div class="cards-grid">
+        ${metricCard('Total Feedback Explanations', intValue(explanations.length))}
+        ${metricCard('Corrections Submitted', intValue(corrections))}
+        ${metricCard('Agreements Submitted', intValue(agreements))}
+        ${metricCard('High Uncertainty Reviews', intValue(highUncertainty))}
+        ${metricCard('Examiners Participated', intValue(examinerCount))}
+      </div>
+      ${renderInsightFilters()}
+      ${filtered.length ? `<div class="insight-grid">${cards}</div>` : empty('No examiner insights match the current filters.')}
+    `;
+    bindInsightControls();
   }
 
   function renderExaminers(){
@@ -318,36 +499,54 @@
     if (Array.isArray(matrix) && matrix.length === 2) return {tn:Number(matrix[0][0]||0), fp:Number(matrix[0][1]||0), fn:Number(matrix[1][0]||0), tp:Number(matrix[1][1]||0)};
     return {tn:Number(matrix.true_negative||0), fp:Number(matrix.false_positive||0), fn:Number(matrix.false_negative||0), tp:Number(matrix.true_positive||0)};
   }
+  function performanceDetails(metrics){
+    const matrix = matrixValues(metrics && metrics.confusion_matrix);
+    if (!matrix) return {matrix:null, fpr:null, fnr:null, totalErrors:null, correctPredictions:null};
+    const fpr = (matrix.fp + matrix.tn) ? matrix.fp / (matrix.fp + matrix.tn) : null;
+    const fnr = (matrix.fn + matrix.tp) ? matrix.fn / (matrix.fn + matrix.tp) : null;
+    return {
+      matrix,
+      fpr,
+      fnr,
+      totalErrors: matrix.fp + matrix.fn,
+      correctPredictions: matrix.tp + matrix.tn
+    };
+  }
   function recommendation(){
     const s = pageData.summary || {};
     const metrics = pageData.metrics || {};
     const reviewed = Number(s.reviewed_targets || 0);
     const targets = Number(s.review_targets || 0);
-    const f1 = Number(metrics.f1_macro || 0);
-    if (reviewed < targets) return 'Continue feedback collection.';
-    if (f1 >= 0.75) return 'Performance is satisfactory. The owner may stop feedback.';
-    return 'Consider reopening the evaluation cycle for another Active Learning iteration.';
+    if (metrics.available === false) return 'Ground truth labels are required before F1-based model performance decisions can be made.';
+    if (!isLogistic()) return 'Standard detection and feedback results are available for the selected model.';
+    if (reviewed < targets) return 'More examiner feedback is recommended before stopping.';
+    return 'Review the reported F1, support, and confusion matrix before making a final owner decision.';
   }
   function renderPerformance(){
     const metrics = pageData.metrics || {};
-    const hasMetrics = ['accuracy','precision_macro','recall_macro','f1_macro'].some(key => metrics[key] !== null && metrics[key] !== undefined);
-    const matrix = matrixValues(metrics.confusion_matrix);
-    const fpr = matrix && (matrix.fp + matrix.tn) ? matrix.fp / (matrix.fp + matrix.tn) : null;
-    const fnr = matrix && (matrix.fn + matrix.tp) ? matrix.fn / (matrix.fn + matrix.tp) : null;
+    const hasMetrics = metrics.available === true || (
+      metrics.available === undefined &&
+      ['accuracy','precision_macro','recall_macro','f1_macro'].some(key => metrics[key] !== null && metrics[key] !== undefined)
+    );
+    const details = performanceDetails(metrics);
+    const matrix = details.matrix;
+    const support = metrics.support || {};
     const metricContent = hasMetrics ? `
       <div class="metric-list">
         ${metricCard('Accuracy', pct(metrics.accuracy))}
         ${metricCard('Precision Macro', pct(metrics.precision_macro))}
         ${metricCard('Recall Macro', pct(metrics.recall_macro))}
         ${metricCard('F1 Macro', pct(metrics.f1_macro))}
-        ${metricCard('False Positive Rate', pct(fpr))}
-        ${metricCard('False Negative Rate', pct(fnr))}
+        ${metrics.f1_ai !== undefined && metrics.f1_ai !== null ? metricCard('AI F1', pct(metrics.f1_ai)) : ''}
+        ${metricCard('False Positive Rate', pct(details.fpr))}
+        ${metricCard('False Negative Rate', pct(details.fnr))}
       </div>
+      <div class="notice notice-info" style="margin-top:16px">Support: labeled ${intValue(support.total_labeled)} | Human ${intValue(support.human)} | AI ${intValue(support.ai)}.</div>
       ${matrix ? `<h3 style="margin:20px 0 10px">Confusion Matrix</h3><div class="matrix">
-        <div class="matrix-cell"><div class="matrix-label">True Negatives</div><div class="matrix-value">${matrix.tn}</div></div>
-        <div class="matrix-cell"><div class="matrix-label">False Positives</div><div class="matrix-value">${matrix.fp}</div></div>
-        <div class="matrix-cell"><div class="matrix-label">False Negatives</div><div class="matrix-value">${matrix.fn}</div></div>
-        <div class="matrix-cell"><div class="matrix-label">True Positives</div><div class="matrix-value">${matrix.tp}</div></div>
+        <div class="matrix-cell"><div class="matrix-label">TN: Human → Human</div><div class="matrix-value">${matrix.tn}</div></div>
+        <div class="matrix-cell"><div class="matrix-label">FP: Human → AI</div><div class="matrix-value">${matrix.fp}</div></div>
+        <div class="matrix-cell"><div class="matrix-label">FN: AI → Human</div><div class="matrix-value">${matrix.fn}</div></div>
+        <div class="matrix-cell"><div class="matrix-label">TP: AI → AI</div><div class="matrix-value">${matrix.tp}</div></div>
       </div>
       <h3 style="margin:20px 0 10px">Error Analysis</h3>
       <div class="cards-grid">
@@ -355,34 +554,37 @@
         ${metricCard('True Negatives', matrix.tn)}
         ${metricCard('False Positives', matrix.fp)}
         ${metricCard('False Negatives', matrix.fn)}
-        ${metricCard('Total Errors', matrix.fp + matrix.fn)}
-      </div>` : ''}` : empty('Performance metrics are not available yet.');
+        ${metricCard('Total Errors', details.totalErrors)}
+        ${metricCard('Correct Predictions', details.correctPredictions)}
+      </div>
+      <div class="notice notice-info" style="margin-top:16px">False Positive means human text incorrectly predicted as AI/Machine-generated. False Negative means AI/Machine-generated text incorrectly predicted as Human. This follows the stored confusion matrix order [[TN, FP], [FN, TP]].</div>` : ''}` : empty(metrics.reason || 'Performance metrics are unavailable because ground truth labels are missing or invalid.');
     const s = pageData.summary || {};
     const learningPanel = isLogistic() ? `
       <div class="notice notice-info" style="margin-top:18px">
-        <strong>Active Learning Evaluation</strong><br>
+        <strong>Feedback Readiness</strong><br>
         Current Version: v1<br>
         Feedback targets: ${intValue(s.review_targets)} | Reviewed targets: ${intValue(s.reviewed_targets)} | Corrected labels: ${intValue(s.corrected_labels)}<br>
-        Average uncertainty: ${pct(s.avg_uncertainty)} | F1 score: ${pct(metrics.f1_macro)}<br>
+        Average uncertainty: ${pct(s.avg_uncertainty)} | F1 Macro: ${pct(metrics.f1_macro)}<br>
         Recommendation: ${recommendation()}
-      </div>` : `<div class="notice notice-info" style="margin-top:18px">Active Learning retraining and iteration comparison are currently available only for Logistic Regression. This model shows standard detection and feedback results.</div>`;
-    document.getElementById('performance').innerHTML = metricContent + learningPanel;
+      </div>` : `<div class="notice notice-info" style="margin-top:18px">This model shows standard detection and feedback results.</div>`;
+    const recommendationPanel = `<div class="notice ${isLogistic() ? 'notice-warn' : 'notice-info'}" style="margin-top:18px"><strong>Owner Recommendation</strong><br>${recommendation()}</div>`;
+    document.getElementById('performance').innerHTML = metricContent + learningPanel + recommendationPanel;
   }
 
   function renderDownloads(){
-    const buttons = [
-      ['Download Original Dataset','Original dataset download will be connected next.'],
-      ['Download PDF Report','PDF report generation will be implemented next.']
-    ];
     document.getElementById('downloads').innerHTML = `
       <div class="button-row" style="margin-bottom:16px">
         <button class="action-btn action-secondary" onclick="downloadExport('csv','detection')">Download Detection Dataset CSV</button>
         <button class="action-btn action-secondary" onclick="openJsonExport('detection')">Download Detection Dataset JSON</button>
         <button class="action-btn action-primary" onclick="downloadExport('csv','feedback')">Download Final Enriched Dataset CSV</button>
         <button class="action-btn action-primary" onclick="openJsonExport('feedback')">Download Final Enriched Dataset JSON</button>
+        <button class="action-btn action-primary" onclick="window.location.href='/api/project/${encodeURIComponent(PROJECT_ID)}/report.pdf'">Download PDF Report</button>
       </div>
       <div class="download-grid">
-        ${buttons.map(([label,msg]) => `<div class="download-card"><h3>${label}</h3><p>This action is reserved for the next export/report phase.</p><button class="action-btn action-secondary action-disabled" onclick="placeholder('${msg}')">${label}</button></div>`).join('')}
+        <div class="download-card"><h3>Detection Dataset</h3><p>Original rows enriched with stored model predictions, confidence, and uncertainty.</p><button class="action-btn action-secondary" onclick="downloadExport('csv','detection')">CSV</button></div>
+        <div class="download-card"><h3>Final Enriched Dataset</h3><p>Detection output plus examiner feedback and corrected labels when available.</p><button class="action-btn action-primary" onclick="downloadExport('csv','feedback')">CSV</button></div>
+        <div class="download-card"><h3>Professional PDF Report</h3><p>Owner-only summary covering detection, metrics, Active Learning status, examiners, and recommendation.</p><button class="action-btn action-primary" onclick="window.location.href='/api/project/${encodeURIComponent(PROJECT_ID)}/report.pdf'">Download PDF</button></div>
+        <div class="download-card"><h3>Original Dataset</h3><p>Original dataset direct download is still reserved for a later phase.</p><button class="action-btn action-secondary action-disabled" onclick="placeholder('Original dataset download will be connected next.')">Original Dataset</button></div>
       </div>
     `;
   }
@@ -410,6 +612,7 @@
     setupTabs();
     renderOverview();
     renderDetection();
+    renderInsights();
     renderExaminers();
     renderPerformance();
     renderDownloads();

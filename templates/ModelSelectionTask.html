@@ -53,10 +53,18 @@
     body.dark .search-input,
     body.dark thead,
     body.dark .modal-content-text,
-    body.dark .overall-row {
+    body.dark .overall-row,
+    body.dark .metrics-panel,
+    body.dark .metric-mini,
+    body.dark .cm-cell,
+    body.dark .metrics-note {
       background: #0f172a;
       color: var(--text);
       border-color: var(--line);
+    }
+    body.dark .metric-mini b,
+    body.dark .cm-cell b {
+      color: var(--text);
     }
 
     .mast {
@@ -196,6 +204,61 @@
     .card-label    { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
     .card-value    { font-size: 36px; font-weight: 700; margin-bottom: 4px; }
     .card-subtitle { font-size: 14px; color: var(--muted); }
+
+    .metrics-panel {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 24px;
+    }
+    .metrics-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .metrics-title { font-size: 16px; font-weight: 700; color: var(--text); }
+    .metrics-support { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .metric-mini {
+      border: 1px solid #e4ebf5;
+      background: #f8fbff;
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .metric-mini span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 700; }
+    .metric-mini b { font-size: 20px; color: #0e162b; }
+    .cm-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(120px, 1fr));
+      gap: 10px;
+      max-width: 420px;
+    }
+    .cm-cell {
+      border: 1px solid #e4ebf5;
+      background: #f8fbff;
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .cm-cell span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .cm-cell b { font-size: 20px; color: #0e162b; }
+    .metrics-note {
+      border: 1px solid #cfe8ff;
+      background: #f8fbff;
+      color: #475467;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
 
     .action-bar {
       background: #fff;
@@ -480,6 +543,8 @@
       </div>
     </div>
 
+    <div class="metrics-panel is-hidden" id="newsMetricsPanel"></div>
+
     <!-- Action Bar -->
     <div class="action-bar is-hidden" id="actionBar">
       <div class="search-box">
@@ -657,6 +722,77 @@ checkIfAlreadySelected();
       document.getElementById('loadingState').style.display  = 'none';
       document.getElementById('emptyState').style.display   = 'block';
       document.getElementById('tableWrapper').style.display = 'none';
+      document.getElementById('newsMetricsPanel').classList.add('is-hidden');
+    }
+
+    function metricNumber(value) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function metricPct(value) {
+      const number = metricNumber(value);
+      return number === null ? '—' : `${(number * 100).toFixed(2)}%`;
+    }
+
+    function metric4(value) {
+      const number = metricNumber(value);
+      return number === null ? '—' : number.toFixed(4);
+    }
+
+    function normalizeMatrix(matrix) {
+      if (!matrix) return null;
+      if (Array.isArray(matrix) && matrix.length === 2 && Array.isArray(matrix[0]) && Array.isArray(matrix[1])) {
+        return {
+          tn: Number(matrix[0][0] || 0),
+          fp: Number(matrix[0][1] || 0),
+          fn: Number(matrix[1][0] || 0),
+          tp: Number(matrix[1][1] || 0)
+        };
+      }
+      return {
+        tn: Number(matrix.true_negative ?? matrix.tn ?? 0),
+        fp: Number(matrix.false_positive ?? matrix.fp ?? 0),
+        fn: Number(matrix.false_negative ?? matrix.fn ?? 0),
+        tp: Number(matrix.true_positive ?? matrix.tp ?? 0)
+      };
+    }
+
+    function renderNewsMetrics(metrics) {
+      const panel = document.getElementById('newsMetricsPanel');
+      if (!panel) return;
+
+      const hasStandardMetrics = metrics && metrics.available === true;
+      if (!hasStandardMetrics) {
+        panel.classList.remove('is-hidden');
+        panel.className = 'metrics-note';
+        panel.textContent = 'Performance metrics are unavailable because ground truth labels were not provided. Detection and feedback can still continue.';
+        return;
+      }
+
+      const matrix = normalizeMatrix(metrics.confusion_matrix);
+      const support = metrics.support || {};
+      panel.className = 'metrics-panel';
+      panel.classList.remove('is-hidden');
+      panel.innerHTML = `
+        <div class="metrics-head">
+          <div class="metrics-title">Performance Summary</div>
+          <div class="metrics-support">Labeled: ${Number(support.total_labeled || 0)} | Human: ${Number(support.human || 0)} | AI: ${Number(support.ai || 0)}</div>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-mini"><span>Accuracy</span><b>${metricPct(metrics.accuracy)}</b></div>
+          <div class="metric-mini"><span>Macro F1</span><b>${metric4(metrics.f1_macro)}</b></div>
+          <div class="metric-mini"><span>AI F1</span><b>${metric4(metrics.f1_ai)}</b></div>
+          <div class="metric-mini"><span>False Positive Rate</span><b>${metricPct(metrics.false_positive_rate)}</b></div>
+          <div class="metric-mini"><span>False Negative Rate</span><b>${metricPct(metrics.false_negative_rate)}</b></div>
+        </div>
+        ${matrix ? `<div class="cm-grid">
+          <div class="cm-cell"><span>TN: Human → Human</span><b>${matrix.tn}</b></div>
+          <div class="cm-cell"><span>FP: Human → AI</span><b>${matrix.fp}</b></div>
+          <div class="cm-cell"><span>FN: AI → Human</span><b>${matrix.fn}</b></div>
+          <div class="cm-cell"><span>TP: AI → AI</span><b>${matrix.tp}</b></div>
+        </div>` : ''}
+      `;
     }
 
     function displayResults(data) {
@@ -677,6 +813,7 @@ checkIfAlreadySelected();
 
       const modelName = (summary.model_type === "rnn") ? "RNN (BiGRU)" : "Logistic Regression (TF-IDF)";
       document.getElementById('datasetInfo').textContent = `Results from ${modelName}`;
+      renderNewsMetrics(summary.metrics || data.metrics);
 
       const tbody = document.getElementById('resultsTable');
       tbody.innerHTML = '';
@@ -756,7 +893,7 @@ checkIfAlreadySelected();
         const res = await fetch(`/api/task/${taskId}/select_model`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ selected_model: modelType })
+          body: JSON.stringify({ model: modelType, selected_model: modelType })
         });
         
         const data = await res.json();

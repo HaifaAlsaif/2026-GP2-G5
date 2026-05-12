@@ -236,6 +236,8 @@
     }
 
     .chunk-card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+    .chunk-card.selected { border: 2px solid var(--primary2); background: #eff6ff; }
+    .review-target-note { background:#eff6ff; border:1px solid #93c5fd; color:#1d4ed8; border-radius:8px; padding:12px 14px; font-size:14px; font-weight:600; margin-bottom:16px; }
     .chunk-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
     .chunk-bars { display: flex; flex-direction: column; gap: 6px; }
     .chunk-bar { display: flex; align-items: center; gap: 8px; font-size: 12px; }
@@ -486,7 +488,7 @@
     <div class="page-header">
       <a href="/projectdetailsexaminer/{{ project_id }}" class="back-link">← Back to Project</a>
       <h1 class="page-title">{{ task_name }}</h1>
-      <p class="page-subtitle">Review articles and provide feedback</p>
+      <p class="page-subtitle">Review selected chunks and provide feedback</p>
     </div>
 
     <div class="progress-bar">
@@ -494,7 +496,7 @@
       <div class="progress-track">
         <div class="progress-fill" id="progressFill" style="width: 0%"></div>
       </div>
-      <div class="progress-text" id="progressText">0 / 0 articles reviewed</div>
+      <div class="progress-text" id="progressText">0 / 0 chunks reviewed</div>
     </div>
 
     <div class="filter-section" id="filterSection" style="display: none;">
@@ -657,7 +659,7 @@
       const total  = articles.length;
       const pct    = total > 0 ? (reviewedCount / total) * 100 : 0;
       document.getElementById('progressFill').style.width = pct + '%';
-      document.getElementById('progressText').textContent = reviewedCount + ' / ' + total + ' articles reviewed';
+      document.getElementById('progressText').textContent = reviewedCount + ' / ' + total + ' chunks reviewed';
     }
 
     /* ─── render list ─── */
@@ -724,6 +726,12 @@
       const feedbackHTML  = article.has_feedback
         ? renderExistingFeedback(article.feedback)
         : renderFeedbackForm(article, index);
+      const selectedChunk = article.selected_chunk || {};
+      const selectedChunkText = selectedChunk.chunk_text || selectedChunk.text || '';
+      const targetNote = article.target_unit === 'chunk'
+        ? '<div class="review-target-note">Review target: Chunk ' + (article.chunk_index || selectedChunk.chunk_index || '') + '</div>' +
+          '<div class="article-content" style="max-height:180px;">' + (selectedChunkText || 'Selected chunk text is unavailable.') + '</div>'
+        : '';
 
       div.innerHTML =
         '<div class="accordion-header" onclick="toggleAccordion(' + index + ')">' +
@@ -733,6 +741,7 @@
         '</div>' +
         '<div class="accordion-body" id="body-' + index + '">' +
           '<div class="accordion-content">' +
+        targetNote +
         '<div class="article-content" id="articleContent-' + index + '">' + highlightChunks(article.content, article.chunks) + '</div>' +
             detectionHTML +
             feedbackHTML +
@@ -765,9 +774,10 @@
       article.chunks.forEach(function(chunk, i){
         const chunkNumber = i + 1;
         const confidence = Math.max(chunk.human, chunk.ai).toFixed(1);
+        const selectedClass = chunk.active_learning_selected ? ' selected' : '';
         cardsHTML +=
-          '<div class="chunk-card">' +
-            '<div class="chunk-label">Chunk ' + chunkNumber + '</div>' +
+          '<div class="chunk-card' + selectedClass + '">' +
+            '<div class="chunk-label">Chunk ' + chunkNumber + (chunk.active_learning_selected ? ' · Review target' : '') + '</div>' +
             '<div class="chunk-bars">' +
               '<div class="chunk-bar">' +
                 '<span class="chunk-bar-label">Human:</span>' +
@@ -820,7 +830,7 @@
       const labelClass = feedback.label ? feedback.label.toLowerCase() : 'ai';
       return (
         '<div class="feedback-exists">' +
-          '<div class="feedback-warning">⚠️ This article already has feedback</div>' +
+          '<div class="feedback-warning">⚠️ This review target already has feedback</div>' +
           '<div class="feedback-info">' +
             '<div class="feedback-meta">' +
               '<span class="feedback-author">' + (feedback.examiner_name || 'Unknown') + '</span>' +
@@ -925,7 +935,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             agreed_with_model: true,
-            dataset_id: datasetId
+            dataset_id: datasetId,
+            chunk_index: articles[index]?.chunk_index || articles[index]?.selected_chunk?.chunk_index || null
           })
         });
         const data = await res.json();
@@ -954,7 +965,12 @@
         const res  = await fetch('/api/article/' + articleId + '/submit_feedback', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ label, explanation, dataset_id: datasetId })
+          body: JSON.stringify({
+            label,
+            explanation,
+            dataset_id: datasetId,
+            chunk_index: articles[index]?.chunk_index || articles[index]?.selected_chunk?.chunk_index || null
+          })
         });
         const data = await res.json();
         if (data.error) { alert('Error: ' + data.error); return; }

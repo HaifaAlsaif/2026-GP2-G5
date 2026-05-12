@@ -874,6 +874,8 @@ a{color:inherit}
               </div>
             </div>
 
+            <div class="sub-metrics" id="evalSupportLine" style="display:none;margin-bottom:14px;"></div>
+
             <div class="eval-empty" id="evalEmpty" style="display:none;">
               Ground truth not provided — metrics are hidden.
             </div>
@@ -1205,7 +1207,7 @@ a{color:inherit}
       const runRes = await fetch(`/api/project/${PROJECT_ID}/analyze_conversations`, {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ model_key })
+        body: JSON.stringify({ model_key, task_id: TASK_ID })
       });
       if(!runRes.ok) throw new Error(await runRes.text() || "Analyze request failed");
 
@@ -1471,20 +1473,35 @@ a{color:inherit}
     $("humanInline").textContent = String(humanCount);
 
     // Evaluation
-    const macro = lastSummary?.macro_metrics;
-    if(hasGT && macro && typeof macro === "object"){
+    const standardMetrics = lastSummary?.metrics && typeof lastSummary.metrics === "object" ? lastSummary.metrics : null;
+    const macro = standardMetrics?.available === true
+      ? standardMetrics
+      : (lastSummary?.macro_metrics && typeof lastSummary.macro_metrics === "object" ? lastSummary.macro_metrics : null);
+    const metricsAvailable = standardMetrics
+      ? standardMetrics.available === true
+      : !!(hasGT && macro);
+
+    if(metricsAvailable && macro && typeof macro === "object"){
       $("evalCard").style.display = "block";
       $("evalEmpty").style.display = "none";
+      $("evalSupportLine").style.display = "block";
       $("accVal").textContent  = (n(macro.accuracy) * 100).toFixed(2) + "%";
       $("f1Val").textContent   = n(macro.f1_macro).toFixed(4);
       $("precVal").textContent = n(macro.precision_macro).toFixed(4);
       $("recVal").textContent  = n(macro.recall_macro).toFixed(4);
 
-      const cm = lastSummary?.confusion_matrix || macro?.confusion_matrix;
+      const support = macro.support || {};
+      const aiF1 = (macro.f1_ai === 0 || macro.f1_ai) ? n(macro.f1_ai).toFixed(4) : "â€”";
+      $("evalSupportLine").innerHTML =
+        `AI F1: <b>${aiF1}</b> <span class="dot">â€¢</span> Labeled: <b>${n(support.total_labeled ?? 0)}</b> <span class="dot">â€¢</span> Human: <b>${n(support.human ?? 0)}</b> <span class="dot">â€¢</span> AI: <b>${n(support.ai ?? 0)}</b>`;
+
+      const cm = macro?.confusion_matrix || lastSummary?.confusion_matrix;
       renderConfusionMatrix(cm);
     }else{
       $("evalCard").style.display = "none";
       $("evalEmpty").style.display = "block";
+      $("evalSupportLine").style.display = "none";
+      $("evalEmpty").textContent = standardMetrics?.reason || "Ground truth not provided — metrics are hidden.";
       renderConfusionMatrix(null);
     }
 
@@ -1505,7 +1522,10 @@ a{color:inherit}
     if(Array.isArray(cm) && Array.isArray(cm[0])){
       tn = n(cm[0][0]); fp = n(cm[0][1]); fn = n(cm[1][0]); tp = n(cm[1][1]);
     }else{
-      tn = n(cm.tn); fp = n(cm.fp); fn = n(cm.fn); tp = n(cm.tp);
+      tn = n(cm.tn ?? cm.true_negative);
+      fp = n(cm.fp ?? cm.false_positive);
+      fn = n(cm.fn ?? cm.false_negative);
+      tp = n(cm.tp ?? cm.true_positive);
     }
 
     wrap.innerHTML = `
