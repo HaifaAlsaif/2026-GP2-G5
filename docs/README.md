@@ -1574,6 +1574,8 @@ This appears to be an older/generated index page that links to static page names
 | GET | `/api/project/{project_id}/active_learning_export` | Export reviewed Active Learning samples for offline Logistic Regression retraining |
 | GET | `/api/project/{project_id}/results_summary` | Owner-only normalized results summary for Owner Results |
 | GET | `/api/project/{project_id}/final_dataset_export` | Owner-only CSV/JSON export for detection or feedback-enriched datasets |
+| GET | `/api/project/{project_id}/report.pdf` | Owner-only professional PDF report |
+| GET | `/api/project/{project_id}/active_learning_feedback_summary` | Owner-only summary for normalized Active Learning feedback |
 
 ### Examiner progress and rating APIs
 
@@ -2220,6 +2222,78 @@ Uploaded conversation feedback uses:
 POST /api/task/{task_id}/uploaded_conversation_feedback/{dialogue_id}/turn/{turn_index}/submit
 ```
 
+### Normalized Active Learning feedback
+
+Feedback is still written to the original feedback paths used by each page, and an additional normalized copy is written for owner review, export, reporting, and future Logistic Regression retraining metadata.
+
+Normalized feedback is stored under:
+
+```text
+active_learning_feedback/{project_id}/{sample_id}
+```
+
+This normalized record is written when feedback is submitted for:
+
+```text
+POST /api/article/{article_id}/submit_feedback
+POST /api/task/{task_id}/conversation_feedback/{conversation_id}/turn/{turn_index}/submit
+POST /api/task/{task_id}/uploaded_conversation_feedback/{dialogue_id}/turn/{turn_index}/submit
+```
+
+Important normalized fields include:
+
+```text
+project_id
+sample_id
+project_type
+dataset_id
+source_id
+article_id
+row_id
+task_id
+conversation_id
+dialogue_id
+turn_index
+title
+text
+prev_text
+original_label
+model_prediction
+model_prediction_label
+corrected_label
+corrected_label_text
+MachineGen
+confidence
+uncertainty
+selected_model_key
+selected_model_name
+model_version
+examiner_uid
+examiner_name
+agreed_with_model
+feedback_explanation
+submitted_at
+used_for_retraining
+training_export_id
+```
+
+Label normalization uses:
+
+```text
+Human = 0
+AI / Machine-generated = 1
+```
+
+If the examiner agrees with the model, the corrected label matches the model prediction. If the examiner disagrees, the corrected label comes from the submitted feedback label.
+
+Owners can inspect normalized feedback with:
+
+```text
+GET /api/project/{project_id}/active_learning_feedback_summary
+```
+
+This returns total feedback rows, Logistic Regression feedback rows, retraining usage flags, corrected-label counts, examiner-level counts, and recent feedback explanations.
+
 The conversation feedback page supports:
 
 - Dialogue filters:
@@ -2343,6 +2417,7 @@ metrics
 examiners
 tasks
 most_uncertain_samples
+feedback_explanations
 warnings
 ```
 
@@ -2355,6 +2430,63 @@ generated_conversation
 ```
 
 The Owner Results UI displays Active Learning, reopen/iteration, and retraining-related panels only when the selected model is Logistic Regression based. RNN and other models show standard detection and feedback results without reopen/retraining controls.
+
+### Owner Results tabs
+
+The project detail results page includes:
+
+- Overview
+- Detection Results
+- Examiner Insights
+- Examiner Participation
+- Performance Evaluation
+- Downloads & Report
+- Reopen / Iterations, shown only for Logistic Regression
+
+`Examiner Insights` turns examiner feedback explanations into review cards for the owner. Each card shows examiner identity, participation status, submitted date, model prediction, corrected label, agreement/disagreement state, confidence, uncertainty level, sample preview, examiner explanation, Active Learning impact, and current examiner rating when available.
+
+The tab supports:
+
+- Search by examiner name, sample text, or explanation text.
+- Filtering by all feedback, corrections only, agreements only, high uncertainty, low uncertainty, and examiner.
+- Rating integration through the existing owner rating endpoint:
+
+```text
+POST /api/project/{project_id}/rate_examiner
+```
+
+### Feedback explanations in owner summaries
+
+`results_summary` includes `feedback_explanations`, which is read primarily from:
+
+```text
+active_learning_feedback/{project_id}
+```
+
+If normalized feedback is not available, the backend can fall back to the older feedback paths when safe.
+
+Each explanation item includes:
+
+```text
+sample_id
+project_type
+title
+text_preview
+prediction
+corrected_label
+examiner_uid
+examiner_name
+feedback_explanation
+submitted_at
+confidence
+uncertainty
+agreed_with_model
+participation_status
+examiner_rating
+correction_changed_prediction
+```
+
+The Detection Results tab also shows a compact `Examiner Feedback Explanations` section after the uncertain samples table.
 
 ### Final dataset export endpoint
 
@@ -2529,9 +2661,42 @@ active_learning_selected
 
 Generated conversation feedback exports add the same feedback fields used by news feedback exports.
 
+### Professional PDF report
+
+Owners can download a project report with:
+
+```text
+GET /api/project/{project_id}/report.pdf
+```
+
+The response is owner-only and downloads:
+
+```text
+trustlens_{project_name}_report.pdf
+```
+
+PDF generation uses:
+
+```text
+reportlab
+```
+
+The report includes:
+
+- Cover / Project Summary.
+- Detection Summary.
+- Performance Evaluation.
+- Error Analysis.
+- Active Learning Summary.
+- Most Uncertain Samples.
+- Examiner Participation.
+- Examiner Feedback Explanations.
+- Final Recommendation / Owner Decision Support.
+
+The PDF uses the same owner summary data and stored model outputs used by Owner Results. Confidence and uncertainty values are not recalculated differently for the report.
+
 ### Current limitations
 
-- PDF report generation is not implemented yet.
 - Reopen Evaluation Cycle is still UI-only.
 - Automatic retraining is not implemented.
 - Exported feedback rows are marked with `used_for_retraining=false` for now.
@@ -2612,6 +2777,10 @@ Before a new team runs or continues development, confirm:
 - Test `/owner/results` project filtering, search, and loading state.
 - Test `/owner/results/{project_id}` for news, uploaded conversation, and generated conversation projects.
 - Test `/api/project/{project_id}/results_summary` as the project owner.
+- Test `feedback_explanations` in `/api/project/{project_id}/results_summary`.
+- Test `/api/project/{project_id}/active_learning_feedback_summary` after examiner feedback is submitted.
+- Test `/api/project/{project_id}/report.pdf`.
+- Test the `Examiner Insights` tab filters, search, review cards, and rating button.
 - Test `/api/project/{project_id}/final_dataset_export?format=csv&stage=detection`.
 - Test `/api/project/{project_id}/final_dataset_export?format=json&stage=detection`.
 - Test `/api/project/{project_id}/final_dataset_export?format=csv&stage=feedback`.
