@@ -51,6 +51,23 @@
     .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
     .stat-value { margin-top: 6px; font-size: 22px; font-weight: 700; }
     .mini-line { margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .finalized-banner {
+      display: none;
+      margin-top: 12px;
+      border: 1px solid #c7d2ff;
+      background: #eef3ff;
+      color: #25345f;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .finalized-banner.show { display: block; }
+    body.dark .finalized-banner {
+      background: #13284a;
+      border-color: #2a3f66;
+      color: #d7e4ff;
+    }
 
     .metrics-row { margin-top: 18px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
     .metric-card { background: #f6f7fb; border: 1px solid #e9ecf5; border-radius: 12px; padding: 10px 12px; }
@@ -117,7 +134,7 @@
     .details-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
     .details-row {
   display: grid;
-  grid-template-columns: 32px 70px 1fr 160px 90px 70px 90px;
+  grid-template-columns: 32px 70px 1fr 160px 90px 70px 90px 120px;
   gap: 10px;
   font-size: 12px;
   align-items: center;
@@ -1512,6 +1529,481 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
 .detect-meta{margin-top:10px;font-size:13px;color:var(--muted);font-weight:700;display:flex;justify-content:space-between;gap:12px;}
 .is-hidden{display:none !important;}
 
+/* Unified platform shell */
+.app{
+  max-width:none;
+  min-height:100vh;
+  padding:0;
+  display:flex;
+  flex-direction:column;
+}
+.header{
+  position:sticky;
+  top:0;
+  left:0;
+  right:0;
+  height:64px;
+  padding:0 clamp(16px,6vw,134.8px);
+  background:rgba(255,255,255,.82);
+  backdrop-filter:saturate(180%) blur(14px);
+  border-bottom:1px solid var(--line);
+  z-index:1000;
+}
+body.dark .header{background:rgba(11,16,32,.86);}
+.brand-text{
+  font-size:20px;
+  font-weight:600;
+  line-height:1;
+  background:linear-gradient(90deg,#00b8db,#155dfc);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+.logo{width:32px;height:32px;display:block;}
+.lang-btn,.icon-btn{
+  width:40px;
+  height:40px;
+  border-radius:12px;
+  background:rgba(0,0,0,.06);
+  color:var(--ink);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+body.dark .lang-btn,body.dark .icon-btn{background:rgba(255,255,255,.08);color:var(--ink);}
+.user-avatar{width:40px;height:40px;font-size:16px;background:linear-gradient(135deg,#00b8db,#155dfc);}
+.user-name{font-size:14px;color:var(--ink);}
+.content-wrapper{
+  flex:1;
+  display:flex;
+  justify-content:center;
+  padding:24px clamp(16px,6vw,134.8px) 40px;
+}
+.card-shell{
+  width:100%;
+  max-width:1200px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:var(--card);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.card-inner{padding:24px 24px 28px;}
+.top-bar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 0 18px;
+  border-bottom:.8px solid var(--line);
+  margin-bottom:18px;
+}
+.back-link{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  color:var(--ink);
+  text-decoration:none;
+  padding:6px 10px;
+  border-radius:10px;
+  transition:background .18s ease;
+  font-size:14px;
+  margin:0;
+}
+.back-link:hover{background:rgba(0,0,0,.04);}
+body.dark .back-link:hover{background:rgba(255,255,255,.04);}
+.page-heading{display:flex;flex-direction:column;gap:6px;margin:10px 0 18px;}
+.title-row{display:flex;align-items:center;gap:12px;}
+.badge-icon{
+  width:42px;
+  height:42px;
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(21,93,252,.08);
+  border:1px solid rgba(21,93,252,.18);
+  box-shadow:0 10px 15px -10px rgba(21,93,252,.35);
+  flex:0 0 auto;
+}
+.badge-icon::before{
+  content:"AI";
+  font-size:13px;
+  font-weight:900;
+  color:#155dfc;
+  letter-spacing:0;
+}
+.page-title{
+  margin:0;
+  font-size:34px;
+  letter-spacing:-.4px;
+  color:#0f172b;
+  line-height:1.05;
+}
+body.dark .page-title{color:var(--ink);}
+.selected-model{margin:0;font-size:14px;color:var(--muted);line-height:1.45;}
+.panel{
+  border-radius:18px;
+  background:var(--card);
+  border:1px solid var(--line);
+  overflow:hidden;
+  box-shadow:var(--shadow);
+  padding:0;
+}
+body.dark .panel{background:rgba(255,255,255,.03);}
+.summary-bar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:var(--card);
+  padding:12px 14px;
+  margin:8px 0 14px;
+}
+body.dark .summary-bar{background:rgba(255,255,255,.03);}
+.summary-title,.table-title{font-weight:900;font-size:14px;}
+.summary-sub{font-size:12px;color:var(--muted);}
+.btn,.matrix-link,.view-btn,.prev-btn{
+  border:.8px solid var(--line);
+  border-radius:10px;
+  font-weight:900;
+  min-height:36px;
+}
+.btn.primary{
+  background:#155dfc;
+  border-color:#155dfc;
+  color:#fff;
+  box-shadow:0 10px 15px -8px rgba(21,93,252,.45);
+}
+.select,.input{
+  border:.8px solid var(--line);
+  border-radius:12px;
+  padding:9px 10px;
+  background:rgba(255,255,255,.55);
+  outline:none;
+  font-weight:800;
+}
+body.dark .select,body.dark .input{background:rgba(255,255,255,.03);color:var(--ink);}
+.detect-stage{margin:0 0 18px;}
+.detect-card{
+  border-radius:18px;
+  background:var(--card);
+  border:1px solid var(--line);
+  box-shadow:var(--shadow);
+  padding:46px 24px;
+  align-items:center;
+  justify-content:center;
+  min-height:320px;
+}
+body.dark .detect-card{background:rgba(255,255,255,.03);}
+.detect-steps{width:min(560px,100%);display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;}
+.detect-step{font-weight:900;}
+.detect-hero{width:min(620px,100%);text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center;}
+.detect-title{margin:0;font-size:18px;font-weight:800;color:var(--ink);}
+.detect-sub{font-size:12px;}
+.detect-actions{
+  width:min(520px,100%);
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:10px;
+  border:.8px solid var(--line);
+  border-radius:14px;
+  background:rgba(255,255,255,.72);
+  padding:12px;
+}
+body.dark .detect-actions{background:rgba(255,255,255,.03);}
+.stats-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:8px 0 12px;}
+.stat-card{
+  border-radius:14px;
+  border:1px solid #e9ecf5;
+  padding:16px;
+  min-height:98px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  background:rgba(255,255,255,.55);
+  position:relative;
+  overflow:hidden;
+}
+.stat-card:before{
+  content:"";
+  position:absolute;
+  inset:-40% -30% auto auto;
+  width:220px;
+  height:220px;
+  border-radius:999px;
+  opacity:.24;
+}
+.stat-card.blue{background:linear-gradient(180deg,#eef2ff,rgba(255,255,255,.55));border-left:4px solid rgba(21,93,252,.85);}
+.stat-card.green{background:linear-gradient(180deg,#e8f7ef,rgba(255,255,255,.55));border-left:4px solid rgba(0,188,125,.95);}
+.stat-card.orange{background:linear-gradient(180deg,#fff4df,rgba(255,255,255,.55));border-left:4px solid rgba(21,93,252,.70);}
+.stat-card.blue:before{background:radial-gradient(circle at 30% 30%, rgba(21,93,252,.55), transparent 60%);}
+.stat-card.green:before{background:radial-gradient(circle at 30% 30%, rgba(0,188,125,.55), transparent 60%);}
+.stat-card.orange:before{background:radial-gradient(circle at 30% 30%, rgba(21,93,252,.45), transparent 60%);}
+.stat-label{font-size:12px;letter-spacing:.6px;text-transform:uppercase;font-weight:900;color:var(--muted);}
+.stat-value{font-size:28px;font-weight:900;margin-top:auto;}
+.mini-line{
+  margin:0 0 14px;
+  padding:10px 12px;
+  border:.8px solid var(--line);
+  border-radius:12px;
+  background:rgba(255,255,255,.70);
+  font-size:12px;
+  color:var(--muted);
+}
+body.dark .mini-line{background:rgba(255,255,255,.03);}
+.eval-row{
+  border:.8px solid var(--line);
+  border-radius:14px 14px 0 0;
+  background:rgba(255,255,255,.70);
+  padding:12px 14px 0;
+  margin:10px 0 0;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+body.dark .eval-row{background:rgba(255,255,255,.03);}
+.metrics-row{
+  margin:0 0 14px;
+  padding:12px 14px;
+  border:.8px solid var(--line);
+  border-top:0;
+  border-radius:0 0 14px 14px;
+  background:rgba(255,255,255,.70);
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+}
+body.dark .metrics-row{background:rgba(255,255,255,.03);}
+.metric-card{border:.8px solid var(--line);border-radius:12px;padding:10px;background:rgba(255,255,255,.55);}
+.metric-title{font-size:12px;color:var(--muted);font-weight:900;}
+.metric-value{font-size:16px;font-weight:900;}
+.bottom-grid{display:grid;grid-template-columns:360px 1fr;gap:18px;align-items:start;margin-top:14px;}
+.box{
+  border-radius:18px;
+  background:var(--card);
+  border:1px solid var(--line);
+  overflow:hidden;
+  box-shadow:var(--shadow);
+  padding:14px;
+}
+body.dark .box{background:rgba(255,255,255,.03);}
+.table-head{gap:12px;align-items:center;border-bottom:.8px solid var(--line);padding-bottom:12px;}
+.filters{display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:nowrap;}
+table{font-size:14px;}
+th{font-size:12px;font-weight:900;border-bottom:.8px solid var(--line);}
+td{padding:12px 14px;border-bottom:.8px solid rgba(0,0,0,.06);}
+body.dark td{border-bottom:.8px solid rgba(255,255,255,.08);}
+.pill{font-size:12px;font-weight:900;padding:6px 10px;}
+.finalized-banner{
+  margin:0 0 14px;
+  border:.8px dashed var(--line);
+  border-radius:14px;
+  background:rgba(21,93,252,.06);
+  color:var(--ink);
+}
+.insights-panel{
+  background:rgba(255,255,255,.70);
+  border:.8px solid var(--line);
+  border-radius:14px;
+  padding:12px 14px;
+  margin:10px 0 14px;
+}
+body.dark .insights-panel{background:rgba(255,255,255,.03);}
+.section-kicker{
+  font-size:12px;
+  letter-spacing:.6px;
+  text-transform:uppercase;
+  color:var(--muted);
+  font-weight:900;
+  margin-bottom:8px;
+}
+.insights-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+}
+.insight-tile{
+  border:.8px solid var(--line);
+  border-radius:12px;
+  padding:10px;
+  background:rgba(21,93,252,.06);
+  min-height:78px;
+}
+body.dark .insight-tile{background:rgba(255,255,255,.06);}
+.insight-tile span{display:block;font-size:12px;color:var(--muted);font-weight:900;}
+.insight-tile b{display:block;font-size:18px;margin-top:6px;overflow-wrap:anywhere;}
+.insight-tile small{display:block;margin-top:6px;font-size:12px;line-height:1.35;color:var(--muted);}
+@media (max-width:980px){
+  .stats-grid,.metrics-row{grid-template-columns:1fr;}
+  .bottom-grid{grid-template-columns:1fr;}
+  .insights-grid{grid-template-columns:1fr;}
+  .filters{flex-wrap:wrap;}
+  .page-title{font-size:30px;}
+}
+
+/* Final generated dashboard layout repair */
+.app{
+  max-width: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+.content-wrapper{
+  padding-left: clamp(14px,3vw,56px);
+  padding-right: clamp(14px,3vw,56px);
+}
+.card-shell{
+  max-width: 1560px;
+}
+.bottom-grid{
+  grid-template-columns: minmax(300px,360px) minmax(0,1fr);
+}
+.box,
+.panel{
+  min-width: 0;
+}
+.select,
+.input,
+select.select{
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 42px;
+  line-height: 1.2;
+  border: .8px solid var(--line);
+  border-radius: 12px;
+  padding: 0 38px 0 12px;
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 18px,
+    calc(100% - 12px) 18px;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.input{
+  background-image: none;
+  cursor: text;
+  padding-right: 12px;
+}
+body.dark .select,
+body.dark .input,
+body.dark select.select{
+  background-color: #0f172a;
+  color: var(--ink);
+  border-color: var(--line);
+}
+.detect-select{
+  width: 100%;
+}
+.summary-actions,
+.filters{
+  flex-wrap: wrap;
+}
+.filters .input{
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+.filters .select{
+  flex: 0 0 auto;
+  min-width: 180px;
+}
+.box table{
+  width: 100%;
+  table-layout: fixed;
+}
+.box th,
+.box td{
+  padding: 12px 10px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.box th:first-child,
+.box td:first-child{
+  width: 17%;
+}
+.box th:last-child,
+.box td:last-child{
+  width: 96px;
+  text-align: right;
+}
+.details-box{
+  overflow: hidden;
+}
+.details-row{
+  grid-template-columns: 36px 90px minmax(220px,1fr) 120px 110px 80px 110px 130px;
+}
+.details-row > div,
+.details-row > strong{
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.details-scroll{
+  overflow-x: auto;
+}
+.dist-note,
+#distLine{
+  overflow-wrap: anywhere;
+}
+.dist-third{
+  display: none;
+}
+.details-modal-card{
+  width:min(1040px,94vw);
+  max-height:84vh;
+  overflow:auto;
+}
+.details-summary{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:0 0 12px;
+  color:var(--muted);
+  font-size:12px;
+}
+.details-turn-list{display:grid;gap:10px}
+.details-turn-card{
+  border:.8px solid var(--line);
+  border-radius:14px;
+  padding:12px;
+  background:rgba(255,255,255,.68);
+}
+body.dark .details-turn-card{background:rgba(255,255,255,.04)}
+.details-turn-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.details-turn-index{font-weight:900}
+.details-turn-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.details-turn-text,.details-turn-prev{font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+.details-turn-prev{margin-top:8px;color:var(--muted);border-top:.8px dashed var(--line);padding-top:8px}
+.details-empty{color:var(--muted);font-weight:900;padding:16px;border:.8px dashed var(--line);border-radius:14px}
+@media (min-width:1100px){
+  .stats-grid{
+    grid-template-columns: repeat(6,minmax(0,1fr));
+  }
+}
+@media (max-width:980px){
+  .bottom-grid{
+    grid-template-columns: 1fr;
+  }
+  .box{
+    overflow-x: auto;
+  }
+  .box table{
+    min-width: 860px;
+  }
+  .details-row{
+    min-width: 900px;
+  }
+}
+
 
   </style>
 </head>
@@ -1519,7 +2011,7 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
 <div class="app">
   <header class="header">
     <div class="brand notranslate" translate="no">
-      <img src="../static/images/img_header.svg" alt="TrustLens logo" class="logo">
+      <img src="/static/images/icon_logo.svg" alt="TrustLens logo" class="logo">
       <div class="brand-text">TrustLens</div>
     </div>
     <div class="header-right">
@@ -1550,11 +2042,22 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
     </div>
   </header>
 
-  <a href="#" id="backToProject" class="back-link" data-i18n="back">← Back to Project</a>
+  <main class="content-wrapper">
+    <section class="card-shell">
+      <div class="card-inner">
 
-  <div class="page-title" data-i18n="title">Conversation Analysis</div>
-<div class="selected-model" id="selectedModelLine" data-i18n="selected_model">Selected model: —</div>
-<div class="selected-model" id="taskSelectionLine">Task model selection: Not saved</div>
+  <div class="top-bar">
+    <a href="#" id="backToProject" class="back-link" data-i18n="back">← Back to Project</a>
+  </div>
+
+  <div class="page-heading">
+    <div class="title-row">
+      <div class="badge-icon"></div>
+      <h1 class="page-title" data-i18n="title">Conversation Analysis</h1>
+    </div>
+    <p class="selected-model" id="selectedModelLine" data-i18n="selected_model">Detection model: —</p>
+    <p class="selected-model" id="taskSelectionLine">Task model selection: Not saved</p>
+  </div>
 
   <section class="detect-stage" id="generatedStage">
     <div class="detect-card" id="generatedReady">
@@ -1571,10 +2074,11 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
         </div>
         <div class="detect-actions">
           <select id="stageModelSelect" class="select detect-select">
-            <option value="logreg">Logistic Regression</option>
+            <option value="logreg">Baseline TF-IDF + Logistic Regression</option>
             <option value="rnn">RNN</option>
+            <option value="falcon" disabled>SOTA Model (Coming Soon)</option>
           </select>
-          <button class="btn primary" id="stageRunBtn" type="button">Run Analysis</button>
+          <button class="btn primary" id="stageRunBtn" type="button">Run Detection</button>
         </div>
       </div>
     </div>
@@ -1603,7 +2107,7 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
     <div class="summary-bar">
       <div>
         <div class="summary-title" data-i18n="summary_title">Analysis Summary</div>
-        <div class="summary-sub" id="summaryMeta">Model: — • Time: — • GT: Yes</div>
+        <div class="summary-sub" id="summaryMeta">Model: — • Time: — • GT: inferred from sender role and conversation type</div>
       </div>
       <div class="summary-actions">
         <details class="download-dd">
@@ -1617,17 +2121,21 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
           
         <select id="analysisModelSelect" class="select">
           <option value="">Select model</option>
-          <option value="logreg">Logistic Regression</option>
+          <option value="logreg">Baseline TF-IDF + Logistic Regression</option>
           <option value="rnn">RNN</option>
-          <option value="falcon" disabled>Falcon</option>
+          <option value="falcon" disabled>SOTA Model (Coming Soon)</option>
         </select>
       
-        <button class="btn primary" id="runAnalysisBtn" type="button">Run Analysis</button>
+        <button class="btn primary" id="runAnalysisBtn" type="button">Run Detection</button>
 
       </div>
       
     </div>
      <!-- ✅ يظهر فقط في feedback mode -->
+<div class="finalized-banner" id="generatedFinalizedBanner">
+  <strong>Finalized Evaluation</strong><br>
+  Submitted model is locked, review targets are frozen, and reruns are preview-only.
+</div>
 <div id="feedbackModeRoot">
   <div class="fb-progress-card">
     <div class="fb-progress-title">Progress</div>
@@ -1643,7 +2151,7 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
         <span>📊 Sort Conversations:</span>
         <select id="fbSortSelect" class="select">
           <option value="default">Default Order</option>
-          <option value="most_uncertain">Most Uncertain First</option>
+          <option value="most_uncertain">Lowest Uncertainty Margin First</option>
           <option value="least_uncertain">Least Uncertain First</option>
           <option value="most_pending">Most Pending Targets</option>
         </select>
@@ -1674,7 +2182,7 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
         </select>
       </div>
     </div>
-    <div class="fb-filter-note">Most uncertain means the model is closest to a 50/50 decision. Review targets are used for Active Learning; context turns are shown only to help judgment.</div>
+    <div class="fb-filter-note">Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority. Review targets are used for Active Learning; context turns are shown only to help judgment.</div>
 
   </div>
 
@@ -1700,19 +2208,69 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
           <span class="line"></span> <span data-i18n="confusion_matrix">Confusion Matrix</span>
         </button>
     
-        <button class="btn primary eval-submit-btn" id="saveModelBtn" type="button">Submit Model</button>
+        <button class="btn primary eval-submit-btn" id="saveModelBtn" type="button">Submit Results</button>
       </div>
     </div>
     
 
     <div class="metrics-row">
       <div class="metric-card"><div class="metric-title" data-i18n="accuracy">Accuracy</div><div class="metric-value" id="accVal">—</div></div>
-      <div class="metric-card"><div class="metric-title" data-i18n="f1_macro">F1 Macro</div><div class="metric-value" id="f1Val">—</div></div>
+      <div class="metric-card"><div class="metric-title" data-i18n="f1_macro">Macro F1</div><div class="metric-value" id="f1Val">—</div></div>
       <div class="metric-card"><div class="metric-title" data-i18n="precision_macro">Precision Macro</div><div class="metric-value" id="precVal">—</div></div>
       <div class="metric-card"><div class="metric-title" data-i18n="recall_macro">Recall Macro</div><div class="metric-value" id="recVal">—</div></div>
     </div>
 
     <div class="mini-line" id="evalNote" style="margin-top:-6px;margin-bottom:16px;">—</div>
+    <div class="mini-line" id="activeLearningLine" style="margin-top:-8px;margin-bottom:16px;">
+      Active Learning: review targets are turn-level and are frozen after Submit Results.
+    </div>
+
+    <div class="insights-panel" id="generatedActiveLearningPanel">
+      <div class="section-kicker">Active Learning Insights</div>
+      <div class="insights-grid">
+        <div class="insight-tile">
+          <span>Total Review Targets</span>
+          <b id="generatedReviewTotal">—</b>
+          <small>Target unit: turn</small>
+        </div>
+        <div class="insight-tile">
+          <span>Pending Targets</span>
+          <b id="generatedReviewPending">—</b>
+          <small>Frozen after Submit Results</small>
+        </div>
+        <div class="insight-tile">
+          <span>Lowest Uncertainty Margin</span>
+          <b id="generatedLowestMargin">—</b>
+          <small>Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.</small>
+        </div>
+        <div class="insight-tile">
+          <span>Why Selected</span>
+          <b>Model uncertainty</b>
+          <small>Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="insights-panel" id="generatedDiagnosticsPanel">
+      <div class="section-kicker">Diagnostics</div>
+      <div class="insights-grid">
+        <div class="insight-tile">
+          <span>Highest AI-heavy Task</span>
+          <b id="generatedHighestAiTask">—</b>
+          <small>Highest dialogue-level machine percentage</small>
+        </div>
+        <div class="insight-tile">
+          <span>Evaluation Level</span>
+          <b>Turn-level</b>
+          <small>Ground truth is inferred from sender role and conversation type.</small>
+        </div>
+        <div class="insight-tile">
+          <span>Avg Turns / Dialogue</span>
+          <b id="generatedAvgTurnsDiag">—</b>
+          <small>Average unit density per generated task</small>
+        </div>
+      </div>
+    </div>
 
     <div class="bottom-grid">
       <div class="box">
@@ -1728,11 +2286,15 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
         <div class="bar-wrap">
           <div>
             <div class="vbar green"><div class="vbar-inner green" id="humanBarVal">0</div></div>
-            <div style="text-align:center;font-size:12px;margin-top:6px;" data-i18n="human">Human</div>
+            <div style="text-align:center;font-size:12px;margin-top:6px;" data-i18n="human" id="humanBarLabel">Human</div>
           </div>
           <div>
             <div class="vbar blue"><div class="vbar-inner blue" id="machineBarVal">0</div></div>
-            <div style="text-align:center;font-size:12px;margin-top:6px;" data-i18n="machine">Machine</div>
+            <div style="text-align:center;font-size:12px;margin-top:6px;" data-i18n="machine" id="machineBarLabel">Machine</div>
+          </div>
+          <div class="dist-third" id="mixedDistColumn">
+            <div class="vbar"><div class="vbar-inner" id="mixedBarVal" style="background:#ad46ff;">0</div></div>
+            <div style="text-align:center;font-size:12px;margin-top:6px;" id="mixedBarLabel">Mixed</div>
           </div>
         </div>
 
@@ -1753,6 +2315,8 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
             </select>
             <select class="select" id="sortSelect">
               <option value="ai_desc">Sort: AI% (desc)</option>
+              <option value="turns_desc">Sort: #Turns (desc)</option>
+              <option value="id_asc">Sort: ID (asc)</option>
               <option value="human_desc">Sort: Human% (desc)</option>
             </select>
           </div>
@@ -1776,6 +2340,19 @@ body.dark .detect-step.active{background:#18335d;color:#cfe0ff;}
       </div>
     </div>
   </section>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="cm-modal" id="detailsModal" aria-hidden="true">
+  <div class="cm-backdrop" data-details-close></div>
+  <div class="cm-card details-modal-card" role="dialog" aria-modal="true" aria-labelledby="detailsTitle">
+    <button class="cm-close" data-details-close type="button">×</button>
+    <div class="cm-title" id="detailsTitle">Dialogue Details</div>
+    <div class="details-summary" id="detailsSummary"></div>
+    <div class="details-turn-list" id="detailsTurnList"></div>
+  </div>
 </div>
 
 <div class="cm-modal" id="cmModal" aria-hidden="true">
@@ -1842,6 +2419,7 @@ let feedbackOpenId = null;
 let feedbackSortMode = "default";
 let feedbackDialogueFilter = "all";
 let feedbackTurnFilter = "all";
+let feedbackTaskCompleted = false;
 const feedbackDraft = {};
 
 let activeModel = "";
@@ -1879,7 +2457,7 @@ function modelKeyFromName(name){
 
 
 function setSelectedModelLine(key){
-  selectedModelLineEl.textContent = `Selected model: ${modelLabel(key)}`;
+  selectedModelLineEl.textContent = `Detection model: ${modelLabel(key)}`;
 }
 
 setSelectedModelLine("");
@@ -1900,16 +2478,19 @@ let openId = null;
 let currentLang = "en";
 let lastRunAt = null;
 let lastSummary = { avg: "—", ai: "—", mixed: "—", human: "—", pct: "—" };
-let distMode = "turn";
+let distMode = "dialogue";
 let distData = {
   turnHuman: 0,
   turnMachine: 0,
   dialogHuman: 0,
   dialogMachine: 0,
+  dialogMixed: 0,
   avg: "—",
   highest: "—",
   turnMachinePct: "0.0",
-  dialogMachinePct: "0.0"
+  dialogMachinePct: "0.0",
+  dialogHumanPct: "0.0",
+  dialogMixedPct: "0.0"
 };
 
 function setDistTab(mode) {
@@ -1920,8 +2501,12 @@ function setDistTab(mode) {
   renderDistribution();
 }
 
+document.querySelectorAll("#distTabs .tab").forEach((btn) => {
+  btn.addEventListener("click", () => setDistTab(btn.dataset.mode || "dialogue"));
+});
 
-function renderDistribution() {
+
+function renderDistributionLegacyUnused() {
   const hBar = document.getElementById("humanBarVal");
   const mBar = document.getElementById("machineBarVal");
   const distNoteEl = document.getElementById("distNote");
@@ -1950,6 +2535,66 @@ function renderDistribution() {
   });
 }
 
+function renderDistribution() {
+  const hBar = document.getElementById("humanBarVal");
+  const mBar = document.getElementById("machineBarVal");
+  const mixBar = document.getElementById("mixedBarVal");
+  const mixCol = document.getElementById("mixedDistColumn");
+  const humanLabel = document.getElementById("humanBarLabel");
+  const machineLabel = document.getElementById("machineBarLabel");
+  const distNoteEl = document.getElementById("distNote");
+  const distLineEl = document.getElementById("distLine");
+  const isTurn = distMode === "turn";
+  const humanVal = isTurn ? Number(distData.turnHuman || 0) : Number(distData.dialogHuman || 0);
+  const machineVal = isTurn ? Number(distData.turnMachine || 0) : Number(distData.dialogMachine || 0);
+  const mixedVal = isTurn ? 0 : Number(distData.dialogMixed || 0);
+  const maxBar = Math.max(humanVal, machineVal, mixedVal, 1);
+
+  if (hBar) {
+    hBar.textContent = humanVal;
+    hBar.style.height = `${(humanVal / maxBar) * 100}%`;
+  }
+  if (mBar) {
+    mBar.textContent = machineVal;
+    mBar.style.height = `${(machineVal / maxBar) * 100}%`;
+  }
+  if (mixBar) {
+    mixBar.textContent = mixedVal;
+    mixBar.style.height = `${(mixedVal / maxBar) * 100}%`;
+  }
+  if (mixCol) mixCol.style.display = isTurn ? "none" : "block";
+  if (humanLabel) humanLabel.textContent = isTurn ? "Human" : "Human";
+  if (machineLabel) machineLabel.textContent = isTurn ? "Machine" : "AI-heavy";
+
+  if (isTurn) {
+    const total = humanVal + machineVal;
+    const humanPct = total ? (humanVal / total) * 100 : 0;
+    if (distNoteEl) {
+      distNoteEl.textContent = total
+        ? `Machine turns are ${distData.turnMachinePct}% of all turns.`
+        : "No turn distribution available yet.";
+    }
+    if (distLineEl) {
+      distLineEl.textContent = total
+        ? `Human turns: ${humanVal} (${humanPct.toFixed(1)}%) | Machine turns: ${machineVal} (${distData.turnMachinePct}%)`
+        : "No turn distribution available yet.";
+    }
+    return;
+  }
+
+  const total = humanVal + machineVal + mixedVal;
+  if (distNoteEl) {
+    distNoteEl.textContent = total
+      ? `AI-heavy dialogues are ${distData.dialogMachinePct}% of all dialogues.`
+      : "No dialogue distribution available yet.";
+  }
+  if (distLineEl) {
+    distLineEl.textContent = total
+      ? `Human dialogues: ${humanVal} (${distData.dialogHumanPct}%) | Mixed dialogues: ${mixedVal} (${distData.dialogMixedPct}%) | AI-heavy dialogues: ${machineVal} (${distData.dialogMachinePct}%)`
+      : "No dialogue distribution available yet.";
+  }
+}
+
 function formatRunTime(dateObj) {
   if (!dateObj) return "—";
   try {
@@ -1973,7 +2618,7 @@ function updateSummaryMeta() {
   if (currentLang === "ar") {
     el.textContent = `النموذج: ${modelTxt} • الوقت: ${timeTxt} • الحقيقة الأرضية: نعم`;
   } else {
-    el.textContent = `Model: ${modelTxt} • Time: ${timeTxt} • GT: Yes`;
+    el.textContent = `Model: ${modelTxt} • Time: ${timeTxt} • GT: inferred from sender role and conversation type`;
   }
 }
 
@@ -1982,9 +2627,9 @@ function updateSummaryMeta() {
     en: {
       back: "← Back to Project",
       title: "Conversation Analysis",
-      selected_model: "Selected model: —",
+      selected_model: "Detection model: —",
       summary_title: "Analysis Summary",
-      summary_sub: "Model: — • Time: — • GT: Yes",
+      summary_sub: "Model: — • Time: — • GT: inferred from sender role and conversation type",
       download: "Download ▾",
       advanced: "Advanced",
       submit: "Submit Results",
@@ -1997,7 +2642,7 @@ function updateSummaryMeta() {
       eval_metrics: "Evaluation Metrics",
       confusion_matrix: "Confusion Matrix",
       accuracy: "Accuracy",
-      f1_macro: "F1 Macro",
+      f1_macro: "Macro F1",
       precision_macro: "Precision Macro",
       recall_macro: "Recall Macro",
       distribution: "Distribution",
@@ -2010,6 +2655,8 @@ function updateSummaryMeta() {
       mixed: "Mixed",
       human: "Human",
       sort_ai_desc: "Sort: AI% (desc)",
+      sort_turns_desc: "Sort: #Turns (desc)",
+      sort_id_asc: "Sort: ID (asc)",
       sort_human_desc: "Sort: Human% (desc)",
       th_dialogue_id: "Dialogue ID",
       th_turns: "#Turns",
@@ -2056,10 +2703,10 @@ function updateSummaryMeta() {
       machine_pct: "نسبة الآلة",
       eval_metrics: "مقاييس التقييم",
       confusion_matrix: "مصفوفة الالتباس",
-      accuracy: "الدقة",
-      f1_macro: "F1 متوسط",
-      precision_macro: "الإحكام المتوسط",
-      recall_macro: "الاسترجاع المتوسط",
+      accuracy: "دقة على مستوى التيرن",
+      f1_macro: "F1 متوسط على مستوى التيرن",
+      precision_macro: "الإحكام المتوسط على مستوى التيرن",
+      recall_macro: "الاسترجاع المتوسط على مستوى التيرن",
       distribution: "التوزيع",
       turn_level: "مستوى الدور",
       dialogue_level: "مستوى الحوار",
@@ -2070,6 +2717,8 @@ function updateSummaryMeta() {
       mixed: "مختلط",
       human: "بشري",
       sort_ai_desc: "ترتيب: %الآلة (تنازلي)",
+      sort_turns_desc: "ترتيب: عدد الأدوار (تنازلي)",
+      sort_id_asc: "ترتيب: المعرّف (تصاعدي)",
       sort_human_desc: "ترتيب: %البشر (تنازلي)",
       th_dialogue_id: "معرف الحوار",
       th_turns: "#الأدوار",
@@ -2132,7 +2781,9 @@ function updateSummaryMeta() {
 
     const sortSelect = document.getElementById("sortSelect");
     sortSelect.options[0].text = i18n[lang].sort_ai_desc;
-    sortSelect.options[1].text = i18n[lang].sort_human_desc;
+    sortSelect.options[1].text = i18n[lang].sort_turns_desc;
+    sortSelect.options[2].text = i18n[lang].sort_id_asc;
+    sortSelect.options[3].text = i18n[lang].sort_human_desc;
 
     langToggle.textContent = lang === "ar" ? "AR" : "EN";
 
@@ -2194,6 +2845,8 @@ function showToast(message) {
 
     list.sort((a,b) => {
       if (sort === "human_desc") return b.humanPct - a.humanPct;
+      if (sort === "turns_desc") return b.total - a.total;
+      if (sort === "id_asc") return String(a.id).localeCompare(String(b.id));
       return b.machinePct - a.machinePct;
     });
 
@@ -2203,7 +2856,7 @@ function showToast(message) {
       const pillClass = d.label === "ai" ? "ai" : d.label === "human" ? "human" : "mix";
       const pillText = d.label === "ai" ? i18n[currentLang].ai_heavy :
                        d.label === "human" ? i18n[currentLang].human : i18n[currentLang].mixed;
-      const actionText = openId === idStr ? i18n[currentLang].close : i18n[currentLang].view;
+      const actionText = i18n[currentLang].view;
 
       const details = openId === idStr ? `
         <tr>
@@ -2216,7 +2869,7 @@ function showToast(message) {
 
               
               <div class="details-row">
-                <strong>#</strong><strong>${i18n[currentLang].sender}</strong><strong>${i18n[currentLang].text}</strong><strong>${i18n[currentLang].prev}</strong><strong>${i18n[currentLang].prediction}</strong><strong>${i18n[currentLang].gt}</strong><strong>${i18n[currentLang].confidence}</strong>
+                <strong>#</strong><strong>${i18n[currentLang].sender}</strong><strong>${i18n[currentLang].text}</strong><strong>${i18n[currentLang].prev}</strong><strong>${i18n[currentLang].prediction}</strong><strong>${i18n[currentLang].gt}</strong><strong>${i18n[currentLang].confidence}</strong><strong>Uncertainty Margin</strong>
               </div>
 
               <div class="details-scroll">
@@ -2241,6 +2894,7 @@ if (role.includes("ai") || role.includes("agent") || role.includes("assistant"))
                   const predLabel = t.prediction === "AI" ? "Machine" : (t.prediction || "—");
                   const gtLabel = t.gt === "AI" ? "Machine" : (t.gt || "—");
                   const conf = (t.confidence === 0 || t.confidence) ? (t.confidence * 100).toFixed(1) + "%" : "—";
+                  const margin = (t.uncertainty === 0 || t.uncertainty) ? (t.uncertainty * 100).toFixed(1) + "%" : "—";
                   return `
                     <div class="details-row">
                       <div>${i + 1}</div>
@@ -2250,6 +2904,7 @@ if (role.includes("ai") || role.includes("agent") || role.includes("assistant"))
                       <div><span class="chip">${esc(predLabel)}</span></div>
                       <div><span class="chip">${esc(gtLabel)}</span></div>
                       <div><span class="chip">${esc(conf)}</span></div>
+                      <div><span class="chip">${esc(margin)}</span></div>
                     </div>
                   `;
                 }).join("")}
@@ -2266,12 +2921,80 @@ if (role.includes("ai") || role.includes("agent") || role.includes("assistant"))
           <td><span class="pill ${pillClass}">${pillText}</span></td>
           <td><button class="view-btn" data-id="${esc(idStr)}">${actionText}</button></td>
         </tr>
-        ${details}
       `;
     }).join("");
   }
 
   const dialogueBodyEl = document.getElementById("dialogueBody");
+function closeDetailsModal(){
+  const modal = document.getElementById("detailsModal");
+  modal?.classList.remove("active");
+  modal?.setAttribute("aria-hidden", "true");
+}
+
+document.querySelectorAll("[data-details-close]").forEach((el) => {
+  el.addEventListener("click", closeDetailsModal);
+});
+
+function formatMaybePct(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "Unavailable";
+  return `${(n <= 1 ? n * 100 : n).toFixed(1)}%`;
+}
+
+function openGeneratedDetailsModal(item) {
+  if (!item) return;
+  const title = document.getElementById("detailsTitle");
+  const summary = document.getElementById("detailsSummary");
+  const list = document.getElementById("detailsTurnList");
+  if (title) title.textContent = `Dialogue Details: ${item.id}`;
+  if (summary) {
+    summary.innerHTML = `
+      <span class="chip">Total turns: ${esc(item.total)}</span>
+      <span class="chip">Human: ${esc(item.human)}</span>
+      <span class="chip">Machine: ${esc(item.machine)}</span>
+      <span class="chip">Machine %: ${esc(item.machinePct.toFixed(1))}%</span>
+    `;
+  }
+  if (list) {
+    const turns = Array.isArray(item.turns) ? item.turns : [];
+    list.innerHTML = turns.length ? turns.map((t, i) => {
+      const turnIdx = Number(t.turn_index || (i + 1));
+      const prev = (t.prev_text || t.prev || "").trim();
+      const role = String(t.sender_role || t.sender_type || t.role || t.sender || "").toLowerCase();
+      const humanName = t.sender_name || t.user_name || t.human_name || t.name || "";
+      let sender = "-";
+      if (role.includes("ai") || role.includes("agent") || role.includes("assistant")) sender = "Agent";
+      else if (role.includes("human") || role.includes("user")) sender = humanName || "Human";
+      else if ((t.prediction || "").toUpperCase() === "AI") sender = "Agent";
+      else sender = humanName || "Human";
+      const predLabel = t.prediction === "AI" ? "Machine" : (t.prediction || "-");
+      const gtLabel = t.gt === "AI" ? "Machine" : (t.gt || "-");
+      const conf = formatMaybePct(t.confidence);
+      const margin = formatMaybePct(t.uncertainty);
+      return `
+        <div class="details-turn-card">
+          <div class="details-turn-head">
+            <div class="details-turn-index">Turn ${esc(turnIdx)}</div>
+            <div class="details-turn-meta">
+              <span class="chip">Sender: ${esc(sender)}</span>
+              <span class="chip">${esc(predLabel)}</span>
+              <span class="chip">GT: ${esc(gtLabel)}</span>
+              <span class="chip">Confidence: ${esc(conf)}</span>
+              <span class="chip">Uncertainty Margin: ${esc(margin)}</span>
+            </div>
+          </div>
+          <div class="details-turn-text">${esc(t.text || "")}</div>
+          ${prev ? `<div class="details-turn-prev"><strong>Previous:</strong> ${esc(prev)}</div>` : ""}
+        </div>
+      `;
+    }).join("") : `<div class="details-empty">No turns found.</div>`;
+  }
+  const modal = document.getElementById("detailsModal");
+  modal?.classList.add("active");
+  modal?.setAttribute("aria-hidden", "false");
+}
+
 dialogueBodyEl?.addEventListener("click", (e) => {
   const prevBtn = e.target.closest(".prev-btn");
   if (prevBtn) {
@@ -2296,8 +3019,8 @@ dialogueBodyEl?.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-id]");
     if (!btn) return;
     const id = btn.getAttribute("data-id");
-    openId = openId === id ? null : id;
-    renderTable();
+    const item = dialogues.find(d => String(d.id) === String(id));
+    openGeneratedDetailsModal(item);
   });
 
   document.getElementById("searchInput").addEventListener("input", renderTable);
@@ -2316,10 +3039,12 @@ cmModal?.addEventListener("click", (e) => { if (e.target.matches("[data-close]")
   function setCmValue(id, val){
     document.getElementById(id).textContent = (val === 0 || val) ? val : "—";
   }
-  async function loadSummary(modelKey) {
+  async function loadSummary(modelKey, runId = "") {
   if (!projectId || !modelKey) return;
 
-  const res = await fetch(`/api/analysis_project/${projectId}?model=${encodeURIComponent(modelKey)}`);
+  const params = new URLSearchParams({ model: modelKey });
+  if (runId) params.set("run_id", runId);
+  const res = await fetch(`/api/analysis_project/${projectId}?${params.toString()}`);
   const data = await res.json();
 
   const cm = data.confusion_matrix || {};
@@ -2401,9 +3126,12 @@ cmModal?.addEventListener("click", (e) => { if (e.target.matches("[data-close]")
   const humanPct = totalTurns ? (humanTurns/totalTurns*100) : 0;
   const machinePct = totalTurns ? (machineTurns/totalTurns*100) : 0;
   const avgTurns = totalDialogs ? (totalTurns/totalDialogs) : 0;
+  const reviewTargetCount = totalTurns ? Math.max(1, Math.min(50, Math.ceil(totalTurns * 0.2))) : 0;
 
   const highestAI = dialogues.length ? Math.max(...dialogues.map(d => d.machinePct)) : 0;
   const dialogueMachinePct = totalDialogs ? (aiHeavy / totalDialogs * 100) : 0;
+  const dialogueHumanPct = totalDialogs ? (humanHeavy / totalDialogs * 100) : 0;
+  const dialogueMixedPct = totalDialogs ? (mixed / totalDialogs * 100) : 0;
  
 
   document.getElementById("totalDialogs").textContent = totalDialogs || "—";
@@ -2412,6 +3140,25 @@ cmModal?.addEventListener("click", (e) => { if (e.target.matches("[data-close]")
   document.getElementById("machineTurns").textContent = (machineTurns === 0 || machineTurns) ? machineTurns : "—";
   document.getElementById("humanPct").textContent = humanPct.toFixed(1) + "%";
   document.getElementById("machinePct").textContent = machinePct.toFixed(1) + "%";
+  const activeLine = document.getElementById("activeLearningLine");
+  if (activeLine) {
+    activeLine.textContent = `Active Learning: ${reviewTargetCount} turn-level review targets ${isModelAlreadySelected ? "are frozen" : "will be frozen after Submit Results"}. Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.`;
+  }
+  const margins = dialogues.flatMap(d => (d.turns || []).map(t => Number(t.uncertainty ?? t.margin)).filter(Number.isFinite));
+  const lowestMargin = margins.length ? Math.min(...margins) : null;
+  const highestTask = dialogues.length
+    ? [...dialogues].sort((a, b) => Number(b.machinePct || 0) - Number(a.machinePct || 0))[0]
+    : null;
+  const reviewTotalEl = document.getElementById("generatedReviewTotal");
+  const reviewPendingEl = document.getElementById("generatedReviewPending");
+  const lowestMarginEl = document.getElementById("generatedLowestMargin");
+  const highestAiTaskEl = document.getElementById("generatedHighestAiTask");
+  const avgTurnsDiagEl = document.getElementById("generatedAvgTurnsDiag");
+  if (reviewTotalEl) reviewTotalEl.textContent = String(reviewTargetCount);
+  if (reviewPendingEl) reviewPendingEl.textContent = isModelAlreadySelected ? "Frozen" : String(reviewTargetCount);
+  if (lowestMarginEl) lowestMarginEl.textContent = lowestMargin === null ? "—" : `${(lowestMargin <= 1 ? lowestMargin * 100 : lowestMargin).toFixed(1)}%`;
+  if (highestAiTaskEl) highestAiTaskEl.textContent = highestTask ? `${highestTask.id || "Task"} (${Number(highestTask.machinePct || 0).toFixed(1)}%)` : "—";
+  if (avgTurnsDiagEl) avgTurnsDiagEl.textContent = avgTurns.toFixed(2);
 
   lastSummary = {
   avg: avgTurns.toFixed(2),
@@ -2427,10 +3174,13 @@ distData = {
   turnMachine: machineTurns,
   dialogHuman: humanHeavy,
   dialogMachine: aiHeavy,
+  dialogMixed: mixed,
   avg: avgTurns.toFixed(2),
   highest: `${highestAI.toFixed(1)}%`,
   turnMachinePct: machinePct.toFixed(1),
-  dialogMachinePct: dialogueMachinePct.toFixed(1)
+  dialogMachinePct: dialogueMachinePct.toFixed(1),
+  dialogHumanPct: dialogueHumanPct.toFixed(1),
+  dialogMixedPct: dialogueMixedPct.toFixed(1)
 };
 
 document.getElementById("miniLine").textContent =
@@ -2497,7 +3247,7 @@ function isReviewTargetTurn(turn) {
 }
 
 function isReviewedTurn(turn) {
-  return Boolean(getTurnSharedFeedback(turn) || turn?.turn_locked);
+  return Boolean(getTurnSharedFeedback(turn) || turn?.turn_locked || turn?.target_status === "reviewed" || turn?.reviewed_by);
 }
 
 function getPendingTargetCount(item) {
@@ -2660,7 +3410,7 @@ function sortTurnsForView(turns) {
 function updateTurnSortBtnLabel() {
   if (!fbTurnSortBtn) return;
   if (turnSortMode === "least_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Least Uncertain";
-  else if (turnSortMode === "most_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Most Uncertain";
+  else if (turnSortMode === "most_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Lowest Uncertainty Margin";
   else fbTurnSortBtn.textContent = "Turn Sort: Default";
 }
 
@@ -2709,9 +3459,10 @@ const isActiveTarget = t.active_learning_selected !== false;
 const conf = (t.confidence === 0 || t.confidence) ? `${Number(t.confidence).toFixed(2)}%` : "—";
 
 
-  const key = `${id}::${turnIdx}`;
+const key = `${id}::${turnIdx}`;
 const sharedFb = getTurnSharedFeedback(t);
 const mine = t.my_feedback || {};
+const ownedByMe = Boolean(sharedFb) && String(sharedFb.examiner_uid || "") === String(currentExaminerUid || "");
 
 if (!feedbackDraft[key]) {
   feedbackDraft[key] = {
@@ -2721,7 +3472,7 @@ if (!feedbackDraft[key]) {
   };
 }
 const draft = feedbackDraft[key];
-const canEdit = isActiveTarget && !sharedFb;
+const canEdit = isActiveTarget && (!sharedFb || (ownedByMe && !feedbackTaskCompleted));
 const predictedLabel = ((pred || "").toUpperCase() === "AI") ? "AI" : "Human";
 
 const agreeBar = `
@@ -2765,7 +3516,7 @@ const lockText = sharedFb?.agreed_with_model
   : `Feedback already submitted by ${esc(sharedFb?.examiner_name || "Examiner")}.`;
 
 const feedbackCell = canEdit
-  ? `${agreeBar}${draft.agree ? agreeConfirm : manualEditor}`
+  ? `${ownedByMe ? '<div class="fb-turn-lock">Reviewed by you. You can edit this feedback until the task is completed.</div>' : ''}${agreeBar}${draft.agree ? agreeConfirm : manualEditor}`
   : (isActiveTarget ? `<div class="fb-turn-lock">${lockText}</div>` : `<div class="fb-turn-lock">Context only. No feedback required for this turn.</div>`);
 
 const submittedBox = renderTurnSubmittedBox(t);
@@ -2782,7 +3533,7 @@ return `
   <div>
     ${isActiveTarget ? `<span class="fb-badge pending" style="display:inline-block;margin-bottom:6px;">Review target</span>` : `<span class="fb-badge context" style="display:inline-block;margin-bottom:6px;">Context</span>`}
     <div>${esc(t.text || "")}</div>
-    <div style="margin-top:6px;color:#6b7280;font-size:12px;">Uncertainty: ${esc(uncertainty)}</div>
+    <div style="margin-top:6px;color:#6b7280;font-size:12px;">Uncertainty Margin: ${esc(uncertainty)}</div>
   </div>
   <div><span class="fb-pred ${predCls}">${pred}</span></div>
   <div>${esc(conf)}</div>
@@ -2840,7 +3591,7 @@ const myBox = isLocked ? `
       <span style="font-size:12px;font-weight:700;color:#5b657a;">Turn Sort:</span>
       <select class="select fb-turn-sort-select" data-turn-sort="${esc(id)}">
         <option value="default" ${turnSortMode === "default" ? "selected" : ""}>Default</option>
-        <option value="most_uncertain" ${turnSortMode === "most_uncertain" ? "selected" : ""}>Most Uncertain</option>
+        <option value="most_uncertain" ${turnSortMode === "most_uncertain" ? "selected" : ""}>Lowest Uncertainty Margin</option>
         <option value="least_uncertain" ${turnSortMode === "least_uncertain" ? "selected" : ""}>Least Uncertain</option>
       </select>
     </div>
@@ -2916,12 +3667,13 @@ const reviewed = (data.progress && data.progress.reviewed) || 0;
 
     const total = (data.progress && data.progress.total) || 0;
     const unit = (data.progress && data.progress.unit) || "conversations";
+    feedbackTaskCompleted = Boolean(data.feedback_locked || data.task_status === "completed" || (total > 0 && Number(reviewed) >= Number(total)));
     renderFeedbackProgress(reviewed, total, unit);
 
     // نعرض اسم الموديل المختار للفيدباك
     if (selectedModelLineEl) {
       selectedModelLineEl.style.display = "block";
-      selectedModelLineEl.textContent = `Selected model: ${data.selected_model_name || "—"}`;
+      selectedModelLineEl.textContent = `Detection model: ${data.selected_model_name || "—"}`;
     }
 
     renderFeedbackCards();
@@ -3125,7 +3877,16 @@ themeToggle.addEventListener("click", () => {
   if (feedbackModeRoot) feedbackModeRoot.style.display = "block";
 
   // ✅ نخفي واجهة التحليل كلها في feedback mode
-  const toHide = [".stats-grid", "#miniLine", '[data-i18n="eval_metrics"]', "#cmOpen", ".metrics-row", ".bottom-grid"];
+  const toHide = [
+    ".stats-grid",
+    "#miniLine",
+    ".eval-row",
+    "#evalNote",
+    "#activeLearningLine",
+    "#generatedActiveLearningPanel",
+    "#generatedDiagnosticsPanel",
+    ".bottom-grid"
+  ];
   toHide.forEach((sel) => {
     const el = document.querySelector(sel);
     if (el) el.style.display = "none";
@@ -3144,13 +3905,26 @@ let isModelAlreadySelected = false;
 
 function setSubmitModelLocked(locked, selectedName = "") {
   isModelAlreadySelected = locked;
-  if (!saveModelBtn) return;
-
-  saveModelBtn.classList.toggle("is-locked", locked);
-  saveModelBtn.setAttribute("aria-disabled", locked ? "true" : "false");
-  saveModelBtn.title = locked
-    ? `Model already selected${selectedName ? `: ${selectedName}` : ""}`
-    : "";
+  if (saveModelBtn) {
+    saveModelBtn.classList.toggle("is-locked", locked);
+    saveModelBtn.setAttribute("aria-disabled", locked ? "true" : "false");
+    saveModelBtn.disabled = locked;
+    saveModelBtn.textContent = locked
+      ? `Submitted${selectedName ? `: ${selectedName}` : ""}`
+      : "Submit Results";
+    saveModelBtn.title = locked
+      ? `Model already selected${selectedName ? `: ${selectedName}` : ""}`
+      : "";
+  }
+  if (modelSelectEl) modelSelectEl.disabled = locked;
+  if (stageModelSelect) stageModelSelect.disabled = locked;
+  document.getElementById("generatedFinalizedBanner")?.classList.toggle("show", locked);
+  if (locked && document.getElementById("generatedFinalizedBanner")) {
+    document.getElementById("generatedFinalizedBanner").innerHTML =
+      `<strong>Finalized Evaluation</strong><br>Submitted${selectedName ? ` with <b>${selectedName}</b>` : ""}. Review targets are frozen and reruns are preview-only.`;
+  }
+  if (runAnalysisBtn) runAnalysisBtn.disabled = false;
+  if (stageRunBtn) stageRunBtn.disabled = false;
 }
 if (isFeedbackMode) {
   if (generatedStage) generatedStage.style.display = "none";
@@ -3160,7 +3934,7 @@ if (isFeedbackMode) {
   setGeneratedStage("ready");
   setSubmitModelLocked(false); // مؤقتًا لين تجي حالة API
   loadTaskSelectionStatus();
-  setDistTab("turn");
+  setDistTab("dialogue");
 }
 
 
@@ -3171,7 +3945,7 @@ if (!isFeedbackMode) {
     document.addEventListener("pointerdown", onDistTabPress, true);
   }
   window.setDistTab = setDistTab;
-  setDistTab("turn");
+  setDistTab("dialogue");
 }
 
 
@@ -3218,7 +3992,7 @@ function buildTurnExportRows() {
 async function downloadDialoguesCsv() {
   const ok = await ensureDialoguesForExport();
   if (!ok) {
-    alert("Run Analysis first (or select model) to export.");
+    alert("Run Detection first (or select model) to export.");
     return;
   }
 
@@ -3252,7 +4026,7 @@ const rows = turnRows.map(r => [
 async function downloadDialoguesJson() {
   const ok = await ensureDialoguesForExport();
   if (!ok) {
-    alert("Run Analysis first (or select model) to export.");
+    alert("Run Detection first (or select model) to export.");
     return;
   }
 
@@ -3339,7 +4113,7 @@ async function loadTaskSelectionStatus() {
       setTaskSelectionLine(`Task model selection: Saved (${rawName || modelLabel(keyFromRaw)})`, true);
       setSubmitModelLocked(true, rawName || modelLabel(keyFromRaw));
     } else {
-      setTaskSelectionLine("Task model selection: Not saved (click Submit Model)");
+      setTaskSelectionLine("Task model selection: Not saved (click Submit Results)");
       setSubmitModelLocked(false);
       setSelectedModelLine(modelSelectEl.value || "");
     }
@@ -3396,8 +4170,10 @@ async function saveTaskModelSelection() {
   } catch {
     setTaskSelectionLine("Task model selection: Save failed");
   } finally {
-    saveModelBtn.disabled = false;
-    saveModelBtn.textContent = oldText;
+    if (!isModelAlreadySelected) {
+      saveModelBtn.disabled = false;
+      saveModelBtn.textContent = oldText;
+    }
   }
 }
 
@@ -3414,6 +4190,10 @@ async function handleRunAnalysis() {
     alert("Please select a model first.");
     return;
   }
+  if (picked === "falcon" || picked === "sota_model") {
+    alert("SOTA Model is coming soon. Please select Logistic Regression or RNN.");
+    return;
+  }
 
   const runUrl =
     `/api/run_analysis_project/${encodeURIComponent(projectId)}` +
@@ -3425,7 +4205,7 @@ async function handleRunAnalysis() {
   lastRunAt = new Date();
   setSelectedModelLine(activeModel);
   updateSummaryMeta();
-  setTaskSelectionLine("Running analysis...", true);
+  setTaskSelectionLine("Running detection...", true);
   setGeneratedStage("processing");
   setGeneratedProgress(8, "Starting analysis...");
   let stageProgress = 8;
@@ -3436,7 +4216,7 @@ async function handleRunAnalysis() {
 
   const oldText = runAnalysisBtn.textContent;
   runAnalysisBtn.disabled = true;
-  runAnalysisBtn.textContent = "Running Analysis...";
+  runAnalysisBtn.textContent = "Running Detection...";
 
   try {
     let runRes = await fetch(runUrl, { method: "POST" });
@@ -3460,10 +4240,10 @@ async function handleRunAnalysis() {
       updateSummaryMeta();
     }
 
-    await loadSummary(activeModel);
+    await loadSummary(activeModel, runData.run_id || "");
     setGeneratedProgress(100, "Analysis complete.");
     setGeneratedStage("results");
-    setTaskSelectionLine("Analysis completed. If this is a task, click Submit Model to save.", true);
+    setTaskSelectionLine(isModelAlreadySelected ? "Preview-only rerun completed. Submitted model remains locked." : "Detection completed. Click Submit Results to finalize.", true);
   } catch (e) {
     alert("Run request failed. Check backend endpoint.");
     setTaskSelectionLine("Run request failed");
@@ -3494,8 +4274,14 @@ async function submitTurnFeedback(conversationId, turnIndex) {
   const item = feedbackItems.find(x => String(x.conversation_id) === String(conversationId));
   const turn = (item?.turns || []).find(tt => Number(tt.turn_index) === Number(turnIndex));
   const sharedFb = turn ? getTurnSharedFeedback(turn) : null;
+  const ownedByMe = Boolean(sharedFb) && String(sharedFb.examiner_uid || "") === String(currentExaminerUid || "");
 
-  if (sharedFb) {
+  if (feedbackTaskCompleted) {
+    alert("Feedback is locked because this labeling task is completed.");
+    return;
+  }
+
+  if (sharedFb && !ownedByMe) {
     alert("تم إرسال فيدباك لهذا التيرن مسبقًا.");
     return;
   }

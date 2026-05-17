@@ -669,6 +669,80 @@ def _mark_frozen_active_learning_target_reviewed(project_id, model_version, samp
     return True
 
 
+def _labeling_task_completed(task_data):
+    return _safe_str((task_data or {}).get("status")).strip().lower() == "completed"
+
+
+def _feedback_owner_uid(feedback_node):
+    if not isinstance(feedback_node, dict) or not feedback_node:
+        return ""
+
+    direct_uid = _safe_str(
+        feedback_node.get("examiner_uid")
+        or feedback_node.get("reviewed_by")
+        or feedback_node.get("updated_by")
+    )
+    if direct_uid:
+        return direct_uid
+
+    for key, value in feedback_node.items():
+        if isinstance(value, dict):
+            return _safe_str(value.get("examiner_uid") or value.get("reviewed_by") or key)
+    return ""
+
+
+def _feedback_record_for_uid(feedback_node, uid):
+    if not isinstance(feedback_node, dict) or not uid:
+        return None
+    if isinstance(feedback_node.get(uid), dict):
+        return feedback_node.get(uid)
+    owner_uid = _feedback_owner_uid(feedback_node)
+    if owner_uid == uid and _safe_str(feedback_node.get("examiner_uid") or feedback_node.get("reviewed_by")):
+        return feedback_node
+    return None
+
+
+def _feedback_history_entry(existing_feedback, edited_at):
+    existing = existing_feedback if isinstance(existing_feedback, dict) else {}
+    return {
+        "edited_at": edited_at,
+        "previous_label": existing.get("label"),
+        "previous_explanation": existing.get("explanation") or existing.get("feedback_explanation"),
+        "previous_agreed_with_model": bool(existing.get("agreed_with_model", False))
+    }
+
+
+def _prepare_feedback_payload(existing_feedback, base_payload, uid, examiner_name, now_iso):
+    existing = existing_feedback if isinstance(existing_feedback, dict) else {}
+    is_edit = bool(existing)
+    payload = dict(base_payload)
+
+    payload["examiner_uid"] = existing.get("examiner_uid") or uid
+    payload["examiner_name"] = existing.get("examiner_name") or examiner_name
+    payload["reviewed_by"] = existing.get("reviewed_by") or existing.get("examiner_uid") or uid
+    payload["reviewed_by_name"] = existing.get("reviewed_by_name") or existing.get("examiner_name") or examiner_name
+    payload["reviewed_at"] = existing.get("reviewed_at") or existing.get("submitted_at") or now_iso
+    payload["submitted_at"] = existing.get("submitted_at") or now_iso
+
+    history = existing.get("previous_feedback_history") if isinstance(existing.get("previous_feedback_history"), list) else []
+    if is_edit:
+        history = history + [_feedback_history_entry(existing, now_iso)]
+        payload["updated_at"] = now_iso
+        payload["updated_by"] = uid
+        payload["edit_count"] = int(existing.get("edit_count") or 0) + 1
+    else:
+        payload["updated_at"] = None
+        payload["updated_by"] = None
+        payload["edit_count"] = int(existing.get("edit_count") or 0)
+
+    payload["previous_feedback_history"] = history
+    return payload, is_edit
+
+
+def _feedback_write_message(is_edit):
+    return "Feedback updated successfully" if is_edit else "Feedback submitted successfully"
+
+
 def _update_news_labeling_status_from_frozen_targets(project_id, model_version):
     """
     Updates news labeling tasks from the shared frozen target progress.
@@ -966,11 +1040,14 @@ def _generated_conversation_node_ref(project_id, model_key, conversation_id):
 def _apply_frozen_active_learning_turn_selection(items, selection, project_type):
     targets = _frozen_target_values(selection)
     target_pairs = set()
+    target_lookup = {}
     for target in targets:
         if project_type == "uploaded_conversation":
-            target_pairs.add((_safe_str(target.get("dialogue_id")), int(target.get("turn_index") or 0)))
+            pair = (_safe_str(target.get("dialogue_id")), int(target.get("turn_index") or 0))
         else:
-            target_pairs.add((_safe_str(target.get("conversation_id")), int(target.get("turn_index") or 0)))
+            pair = (_safe_str(target.get("conversation_id")), int(target.get("turn_index") or 0))
+        target_pairs.add(pair)
+        target_lookup[pair] = target
 
     focused_items = []
     reviewed_turns = 0
@@ -981,10 +1058,16 @@ def _apply_frozen_active_learning_turn_selection(items, selection, project_type)
         for turn in item.get("turns") or []:
             key = (conversation_id, int(turn.get("turn_index", 0) or 0))
             is_selected = key in target_pairs
+            target = target_lookup.get(key) or {}
+            frozen_reviewed = target.get("target_status") == "reviewed" or int(target.get("feedback_count") or 0) > 0
             turn["active_learning_selected"] = is_selected
             if is_selected:
+                turn["target_status"] = "reviewed" if frozen_reviewed or turn.get("turn_locked") else "pending"
+                turn["reviewed_by"] = target.get("reviewed_by")
+                turn["reviewed_at"] = target.get("reviewed_at")
+            if is_selected:
                 selected_count += 1
-                if turn.get("turn_locked"):
+                if turn.get("turn_locked") or frozen_reviewed:
                     reviewed_count += 1
 
         if selected_count > 0:
@@ -4200,7 +4283,7 @@ def api_run_model(task_id):
         return jsonify({"error": "Unauthorized"}), 401
 
     uid = session.get("uid")
-    task_ref, task_data, guard_error = _model_selection_task_guard(task_id, reject_completed=True)
+    task_ref, task_data, guard_error = _model_selection_task_guard(task_id, reject_completed=False)
     if guard_error:
         return guard_error
     
@@ -4803,16 +4886,27 @@ def api_get_task_articles(task_id):
                     detail = detail_map.get(article_id, {})
                     source = dataset_rows.get(article_id, {}) if isinstance(dataset_rows, dict) else {}
                     chunk_index = int(target.get("chunk_index") or 0)
-                    chunk = _news_chunk_by_index(detail, chunk_index) or target
+                    selected_source_chunk = _news_chunk_by_index(detail, chunk_index)
+                    chunk = selected_source_chunk or target
                     chunk_feedbacks = _news_chunk_feedbacks(source, chunk_index)
                     feedback = next(iter(chunk_feedbacks.values())) if isinstance(chunk_feedbacks, dict) and chunk_feedbacks else None
+                    target_reviewed = (
+                        _safe_str(target.get("target_status")) == "reviewed"
+                        or int(target.get("feedback_count") or 0) > 0
+                        or feedback is not None
+                    )
+                    reviewed_by = _safe_str(
+                        (feedback or {}).get("reviewed_by")
+                        or (feedback or {}).get("examiner_uid")
+                        or target.get("reviewed_by")
+                    )
                     chunks = []
-                    for pos, source_chunk in enumerate(detail.get("chunks") or [], start=1):
-                        if not isinstance(source_chunk, dict):
+                    for pos, source_chunk_item in enumerate(detail.get("chunks") or [], start=1):
+                        if not isinstance(source_chunk_item, dict):
                             continue
-                        current_index = int(source_chunk.get("chunk_index") or pos)
+                        current_index = int(source_chunk_item.get("chunk_index") or pos)
                         chunks.append({
-                            **source_chunk,
+                            **source_chunk_item,
                             "active_learning_selected": current_index == chunk_index,
                             "has_feedback": bool(_news_first_chunk_feedback(source, current_index))
                         })
@@ -4834,12 +4928,19 @@ def api_get_task_articles(task_id):
                             "selection_rank": target.get("selection_rank"),
                             "sample_id": target.get("sample_id")
                         },
+                        "selected_chunk_uncertainty": selected_source_chunk.get("uncertainty") if isinstance(selected_source_chunk, dict) else None,
                         "target_unit": "chunk",
                         "chunk_index": chunk_index,
                         "sample_id": target.get("sample_id"),
                         "active_learning_selected": True,
-                        "has_feedback": feedback is not None,
-                        "feedback": feedback
+                        "target_status": "reviewed" if target_reviewed else "pending",
+                        "reviewed_by": reviewed_by or None,
+                        "reviewed_by_name": (feedback or {}).get("reviewed_by_name") or (feedback or {}).get("examiner_name") or target.get("reviewed_by_name"),
+                        "has_feedback": target_reviewed,
+                        "feedback": feedback,
+                        "my_feedback": feedback if reviewed_by == uid else None,
+                        "can_edit_feedback": bool(feedback and reviewed_by == uid and not _labeling_task_completed(task_data)),
+                        "feedback_locked": _labeling_task_completed(task_data)
                     })
                 articles_with_feedback = chunk_rows
             else:
@@ -4910,8 +5011,31 @@ def api_submit_article_feedback(article_id):
             feedback_ref = rtdb.reference(
                 f"datasets/uploaded_news/{dataset_id}/{article_id}/feedback"
             )
-        if feedback_ref.get():
-            return jsonify({"error": "Feedback already exists for this target"}), 400
+
+        existing_feedbacks = feedback_ref.get() or {}
+        if not isinstance(existing_feedbacks, dict):
+            existing_feedbacks = {}
+
+        try:
+            project_id, project = _project_by_dataset_id(dataset_id)
+        except Exception:
+            project_id, project = None, None
+
+        task_completed = False
+        if project_id:
+            for doc in db.collection("tasks").where("project_ID", "==", project_id).where("task_type", "==", "labeling").stream():
+                tdata = doc.to_dict() or {}
+                conversation_type = _safe_str(tdata.get("conversation_type")).strip().lower()
+                if not conversation_type and _labeling_task_completed(tdata):
+                    task_completed = True
+                    break
+        if task_completed:
+            return jsonify({"error": "Feedback is locked because this labeling task is completed"}), 423
+
+        existing_owner_uid = _feedback_owner_uid(existing_feedbacks)
+        existing_user_feedback = _feedback_record_for_uid(existing_feedbacks, uid)
+        if existing_owner_uid and existing_owner_uid != uid:
+            return jsonify({"error": "Feedback already exists for this target and can only be edited by the original reviewer"}), 409
 
         user_doc = db.collection("users").document(uid).get()
         first_name = user_doc.to_dict().get("profile", {}).get("firstName", "")
@@ -4919,7 +5043,6 @@ def api_submit_article_feedback(article_id):
         examiner_name = f"{first_name} {last_name}".strip() or "Examiner"
 
         try:
-            project_id, project = _project_by_dataset_id(dataset_id)
             if project_id:
                 detection_snapshot = _find_detection_snapshot_for_feedback(
                     "news",
@@ -4934,13 +5057,14 @@ def api_submit_article_feedback(article_id):
         except Exception:
             project_id, project, detection_snapshot = None, None, {}
 
+        now_iso = datetime.utcnow().isoformat() + "Z"
         feedback_data = {
             "examiner_uid": uid,
             "examiner_name": examiner_name,
             "agreed_with_model": agreed_with_model,
             "label": None if agreed_with_model else data.get("label"),
             "explanation": "" if agreed_with_model else data.get("explanation", "").strip(),
-            "submitted_at": datetime.utcnow().isoformat() + "Z",
+            "submitted_at": now_iso,
             "article_id": article_id,
             "target_unit": target_unit,
             "chunk_index": chunk_index if target_unit == "chunk" else None,
@@ -4952,6 +5076,7 @@ def api_submit_article_feedback(article_id):
             "confidence": detection_snapshot.get("confidence"),
             "uncertainty": detection_snapshot.get("uncertainty")
         }
+        feedback_data, is_edit = _prepare_feedback_payload(existing_user_feedback, feedback_data, uid, examiner_name, now_iso)
 
         if target_unit == "chunk":
             feedback_ref.child(uid).set(feedback_data)
@@ -4981,7 +5106,7 @@ def api_submit_article_feedback(article_id):
         except Exception as normalized_error:
             app.logger.exception("Failed to write normalized news feedback: %s", normalized_error)
 
-        return jsonify({"message": "Feedback submitted successfully"}), 200
+        return jsonify({"message": _feedback_write_message(is_edit), "updated": is_edit}), 200
 
     except Exception as e:
         app.logger.exception("Failed to submit feedback: %s", e)
@@ -5113,10 +5238,11 @@ def api_run_analysis_project(project_id):
         ms_task_ref, ms_task_data, guard_error = _model_selection_task_guard(
             task_id_from_query,
             project_id=project_id,
-            reject_completed=True
+            reject_completed=False
         )
         if guard_error:
             return guard_error
+        task_finalized = bool(ms_task_data.get("selected_model") or _safe_str(ms_task_data.get("status")).lower() == "completed")
 
         tasks = db.collection("tasks").where("project_ID", "==", project_id).stream()
         run_id = uuid.uuid4().hex[:12]
@@ -5205,14 +5331,16 @@ def api_run_analysis_project(project_id):
             }), 400
 
         selected_at = datetime.utcnow().isoformat() + "Z"
-        base_ref.child("latest_run_id").set(run_id)
-        base_ref.child("latest_model_key").set(model_key)
-        base_ref.child("latest_analyzed_at").set(selected_at)
+        if not task_finalized:
+            base_ref.child("latest_run_id").set(run_id)
+            base_ref.child("latest_model_key").set(model_key)
+            base_ref.child("latest_analyzed_at").set(selected_at)
 
         return jsonify({
             "success": True,
             "model": selected_model,
             "run_id": run_id,
+            "preview_only": task_finalized,
             "ran_at": datetime.utcnow().isoformat() + "Z",
             "analyzed_conversations": analyzed_conversations,
             "analyzed_turns": analyzed_turns
@@ -5231,11 +5359,12 @@ def api_run_analysis_project(project_id):
 def api_analysis_project(project_id):
     selected_model = (request.args.get("model") or "logreg").lower()
     model_key = CONV_RNN_KEY if selected_model == CONV_RNN_KEY else CONV_LOGREG_KEY
+    run_id = _safe_str(request.args.get("run_id"))
 
     if not session.get("idToken"):
         return jsonify({"error": "Unauthorized"}), 401
 
-    raw = _generated_conversation_results_payload(project_id, model_key) or {}
+    raw = _generated_conversation_results_payload(project_id, model_key, run_id=run_id) or {}
     results = []
 
     y_true = []
@@ -5678,6 +5807,8 @@ def api_conversation_feedback_list(task_id):
         "waiting": False,
         "project_id": project_id,
         "task_id": task_id,
+        "task_status": new_status,
+        "feedback_locked": new_status == "completed",
         "selected_model": selected_model,
         "selected_model_name": model_label,
         "active_learning": active_learning_info,
@@ -5724,6 +5855,8 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
             return jsonify({"error": "Task is not labeling"}), 400
         if uid not in (task_data.get("examiner_ids") or []):
             return jsonify({"error": "Forbidden"}), 403
+        if _labeling_task_completed(task_data):
+            return jsonify({"error": "Feedback is locked because this labeling task is completed"}), 423
 
         project_id = task_data.get("project_ID")
         selected_model, model_key, _ = _pick_conversation_model_for_project(project_id)
@@ -5776,8 +5909,12 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
                 existing_turn_feedbacks = candidate
 
         # قفل نهائي: أول فيدباك فقط لكل turn
-        if isinstance(existing_turn_feedbacks, dict) and len(existing_turn_feedbacks) > 0:
-            return jsonify({"error": "Feedback already submitted for this turn"}), 409
+        if not isinstance(existing_turn_feedbacks, dict):
+            existing_turn_feedbacks = {}
+        existing_owner_uid = _feedback_owner_uid(existing_turn_feedbacks)
+        existing_user_feedback = _feedback_record_for_uid(existing_turn_feedbacks, uid)
+        if existing_owner_uid and existing_owner_uid != uid:
+            return jsonify({"error": "Feedback already submitted for this turn and can only be edited by the original reviewer"}), 409
 
         udoc = db.collection("users").document(uid).get()
         if udoc.exists:
@@ -5787,14 +5924,16 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
         else:
             examiner_name = "Examiner"
 
+        now_iso = datetime.utcnow().isoformat() + "Z"
         payload = {
             "examiner_uid": uid,
             "examiner_name": examiner_name,
             "agreed_with_model": agree_with_model,  # ✅ جديد
             "label": label,
             "explanation": explanation,
-            "submitted_at": datetime.utcnow().isoformat() + "Z"
+            "submitted_at": now_iso
         }
+        payload, is_edit = _prepare_feedback_payload(existing_user_feedback, payload, uid, examiner_name, now_iso)
 
         conv_ref.child("turn_feedbacks").child(str(turn_index)).child(uid).set(payload)
 
@@ -5828,7 +5967,8 @@ def api_submit_conversation_turn_feedback(task_id, conversation_id, turn_index):
             app.logger.exception("Failed to write normalized generated conversation feedback: %s", normalized_error)
 
         return jsonify({
-            "message": "Turn feedback saved successfully",
+            "message": _feedback_write_message(is_edit),
+            "updated": is_edit,
             "conversation_id": conversation_id,
             "turn_index": turn_index,
             "selected_model": selected_model
@@ -6048,9 +6188,16 @@ def _write_active_learning_feedback(project_id, sample_id, detection_snapshot, f
         "model_version": snapshot.get("model_version") or "v1",
         "examiner_uid": feedback.get("examiner_uid"),
         "examiner_name": feedback.get("examiner_name"),
+        "reviewed_by": feedback.get("reviewed_by") or feedback.get("examiner_uid"),
+        "reviewed_by_name": feedback.get("reviewed_by_name") or feedback.get("examiner_name"),
+        "reviewed_at": feedback.get("reviewed_at") or feedback.get("submitted_at"),
         "agreed_with_model": agreed_with_model,
         "feedback_explanation": _safe_str(feedback.get("explanation") or feedback.get("feedback_explanation")),
         "submitted_at": feedback.get("submitted_at") or _now_utc_iso(),
+        "updated_at": feedback.get("updated_at"),
+        "updated_by": feedback.get("updated_by"),
+        "edit_count": int(feedback.get("edit_count") or 0),
+        "previous_feedback_history": feedback.get("previous_feedback_history") if isinstance(feedback.get("previous_feedback_history"), list) else [],
         "used_for_retraining": False,
         "training_export_id": None
     }
@@ -8894,6 +9041,8 @@ def api_uploaded_conversation_feedback_list(task_id):
         "waiting": False,
         "project_id": project_id,
         "task_id": task_id,
+        "task_status": new_status,
+        "feedback_locked": new_status == "completed",
         "source": "uploaded",
         "selected_model": selected_model,
         "selected_model_name": model_label,
@@ -8933,6 +9082,8 @@ def api_submit_uploaded_conversation_turn_feedback(task_id, dialogue_id, turn_in
             return jsonify({"error": "Task is not labeling"}), 400
         if uid not in (task_data.get("examiner_ids") or []):
             return jsonify({"error": "Forbidden"}), 403
+        if _labeling_task_completed(task_data):
+            return jsonify({"error": "Feedback is locked because this labeling task is completed"}), 423
 
         project_id = task_data.get("project_ID")
         selected_model, model_key, _ = _pick_conversation_model_for_project(project_id)
@@ -8967,18 +9118,24 @@ def api_submit_uploaded_conversation_turn_feedback(task_id, dialogue_id, turn_in
 
         feedback_ref = run_ref.child("turn_feedbacks").child(safe_key).child(str(turn_index))
         existing_feedbacks = feedback_ref.get() or {}
-        if isinstance(existing_feedbacks, dict) and existing_feedbacks:
-            return jsonify({"error": "Feedback already submitted for this turn"}), 409
+        if not isinstance(existing_feedbacks, dict):
+            existing_feedbacks = {}
+        existing_owner_uid = _feedback_owner_uid(existing_feedbacks)
+        existing_user_feedback = _feedback_record_for_uid(existing_feedbacks, uid)
+        if existing_owner_uid and existing_owner_uid != uid:
+            return jsonify({"error": "Feedback already submitted for this turn and can only be edited by the original reviewer"}), 409
 
         examiner_name = _feedback_examiner_name(uid)
+        now_iso = datetime.utcnow().isoformat() + "Z"
         payload = {
             "examiner_uid": uid,
             "examiner_name": examiner_name,
             "agreed_with_model": agree_with_model,
             "label": label,
             "explanation": explanation,
-            "submitted_at": datetime.utcnow().isoformat() + "Z"
+            "submitted_at": now_iso
         }
+        payload, is_edit = _prepare_feedback_payload(existing_user_feedback, payload, uid, examiner_name, now_iso)
 
         feedback_ref.child(uid).set(payload)
 
@@ -9013,7 +9170,8 @@ def api_submit_uploaded_conversation_turn_feedback(task_id, dialogue_id, turn_in
             app.logger.exception("Failed to write normalized uploaded conversation feedback: %s", normalized_error)
 
         return jsonify({
-            "message": "Turn feedback saved successfully",
+            "message": _feedback_write_message(is_edit),
+            "updated": is_edit,
             "conversation_id": dialogue_id,
             "turn_index": turn_index,
             "selected_model": selected_model,
@@ -9616,9 +9774,10 @@ def analyze_all_conversations(project_id):
 
     req = request.get_json(silent=True) or {}
     task_id = _safe_str(req.get("task_id") or req.get("taskId") or request.args.get("task_id") or request.args.get("taskId"))
-    task_ref, task_data, guard_error = _model_selection_task_guard(task_id, project_id=project_id, reject_completed=True)
+    task_ref, task_data, guard_error = _model_selection_task_guard(task_id, project_id=project_id, reject_completed=False)
     if guard_error:
         return guard_error
+    task_finalized = bool(task_data.get("selected_model") or _safe_str(task_data.get("status")).lower() == "completed")
 
     dataset_id = proj_data.get("dataset_id")
     if not dataset_id:
@@ -9835,16 +9994,18 @@ def analyze_all_conversations(project_id):
 
         try:
             db.collection("project_analysis_conversations").document(project_id).collection("runs").document(run_id).set(analysis_doc)
-            db.collection("project_analysis_conversations").document(project_id).set({
-                "latest_run_id": run_id,
-                "latest_model_key": model_key,
-                "latest_analyzed_at": analyzed_at
-            }, merge=True)
+            if not task_finalized:
+                db.collection("project_analysis_conversations").document(project_id).set({
+                    "latest_run_id": run_id,
+                    "latest_model_key": model_key,
+                    "latest_analyzed_at": analyzed_at
+                }, merge=True)
         except Exception as e:
             app.logger.warning("Firestore save skipped/failed: %s", e)
 
         base_ref = rtdb.reference(f"analysis_results/conversations/{model_key}/{project_id}")
-        base_ref.child("latest_run_id").set(run_id)
+        if not task_finalized:
+            base_ref.child("latest_run_id").set(run_id)
 
         run_ref = base_ref.child("runs").child(run_id)
 
@@ -9867,7 +10028,8 @@ def analyze_all_conversations(project_id):
             "total_dialogues": summary["total_dialogues"],
             "total_turns": summary["total_turns"],
             "model_key": model_key,
-            "run_id": run_id
+            "run_id": run_id,
+            "preview_only": task_finalized
         }), 200
 
     except Exception as e:

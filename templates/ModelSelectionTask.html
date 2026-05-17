@@ -5,6 +5,7 @@
   <meta name="viewport" content="initial-scale=1, width=device-width"/>
   <title>Model Selection • TrustLens</title>
   <style>
+    @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
     :root {
       --bg: #fff;
       --text: #0a0a0a;
@@ -27,7 +28,7 @@
     html, body {
       height: 100%;
       margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
+      font-family: "Space Grotesk", Arial, Helvetica, sans-serif;
       color: var(--text);
       background: #fafafa;
     }
@@ -55,7 +56,9 @@
     body.dark .modal-content-text,
     body.dark .overall-row,
     body.dark .metrics-panel,
+    body.dark .insights-panel,
     body.dark .metric-mini,
+    body.dark .insight-tile,
     body.dark .cm-cell,
     body.dark .metrics-note {
       background: #0f172a;
@@ -63,6 +66,7 @@
       border-color: var(--line);
     }
     body.dark .metric-mini b,
+    body.dark .insight-tile b,
     body.dark .cm-cell b {
       color: var(--text);
     }
@@ -99,7 +103,7 @@
     }
     .user-profile { position: relative; display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
     .avatar {
-      width: 36px; height: 36px;
+      width: 40px; height: 40px;
       border-radius: 50%;
       background: linear-gradient(135deg, var(--primary1), var(--primary2));
       display: grid; place-items: center;
@@ -120,37 +124,85 @@
     .dropdown-divider { height: 1px; background: var(--line); margin: 4px 0; }
 
     .container {
-      max-width: 1400px;
-      margin: 80px auto 40px;
-      padding: 0 clamp(16px, 4vw, 40px);
+      min-height: calc(100vh - 64px);
+      margin: 64px 0 0;
+      padding: 24px clamp(16px, 6vw, 134.8px) 40px;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #e8f0ff 0%, transparent 55%),
+        radial-gradient(900px 500px at 90% 0%, #fff0db 0%, transparent 60%),
+        #f6f7fb;
+    }
+    body.dark .container {
+      background:
+        radial-gradient(1200px 500px at 50% -20%, #163a78 0%, transparent 60%),
+        linear-gradient(135deg, #071225 0%, #0b1b37 55%, #0d2747 100%);
     }
 
-    .page-header { margin-bottom: 32px; }
+    .card-shell {
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--bg);
+      box-shadow: 0 14px 40px rgba(20,22,35,.08);
+      overflow: hidden;
+    }
+    body.dark .card-shell { box-shadow: 0 18px 55px rgba(0,0,0,.45); }
+    .card-inner { padding: 24px 24px 28px; display: flex; flex-direction: column; }
+
+    .page-header {
+      margin-bottom: 18px;
+      padding: 12px 0 18px;
+      border-bottom: .8px solid var(--line);
+      order: 1;
+    }
 
     .back-link {
       display: inline-flex; align-items: center; gap: 8px;
-      color: var(--muted); text-decoration: none;
+      color: var(--text); text-decoration: none;
       font-size: 14px; margin-bottom: 16px;
+      padding: 6px 10px; border-radius: 10px;
     }
-    .back-link:hover { color: var(--text); }
+    .back-link:hover { background: rgba(0,0,0,.04); color: var(--text); }
+    body.dark .back-link:hover { background: rgba(255,255,255,.04); }
 
-    .page-title { font-size: 28px; font-weight: 600; margin: 0 0 8px 0; }
-    .page-subtitle { color: var(--muted); font-size: 16px; margin: 0; }
+    .page-title { font-size: 34px; font-weight: 700; letter-spacing: -.4px; margin: 0 0 8px 0; }
+    .page-subtitle { color: var(--muted); font-size: 14px; line-height: 1.45; margin: 0; }
+    .title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .badge-icon {
+      width: 42px; height: 42px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(21,93,252,.08);
+      border: 1px solid rgba(21,93,252,.18);
+      box-shadow: 0 10px 15px -10px rgba(21,93,252,.35);
+      flex: 0 0 auto;
+    }
+    .badge-icon::before {
+      content: "AI";
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--primary2);
+      letter-spacing: 0;
+    }
 
-    .detect-stage { margin-bottom: 28px; }
+    .detect-stage { margin-bottom: 28px; order: 2; }
     .detect-card {
-      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      background: var(--bg);
       border: 1px solid var(--line);
       border-radius: 18px;
       box-shadow: 0 14px 40px rgba(20,22,35,.08);
-      padding: 24px;
+      padding: 46px 24px;
       display: flex;
       flex-direction: column;
       gap: 18px;
+      align-items: center;
+      justify-content: center;
+      min-height: 320px;
     }
     .detect-steps {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
     }
     .detect-step {
@@ -160,16 +212,29 @@
       border-radius: 12px;
       padding: 10px 12px;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 900;
+      text-align: left;
     }
     .detect-step.active { background: #eef3ff; border-color: #cdd9ff; color: var(--primary2); }
-    .detect-hero { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
-    .detect-copy { max-width: 620px; }
-    .detect-kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 800; }
-    .detect-title { margin: 4px 0 6px; font-size: 24px; font-weight: 800; color: #0e162b; }
-    .detect-sub { margin: 0; font-size: 14px; line-height: 1.6; color: var(--muted); }
-    .detect-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .detect-select { min-width: 260px; height: 42px; }
+    .detect-hero { width: min(620px,100%); display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+    .detect-copy { max-width: 560px; }
+    .detect-kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 900; }
+    .detect-title { margin: 4px 0 6px; font-size: 18px; font-weight: 800; color: var(--text); }
+    .detect-sub { margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+    .detect-actions {
+      width: min(520px,100%);
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      border: .8px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255,255,255,.72);
+      padding: 12px;
+      text-align: left;
+    }
+    body.dark .detect-actions { background: rgba(255,255,255,.03); }
+    .detect-select { min-width: 100%; height: 42px; }
     .detect-progress { width: min(560px, 100%); }
     .detect-track { height: 10px; border-radius: 999px; background: #e8eefc; overflow: hidden; }
     .detect-fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, var(--primary1), var(--primary2)); transition: width .25s ease; }
@@ -178,39 +243,45 @@
 
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-      margin-bottom: 32px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin: 8px 0 12px;
+      order: 4;
     }
 
     .summary-card {
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 24px;
+      background: linear-gradient(180deg,#eef2ff,rgba(255,255,255,.55));
+      border: 1px solid #e9ecf5;
+      border-left: 4px solid rgba(21,93,252,.85);
+      border-radius: 14px;
+      padding: 16px;
+      min-height: 98px;
       position: relative;
       overflow: hidden;
     }
+    body.dark .summary-card { background: rgba(255,255,255,.03); border-color: var(--line); }
+    .summary-card.human { background: linear-gradient(180deg,#e8f7ef,rgba(255,255,255,.55)); border-left-color: rgba(0,188,125,.95); }
+    .summary-card.ai { background: linear-gradient(180deg,#fff4df,rgba(255,255,255,.55)); border-left-color: rgba(245,158,11,.95); }
     .summary-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, var(--primary1), var(--primary2));
+      content:"";position:absolute;inset:-40% -30% auto auto;width:220px;height:220px;border-radius:999px;opacity:.22;
+      background: radial-gradient(circle at 30% 30%, rgba(21,93,252,.55), transparent 60%);
     }
-    .summary-card.human::before { background: linear-gradient(90deg, #0A7A39, #84fab0); }
-    .summary-card.ai::before    { background: linear-gradient(90deg, #F59E0B, #fbbf24); }
+    .summary-card.human::before { background: radial-gradient(circle at 30% 30%, rgba(0,188,125,.55), transparent 60%); }
+    .summary-card.ai::before { background: radial-gradient(circle at 30% 30%, rgba(245,158,11,.45), transparent 60%); }
+    .summary-card.accent { background: linear-gradient(180deg,#f3efff,rgba(255,255,255,.55)); border-left-color: rgba(173,70,255,.85); }
+    .summary-card.accent::before { background: radial-gradient(circle at 30% 30%, rgba(173,70,255,.45), transparent 60%); }
 
-    .card-label    { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
-    .card-value    { font-size: 36px; font-weight: 700; margin-bottom: 4px; }
-    .card-subtitle { font-size: 14px; color: var(--muted); }
+    .card-label    { font-size: 12px; letter-spacing:.6px; text-transform:uppercase; font-weight:900; color: var(--muted); margin-bottom: 10px; }
+    .card-value    { font-size: 28px; font-weight: 900; margin-bottom: 4px; }
+    .card-subtitle { font-size: 12px; color: var(--muted); font-weight:700; }
 
     .metrics-panel {
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 20px 24px;
-      margin-bottom: 24px;
+      background: rgba(255,255,255,.70);
+      border: .8px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin: 10px 0 14px;
+      order: 5;
     }
     .metrics-head {
       display: flex;
@@ -219,22 +290,22 @@
       gap: 12px;
       margin-bottom: 16px;
     }
-    .metrics-title { font-size: 16px; font-weight: 700; color: var(--text); }
+    .metrics-title { font-size: 14px; font-weight: 900; color: var(--text); }
     .metrics-support { font-size: 13px; color: var(--muted); font-weight: 600; }
     .metrics-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 12px;
-      margin-bottom: 18px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
     }
     .metric-mini {
       border: 1px solid #e4ebf5;
-      background: #f8fbff;
-      border-radius: 10px;
-      padding: 12px;
+      background: rgba(255,255,255,.55);
+      border-radius: 12px;
+      padding: 10px;
     }
-    .metric-mini span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 700; }
-    .metric-mini b { font-size: 20px; color: #0e162b; }
+    .metric-mini span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 900; }
+    .metric-mini b { font-size: 16px; color: #0e162b; }
     .cm-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(120px, 1fr));
@@ -249,6 +320,7 @@
     }
     .cm-cell span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
     .cm-cell b { font-size: 20px; color: #0e162b; }
+    .metrics-panel > .cm-grid { display: none; }
     .metrics-note {
       border: 1px solid #cfe8ff;
       background: #f8fbff;
@@ -260,17 +332,178 @@
       line-height: 1.5;
     }
 
-    .action-bar {
-      background: #fff;
+    .section-kicker {
+      font-size: 12px;
+      letter-spacing: .6px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 900;
+      margin-bottom: 8px;
+    }
+
+    .insights-panel {
+      background: rgba(255,255,255,.70);
+      border: .8px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin: 10px 0 14px;
+      order: 5;
+    }
+
+    .insights-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+    }
+
+    .insight-tile {
+      border: 1px solid #e4ebf5;
+      background: rgba(255,255,255,.55);
+      border-radius: 12px;
+      padding: 10px;
+      min-height: 78px;
+    }
+
+    .insight-tile span {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 800;
+    }
+
+    .insight-tile b {
+      display: block;
+      font-size: 18px;
+      color: #0e162b;
+      overflow-wrap: anywhere;
+    }
+
+    .insight-tile small {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+      line-height: 1.35;
+      color: var(--muted);
+    }
+
+    .sub-metrics {
+      margin: 0 0 14px;
+      padding: 10px 12px;
+      border: .8px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255,255,255,.70);
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      order: 5;
+    }
+    body.dark .sub-metrics { background: rgba(255,255,255,.03); }
+    .sub-metrics b { color: var(--text); }
+    .sub-metrics .dot { opacity: .6; }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 18px;
+      align-items: start;
+      order: 6;
+    }
+
+    .platform-panel {
+      border-radius: 18px;
+      background: var(--bg);
       border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 16px 24px;
-      margin-bottom: 24px;
+      overflow: hidden;
+      box-shadow: 0 14px 40px rgba(20,22,35,.08);
+    }
+    body.dark .platform-panel { background: rgba(255,255,255,.03); box-shadow: 0 18px 55px rgba(0,0,0,.45); }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: .8px solid var(--line);
+      background: rgba(236,236,240,.20);
+    }
+    body.dark .panel-header { background: rgba(255,255,255,.02); }
+    .panel-title { margin: 0; font-size: 14px; font-weight: 900; }
+    .chart-box { padding: 14px; height: 320px; display: flex; align-items: center; justify-content: center; }
+    .mini-chart {
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      background: rgba(0,0,0,.04);
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    body.dark .mini-chart { background: rgba(255,255,255,.06); }
+    .bars { height: 190px; display: flex; align-items: flex-end; justify-content: center; gap: 14px; }
+    .bar {
+      width: 70px;
+      border-radius: 14px;
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 8px;
+      box-shadow: 0 10px 18px rgba(0,0,0,.08);
+      min-height: 28px;
+      height: var(--h, 0%);
+    }
+    .bar.human { background: linear-gradient(180deg,rgba(0,188,125,.95),rgba(0,188,125,.55)); }
+    .bar.ai { background: linear-gradient(180deg,rgba(21,93,252,.95),rgba(21,93,252,.55)); }
+    .bar .val { font-size: 12px; font-weight: 900; color: #fff; background: rgba(0,0,0,.18); padding: 2px 10px; border-radius: 999px; }
+    .bar-labels { display: flex; justify-content: center; gap: 58px; color: var(--muted); font-size: 12px; font-weight: 900; }
+    .mini-meta { text-align: center; color: var(--muted); font-size: 12px; }
+    .insight {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text);
+      background: rgba(21,93,252,.08);
+      border: .8px solid rgba(21,93,252,.20);
+      padding: 8px 10px;
+      border-radius: 12px;
+    }
+    .insight-mini {
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      border: .8px dashed var(--line);
+      padding: 8px 10px;
+      border-radius: 12px;
+    }
+
+    .table-tools {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: nowrap;
+    }
+    .table-tools .search-input { min-width: 240px; }
+    .table-tools .search-input { padding: 0 10px; }
+    .table-tools .model-dropdown { min-width: 160px; }
+
+    .action-bar {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px 14px;
+      margin: 8px 0 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
       gap: 16px;
+      order: 3;
     }
 
     .model-select { display: flex; align-items: center; gap: 10px; }
@@ -299,6 +532,18 @@
     }
 
     .action-buttons { display: flex; gap: 12px; }
+    .finalized-note {
+      flex-basis: 100%;
+      display: none;
+      color: var(--text);
+      font-size: 13px;
+      border: .8px solid rgba(21,93,252,.25);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: rgba(21,93,252,.06);
+      line-height: 1.5;
+    }
+    .finalized-note.show { display: block; }
 
     .btn {
       height: 40px; padding: 0 20px;
@@ -317,10 +562,12 @@
     .btn-secondary:hover { background: #f9f9fb; }
 
     .results-container {
-      background: #fff;
+      background: var(--bg);
       border: 1px solid var(--line);
-      border-radius: var(--radius);
+      border-radius: 18px;
       overflow: hidden;
+      box-shadow: 0 14px 40px rgba(20,22,35,.08);
+      order: 6;
     }
     .table-wrapper { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
@@ -376,7 +623,7 @@
     .modal-overlay.open { display: flex; }
     .modal {
       background: #fff; border-radius: var(--radius); padding: 32px;
-      max-width: 700px; width: 90%; max-height: 85vh;
+      max-width: 860px; width: 90%; max-height: 85vh;
       overflow-y: auto; position: relative;
     }
     .modal-close {
@@ -396,8 +643,9 @@
       max-height: 150px; overflow-y: auto;
     }
     .chunk-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 0; border-bottom: 1px solid var(--line);
+      display: grid; grid-template-columns: 92px 1fr minmax(150px, auto); align-items: center; gap: 12px;
+      padding: 12px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px;
+      background: rgba(255,255,255,.55);
     }
     .chunk-row:last-child { border-bottom: none; }
     .chunk-label { font-weight: 600; font-size: 14px; min-width: 40px; }
@@ -406,6 +654,23 @@
     .chunk-bar-fill.human { background: #0A7A39; }
     .chunk-bar-fill.ai    { background: #F59E0B; }
     .chunk-stats { font-size: 13px; color: var(--muted); min-width: 160px; text-align: right; }
+    .chunk-meta {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .chunk-chip {
+      display: inline-flex;
+      align-items: center;
+      border: .8px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: rgba(21,93,252,.06);
+    }
     .overall-row {
       display: flex; justify-content: space-between; align-items: center;
       padding: 12px; background: #f9f9fb; border-radius: 8px; margin-top: 12px;
@@ -434,12 +699,149 @@
 
     @media (max-width: 768px) {
       .summary-grid { grid-template-columns: 1fr; }
+      .content-grid { grid-template-columns: 1fr; }
+      .card-inner { padding: 18px; }
       .action-bar { flex-direction: column; align-items: stretch; }
       .search-box { max-width: none; }
       .action-buttons { justify-content: stretch; }
       .btn { flex: 1; }
       th, td { padding: 12px; }
       .article-title { max-width: 200px; }
+      .chunk-row { grid-template-columns: 1fr; }
+    }
+
+    /* Final dashboard layout repair */
+    .container {
+      padding-left: clamp(14px, 3vw, 56px);
+      padding-right: clamp(14px, 3vw, 56px);
+    }
+    .card-shell {
+      max-width: 1560px;
+    }
+    .content-grid {
+      grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+    }
+    .platform-panel,
+    .results-container {
+      min-width: 0;
+    }
+    .model-dropdown,
+    .select,
+    select.model-dropdown {
+      appearance: none;
+      -webkit-appearance: none;
+      width: auto;
+      min-width: 170px;
+      height: 42px;
+      line-height: 1.2;
+      padding: 0 38px 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background-color: #fff;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+        linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position:
+        calc(100% - 18px) 18px,
+        calc(100% - 12px) 18px;
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    body.dark .model-dropdown,
+    body.dark .select,
+    body.dark select.model-dropdown {
+      background-color: #0f172a;
+      color: var(--text);
+      border-color: var(--line);
+    }
+    .detect-select {
+      width: 100%;
+      min-width: 0;
+    }
+    .table-tools {
+      flex-wrap: wrap;
+    }
+    .table-tools .search-input {
+      flex: 1 1 260px;
+      min-width: 220px;
+      height: 42px;
+      border-radius: 12px;
+    }
+    .table-tools .model-dropdown {
+      flex: 0 0 auto;
+      min-width: 180px;
+    }
+    .table-wrapper {
+      overflow-x: hidden;
+    }
+    .table-wrapper table {
+      table-layout: fixed;
+    }
+    .table-wrapper th,
+    .table-wrapper td {
+      padding: 12px 10px;
+      vertical-align: middle;
+    }
+    .table-wrapper th:first-child,
+    .table-wrapper td:first-child {
+      width: 34%;
+    }
+    .table-wrapper th:last-child,
+    .table-wrapper td:last-child {
+      width: 92px;
+      text-align: right;
+    }
+    .article-title {
+      max-width: none;
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .dist-switch {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .switch-btn {
+      border: .8px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 900;
+      font-size: 12px;
+    }
+    .switch-btn.active {
+      background: rgba(21,93,252,.12);
+      border-color: rgba(21,93,252,.25);
+      color: #155dfc;
+    }
+    .bar.chunk {
+      background: linear-gradient(180deg,rgba(21,93,252,.95),rgba(21,93,252,.55));
+    }
+    @media (min-width: 1100px) {
+      .summary-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 980px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+      .table-wrapper {
+        overflow-x: auto;
+      }
+      .table-wrapper table {
+        min-width: 860px;
+      }
     }
   </style>
 </head>
@@ -471,16 +873,20 @@
       </div>
     </div>
   </div>
-
   <!-- Main Container -->
   <div class="container">
+    <section class="card-shell">
+      <div class="card-inner">
 
     <!-- Page Header -->
     <div class="page-header">
       <a href="/projectdetailsexaminer/{{ project_id }}" class="back-link">← Back to Project</a>
-      <h1 class="page-title">{{ task_name }}</h1>
-      <p class="page-subtitle" id="datasetInfo">Run both models and select the best one</p>
-<p class="page-subtitle" id="taskDescription" style="margin-top:4px;color:#717182;font-size:14px;">{{ task_description }}</p>
+      <div class="title-row">
+        <div class="badge-icon"></div>
+        <h1 class="page-title">News Detection</h1>
+      </div>
+      <p class="page-subtitle" id="datasetInfo">Select a model, then run article detection.</p>
+<p class="page-subtitle" id="taskDescription" style="margin-top:4px;">{{ task_name }}{% if task_description %} — {{ task_description }}{% endif %}</p>
     </div>
 
     <div class="detect-stage" id="newsStage">
@@ -488,6 +894,7 @@
         <div class="detect-steps">
           <div class="detect-step active">1. Ready</div>
           <div class="detect-step">2. Processing</div>
+          <div class="detect-step">3. Results</div>
         </div>
         <div class="detect-hero">
           <div class="detect-copy">
@@ -496,11 +903,14 @@
             <p class="detect-sub">Choose a detector to classify uploaded articles as Human-written or AI-generated, then review the detailed article results.</p>
           </div>
           <div class="detect-actions">
+            <label for="stageNewsModelSelect" class="model-label">Model</label>
             <select id="stageNewsModelSelect" class="model-dropdown detect-select">
               <option value="logistic" selected>Logistic Regression (TF-IDF)</option>
               <option value="rnn">RNN (BiGRU)</option>
+              <option value="sota_model" disabled>SOTA Model (Coming Soon)</option>
             </select>
-            <button class="btn btn-primary" id="stageNewsRunBtn" type="button">Run Analysis</button>
+            <div class="card-subtitle" id="stageModelDesc">Fast classical baseline for article-level detection.</div>
+            <button class="btn btn-primary" id="stageNewsRunBtn" type="button">Run Detection</button>
           </div>
         </div>
       </div>
@@ -509,12 +919,13 @@
         <div class="detect-steps">
           <div class="detect-step active">1. Ready</div>
           <div class="detect-step active">2. Processing</div>
+          <div class="detect-step">3. Results</div>
         </div>
         <div class="detect-hero">
           <div class="detect-copy">
             <div class="detect-kicker">News article detection</div>
             <h2 class="detect-title">Processing articles</h2>
-            <p class="detect-sub">The selected model is analyzing article text and preparing probabilities, chunk details, and summary counts.</p>
+            <p class="detect-sub">The selected model is analyzing article text and preparing probabilities, chunk details, evaluation metrics, and review target signals.</p>
           </div>
           <div class="detect-progress">
             <div class="detect-track"><div class="detect-fill" id="newsProgressFill"></div></div>
@@ -541,17 +952,77 @@
         <div class="card-value" id="aiCount">-</div>
         <div class="card-subtitle" id="aiPercentage">-% of total</div>
       </div>
+      <div class="summary-card">
+        <div class="card-label">Total Chunks</div>
+        <div class="card-value" id="totalChunks">-</div>
+        <div class="card-subtitle">Explainability units</div>
+      </div>
+      <div class="summary-card human">
+        <div class="card-label">Avg Chunks / Article</div>
+        <div class="card-value" id="avgChunks">-</div>
+        <div class="card-subtitle">Review density</div>
+      </div>
+      <div class="summary-card accent">
+        <div class="card-label">Review Targets</div>
+        <div class="card-value" id="summaryReviewTargets">-</div>
+        <div class="card-subtitle">Active Learning queue</div>
+      </div>
     </div>
 
     <div class="metrics-panel is-hidden" id="newsMetricsPanel"></div>
 
+    <div class="insights-panel is-hidden" id="newsActiveLearningPanel">
+      <div class="section-kicker">Active Learning Insights</div>
+      <div class="insights-grid">
+        <div class="insight-tile">
+          <span>Total Review Targets</span>
+          <b id="newsReviewTotal">-</b>
+          <small id="newsReviewUnit">Target unit: chunk</small>
+        </div>
+        <div class="insight-tile">
+          <span>Pending Targets</span>
+          <b id="newsReviewPending">-</b>
+          <small>Frozen after Submit Results</small>
+        </div>
+        <div class="insight-tile">
+          <span>Lowest Uncertainty Margin</span>
+          <b id="newsLowestMargin">-</b>
+          <small>Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.</small>
+        </div>
+        <div class="insight-tile">
+          <span>Why selected?</span>
+          <b id="newsTargetReason">Model uncertainty</b>
+          <small>Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="insights-panel is-hidden" id="newsDiagnosticsPanel">
+      <div class="section-kicker">Diagnostics</div>
+      <div class="insights-grid">
+        <div class="insight-tile">
+          <span>Lowest Confidence Article</span>
+          <b id="newsLowestConfidence">-</b>
+          <small>Model confidence toward the predicted class</small>
+        </div>
+        <div class="insight-tile">
+          <span>Most AI-heavy Article</span>
+          <b id="newsMostAiArticle">-</b>
+          <small>Highest article-level P(AI)</small>
+        </div>
+        <div class="insight-tile">
+          <span>Evaluation Level</span>
+          <b>Article-level</b>
+          <small>Chunk analysis supports explainability and review targets.</small>
+        </div>
+      </div>
+    </div>
+
     <!-- Action Bar -->
     <div class="action-bar is-hidden" id="actionBar">
-      <div class="search-box">
-        <svg class="search-icon" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
-        </svg>
-        <input type="text" class="search-input" id="searchInput" placeholder="Search articles...">
+      <div>
+        <div class="summary-title">Analysis Summary</div>
+        <div class="summary-sub" id="newsSummaryMeta">Model: - | Articles: - | Unit: chunk</div>
       </div>
 
       <div class="model-select">
@@ -559,14 +1030,42 @@
         <select id="modelSelect" class="model-dropdown">
           <option value="logistic" selected>Logistic Regression (TF-IDF)</option>
           <option value="rnn">RNN (BiGRU)</option>
+          <option value="sota_model" disabled>SOTA Model (Coming Soon)</option>
         </select>
       </div>
 
       <div class="action-buttons">
-        <button class="btn btn-primary" id="runAnalysisBtn">🔍 Run Analysis</button>
-        <button class="btn btn-success" id="selectModelBtn" style="display:none;">✅ Select This Model</button>
+        <button class="btn btn-primary" id="runAnalysisBtn">Run Detection</button>
+        <button class="btn btn-success" id="selectModelBtn" style="display:none;">Submit Results</button>
       </div>
+      <div class="finalized-note" id="newsFinalizedNote">Finalized Evaluation: the submitted model is locked, review targets are frozen, and reruns are preview-only.</div>
     </div>
+
+    <div class="content-grid is-hidden" id="newsContentGrid">
+      <div class="platform-panel">
+        <div class="panel-header">
+          <p class="panel-title">Distribution</p>
+          <div class="dist-switch" id="newsDistSwitch">
+            <button class="switch-btn active" data-news-dist="article" type="button">Article-level</button>
+            <button class="switch-btn" data-news-dist="chunk" type="button">Chunk-level</button>
+          </div>
+        </div>
+        <div class="chart-box">
+          <div class="mini-chart">
+            <div class="bars">
+              <div class="bar human" id="newsHumanBar"><span class="val" id="newsHumanBarVal">0</span></div>
+              <div class="bar ai" id="newsAiBar"><span class="val" id="newsAiBarVal">0</span></div>
+            </div>
+            <div class="bar-labels">
+              <span>Human</span>
+              <span>AI</span>
+            </div>
+            <div class="mini-meta">Total: <b id="newsDistTotal">0</b> <span id="newsDistHint">Article distribution</span></div>
+            <div class="insight" id="newsDistInsight">-</div>
+            <div class="insight-mini" id="newsDistMini">Target unit: chunk</div>
+          </div>
+        </div>
+      </div>
 
     <!-- Results Table -->
     <div class="results-container is-hidden" id="resultsContainer">
@@ -576,18 +1075,36 @@
       </div>
 
       <div class="empty-state" id="emptyState" style="display:none;">
-        <p>📊 No analysis results yet</p>
-        <p style="margin-top:8px;">Click "Run Analysis" to analyze all articles in this dataset</p>
+        <p>No analysis results yet</p>
+        <p style="margin-top:8px;">Click "Run Detection" to analyze all articles in this dataset</p>
       </div>
 
       <div class="table-wrapper" id="tableWrapper" style="display:none;">
+        <div class="panel-header">
+          <p class="panel-title">Articles</p>
+          <div class="table-tools">
+            <input type="text" class="search-input" id="searchInput" placeholder="Search articles...">
+            <select class="model-dropdown" id="labelFilter">
+              <option value="all">All labels</option>
+              <option value="human">Human</option>
+              <option value="ai">AI</option>
+            </select>
+            <select class="model-dropdown" id="sortBy">
+              <option value="ai_desc">Sort: AI% (desc)</option>
+              <option value="confidence_asc">Sort: Confidence (asc)</option>
+              <option value="margin_asc">Sort: Uncertainty Margin (asc)</option>
+            </select>
+          </div>
+        </div>
         <table>
           <thead>
             <tr>
               <th>Article Title</th>
               <th>Prediction</th>
-             <th>P(Human)</th>
-            <th>P(AI)</th>
+              <th>P(Human)</th>
+              <th>P(AI)</th>
+              <th>Confidence</th>
+              <th>Uncertainty Margin</th>
               <th>Details</th>
             </tr>
           </thead>
@@ -595,7 +1112,10 @@
         </table>
       </div>
     </div>
+    </div>
 
+      </div>
+    </section>
   </div>
 
   <!-- Details Modal -->
@@ -620,17 +1140,36 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="newsCmModal" aria-hidden="true">
+    <div class="modal">
+      <button class="modal-close" id="newsCmClose" type="button">✕</button>
+      <h2 class="modal-title">Confusion Matrix</h2>
+      <div class="cm-grid" id="newsCmGrid"></div>
+    </div>
+  </div>
+
   <script>
     const taskId = "{{ task_id }}";
     const projectId = "{{ project_id }}";
 
     let allDetails = [];
     let modelsRan = { logistic: false, rnn: false };
+    let latestNewsMatrix = null;
+    let latestNewsSummary = {};
+    let newsDistMode = 'article';
+    function normalizeNewsModelKey(key) {
+      const raw = String(key || '').toLowerCase();
+      if (raw === 'logreg' || raw === 'tfidf_logreg' || raw === 'logistic_regression') return 'logistic';
+      return raw || 'logistic';
+    }
     const newsReady = document.getElementById('newsReady');
     const newsProcessing = document.getElementById('newsProcessing');
     const summaryGrid = document.getElementById('summaryGrid');
     const actionBar = document.getElementById('actionBar');
+    const newsContentGrid = document.getElementById('newsContentGrid');
     const resultsContainer = document.getElementById('resultsContainer');
+    const newsActiveLearningPanel = document.getElementById('newsActiveLearningPanel');
+    const newsDiagnosticsPanel = document.getElementById('newsDiagnosticsPanel');
     const newsProgressFill = document.getElementById('newsProgressFill');
     const newsProgressPct = document.getElementById('newsProgressPct');
     const newsProgressText = document.getElementById('newsProgressText');
@@ -640,13 +1179,44 @@
     const userDropdown = document.getElementById('userDropdown');
     const themeBtn = document.getElementById('themeBtn');
     const langBtn = document.getElementById('langBtn');
+    let newsTaskLocked = false;
+
+    function setNewsSubmitLocked(locked, selectedName = '') {
+      newsTaskLocked = locked;
+      const submitBtn = document.getElementById('selectModelBtn');
+      const modelSelect = document.getElementById('modelSelect');
+
+      if (submitBtn) {
+        submitBtn.style.display = 'inline-flex';
+        submitBtn.disabled = locked;
+        submitBtn.textContent = locked
+          ? `Submitted${selectedName ? `: ${selectedName}` : ''}`
+          : 'Submit Results';
+        submitBtn.title = locked ? 'Model selection is locked for this completed task.' : '';
+      }
+      document.getElementById('newsFinalizedNote')?.classList.toggle('show', locked);
+      if (locked && document.getElementById('newsFinalizedNote')) {
+        document.getElementById('newsFinalizedNote').innerHTML =
+          `Finalized Evaluation: submitted${selectedName ? ` with <b>${selectedName}</b>` : ''}. Review targets are frozen and reruns are preview-only.`;
+      }
+
+      // بعد الإرسال يبقى تشغيل التحليل متاح كمعاينة، لكن اختيار الموديل النهائي لا يتغير.
+      if (modelSelect) modelSelect.disabled = locked;
+      if (stageNewsModelSelect) stageNewsModelSelect.disabled = locked;
+      const runBtn = document.getElementById('runAnalysisBtn');
+      if (runBtn) runBtn.disabled = false;
+      if (stageNewsRunBtn) stageNewsRunBtn.disabled = false;
+    }
 
     function setNewsStage(mode) {
       newsReady?.classList.toggle('is-hidden', mode !== 'ready');
       newsProcessing?.classList.toggle('is-hidden', mode !== 'processing');
       summaryGrid?.classList.toggle('is-hidden', mode !== 'results');
       actionBar?.classList.toggle('is-hidden', mode !== 'results');
+      newsContentGrid?.classList.toggle('is-hidden', mode !== 'results');
       resultsContainer?.classList.toggle('is-hidden', mode !== 'results');
+      newsActiveLearningPanel?.classList.toggle('is-hidden', mode !== 'results');
+      newsDiagnosticsPanel?.classList.toggle('is-hidden', mode !== 'results');
     }
 
     function setNewsProgress(value, text) {
@@ -672,16 +1242,18 @@
 async function checkIfAlreadySelected() {
   const res = await fetch(`/api/tasks/${taskId}`);
   const data = await res.json();
-  if (data.selected_model) {
-    setNewsStage('results');
-    document.getElementById('runAnalysisBtn').disabled = true;
-    document.getElementById('modelSelect').disabled = true;
-    document.getElementById('selectModelBtn').style.display = 'inline-flex';
-    document.getElementById('selectModelBtn').disabled = true;
-    document.getElementById('selectModelBtn').textContent =
-      '✅ Selected: ' + (data.selected_model === 'rnn' ? 'RNN' : 'Logistic Regression');
+    if (data.selected_model) {
+    const selectedKey = normalizeNewsModelKey(data.selected_model);
+    const selectedName = selectedKey === 'rnn' ? 'RNN' : 'Logistic Regression';
+    document.getElementById('modelSelect').value = selectedKey;
+    if (stageNewsModelSelect) stageNewsModelSelect.value = selectedKey;
+    updateNewsModelDescription(selectedKey);
+    setNewsSubmitLocked(true, selectedName);
     document.getElementById('datasetInfo').textContent =
-      'This task is completed. Model selection is locked.';
+      'Finalized evaluation is locked. Run Detection remains available as a preview-only rerun.';
+  } else {
+    setNewsSubmitLocked(false);
+    document.getElementById('selectModelBtn').style.display = 'none';
   }
 }
 
@@ -703,8 +1275,11 @@ checkIfAlreadySelected();
      // نظهر الزر فقط إذا المهمة ما اختارت موديل بعد
       const taskCheck = await fetch(`/api/tasks/${taskId}`);
       const taskData = await taskCheck.json();
-      if (!taskData.selected_model) {
+      if (taskData.selected_model) {
+        setNewsSubmitLocked(true, taskData.selected_model === 'rnn' ? 'RNN' : 'Logistic Regression');
+      } else {
         document.getElementById('selectModelBtn').style.display = 'inline-flex';
+        setNewsSubmitLocked(false);
       }
     } else {
       showEmptyState();
@@ -723,6 +1298,8 @@ checkIfAlreadySelected();
       document.getElementById('emptyState').style.display   = 'block';
       document.getElementById('tableWrapper').style.display = 'none';
       document.getElementById('newsMetricsPanel').classList.add('is-hidden');
+      newsActiveLearningPanel?.classList.add('is-hidden');
+      newsDiagnosticsPanel?.classList.add('is-hidden');
     }
 
     function metricNumber(value) {
@@ -738,6 +1315,66 @@ checkIfAlreadySelected();
     function metric4(value) {
       const number = metricNumber(value);
       return number === null ? '—' : number.toFixed(4);
+    }
+
+    function displayPct(value) {
+      const number = metricNumber(value);
+      return number === null ? '-' : `${number.toFixed(2)}%`;
+    }
+
+    function articleConfidence(article) {
+      const direct = metricNumber(article?.confidence);
+      if (direct !== null) return direct;
+      const human = metricNumber(article?.human_percentage);
+      const ai = metricNumber(article?.ai_percentage);
+      if (human !== null && ai !== null) return Math.max(human, ai);
+      return null;
+    }
+
+    function articleMargin(article) {
+      const direct = metricNumber(article?.uncertainty);
+      if (direct !== null) return direct;
+      const ai = metricNumber(article?.ai_percentage);
+      if (ai !== null) return Math.abs(ai - 50);
+      return null;
+    }
+
+    function collectNewsChunks(details) {
+      const chunks = [];
+      (details || []).forEach(article => {
+        (article.chunks || []).forEach(chunk => chunks.push({ article, chunk }));
+      });
+      return chunks;
+    }
+
+    function renderNewsInsights(details, locked) {
+      const chunks = collectNewsChunks(details);
+      const targetSource = chunks.length ? chunks : (details || []).map(article => ({ article, chunk: null }));
+      const targetCount = targetSource.length ? Math.max(1, Math.min(50, Math.ceil(targetSource.length * 0.2))) : 0;
+      const sortedTargets = [...targetSource].sort((a, b) => {
+        const aMargin = metricNumber(a.chunk?.uncertainty) ?? articleMargin(a.article) ?? Number.POSITIVE_INFINITY;
+        const bMargin = metricNumber(b.chunk?.uncertainty) ?? articleMargin(b.article) ?? Number.POSITIVE_INFINITY;
+        return aMargin - bMargin;
+      });
+      const lowestTarget = sortedTargets[0];
+      const lowestMargin = lowestTarget ? (metricNumber(lowestTarget.chunk?.uncertainty) ?? articleMargin(lowestTarget.article)) : null;
+      const lowestConfidenceArticle = [...(details || [])].sort((a, b) => {
+        return (articleConfidence(a) ?? Number.POSITIVE_INFINITY) - (articleConfidence(b) ?? Number.POSITIVE_INFINITY);
+      })[0];
+      const mostAiArticle = [...(details || [])].sort((a, b) => {
+        return (metricNumber(b.ai_percentage) ?? -1) - (metricNumber(a.ai_percentage) ?? -1);
+      })[0];
+
+      document.getElementById('newsReviewTotal').textContent = String(targetCount);
+      document.getElementById('newsReviewPending').textContent = locked ? 'Frozen' : String(targetCount);
+      document.getElementById('newsReviewUnit').textContent = `Target unit: ${chunks.length ? 'chunk' : 'article'}`;
+      document.getElementById('newsLowestMargin').textContent = displayPct(lowestMargin);
+      document.getElementById('newsLowestConfidence').textContent = lowestConfidenceArticle
+        ? `${lowestConfidenceArticle.title || 'Untitled'} (${displayPct(articleConfidence(lowestConfidenceArticle))})`
+        : '-';
+      document.getElementById('newsMostAiArticle').textContent = mostAiArticle
+        ? `${mostAiArticle.title || 'Untitled'} (${displayPct(metricNumber(mostAiArticle.ai_percentage))})`
+        : '-';
     }
 
     function normalizeMatrix(matrix) {
@@ -764,6 +1401,7 @@ checkIfAlreadySelected();
 
       const hasStandardMetrics = metrics && metrics.available === true;
       if (!hasStandardMetrics) {
+        latestNewsMatrix = null;
         panel.classList.remove('is-hidden');
         panel.className = 'metrics-note';
         panel.textContent = 'Performance metrics are unavailable because ground truth labels were not provided. Detection and feedback can still continue.';
@@ -771,20 +1409,24 @@ checkIfAlreadySelected();
       }
 
       const matrix = normalizeMatrix(metrics.confusion_matrix);
+      latestNewsMatrix = matrix;
       const support = metrics.support || {};
       panel.className = 'metrics-panel';
       panel.classList.remove('is-hidden');
       panel.innerHTML = `
         <div class="metrics-head">
-          <div class="metrics-title">Performance Summary</div>
+          <div class="metrics-title">Evaluation Metrics</div>
           <div class="metrics-support">Labeled: ${Number(support.total_labeled || 0)} | Human: ${Number(support.human || 0)} | AI: ${Number(support.ai || 0)}</div>
+          <button class="btn-details" type="button" id="newsCmOpen">Confusion Matrix</button>
         </div>
         <div class="metrics-grid">
           <div class="metric-mini"><span>Accuracy</span><b>${metricPct(metrics.accuracy)}</b></div>
           <div class="metric-mini"><span>Macro F1</span><b>${metric4(metrics.f1_macro)}</b></div>
+          <div class="metric-mini"><span>Precision Macro</span><b>${metric4(metrics.precision_macro)}</b></div>
+          <div class="metric-mini"><span>Recall Macro</span><b>${metric4(metrics.recall_macro)}</b></div>
           <div class="metric-mini"><span>AI F1</span><b>${metric4(metrics.f1_ai)}</b></div>
-          <div class="metric-mini"><span>False Positive Rate</span><b>${metricPct(metrics.false_positive_rate)}</b></div>
-          <div class="metric-mini"><span>False Negative Rate</span><b>${metricPct(metrics.false_negative_rate)}</b></div>
+          <div class="metric-mini"><span>FPR</span><b>${metricPct(metrics.false_positive_rate)}</b></div>
+          <div class="metric-mini"><span>FNR</span><b>${metricPct(metrics.false_negative_rate)}</b></div>
         </div>
         ${matrix ? `<div class="cm-grid">
           <div class="cm-cell"><span>TN: Human → Human</span><b>${matrix.tn}</b></div>
@@ -802,7 +1444,8 @@ checkIfAlreadySelected();
       document.getElementById('tableWrapper').style.display = 'block';
 
       const summary = data.summary || {};
-      const details = data.sample_results || [];
+      const details = data.all_results || data.sample_results || [];
+      latestNewsSummary = summary;
       allDetails = details;
 
       document.getElementById('totalArticles').textContent   = summary.total_articles    || 0;
@@ -810,34 +1453,106 @@ checkIfAlreadySelected();
       document.getElementById('aiCount').textContent         = summary.ai_count           || 0;
       document.getElementById('humanPercentage').textContent = `${summary.human_percentage || 0}% of total`;
       document.getElementById('aiPercentage').textContent    = `${summary.ai_percentage   || 0}% of total`;
+      const totalChunks = collectNewsChunks(details).length;
+      const avgChunks = details.length ? (totalChunks / details.length) : 0;
+      document.getElementById('totalChunks').textContent = String(totalChunks);
+      document.getElementById('avgChunks').textContent = details.length ? avgChunks.toFixed(2) : '-';
+      document.getElementById('summaryReviewTargets').textContent = String(totalChunks ? Math.max(1, Math.min(50, Math.ceil(totalChunks * 0.2))) : 0);
 
       const modelName = (summary.model_type === "rnn") ? "RNN (BiGRU)" : "Logistic Regression (TF-IDF)";
-      document.getElementById('datasetInfo').textContent = `Results from ${modelName}`;
+      document.getElementById('datasetInfo').textContent = newsTaskLocked
+        ? `Finalized evaluation with ${modelName}. Preview-only reruns remain available.`
+        : `Preview detection results from ${modelName}. Submit Results to finalize.`;
+      document.getElementById('newsSummaryMeta').textContent =
+        `Model: ${modelName} | Articles: ${summary.total_articles || details.length || 0} | Unit: chunk`;
       renderNewsMetrics(summary.metrics || data.metrics);
+      renderNewsInsights(details, newsTaskLocked);
+      renderNewsDistribution(summary, details);
+      renderNewsTable();
+    }
 
+    function renderNewsDistribution(summary, details) {
+      const chunkRows = collectNewsChunks(details);
+      let human = Number(summary.human_count || 0);
+      let ai = Number(summary.ai_count || 0);
+      let total = Number(summary.total_articles || (human + ai) || details.length || 0);
+      let levelText = 'Article distribution';
+
+      if (newsDistMode === 'chunk') {
+        human = 0;
+        ai = 0;
+        chunkRows.forEach(chunk => {
+          const humanScore = Number(chunk.human || chunk.human_percentage || 0);
+          const aiScore = Number(chunk.ai || chunk.ai_percentage || 0);
+          if (aiScore > humanScore) ai += 1;
+          else human += 1;
+        });
+        total = chunkRows.length;
+        levelText = 'Chunk distribution';
+      }
+
+      const maxVal = Math.max(human, ai, 1);
+      document.getElementById('newsHumanBarVal').textContent = String(human);
+      document.getElementById('newsAiBarVal').textContent = String(ai);
+      document.getElementById('newsDistTotal').textContent = String(total);
+      document.getElementById('newsDistHint').textContent = levelText;
+      document.getElementById('newsHumanBar').style.setProperty('--h', `${((human / maxVal) * 100).toFixed(1)}%`);
+      document.getElementById('newsAiBar').style.setProperty('--h', `${((ai / maxVal) * 100).toFixed(1)}%`);
+      const aiPct = total ? (ai / total) * 100 : 0;
+      document.getElementById('newsDistInsight').textContent = total
+        ? `${newsDistMode === 'chunk' ? 'AI chunks' : 'AI-generated articles'} are ${aiPct.toFixed(1)}% of the dataset.`
+        : `No ${newsDistMode === 'chunk' ? 'chunk' : 'article'} distribution available yet.`;
+      document.getElementById('newsDistMini').textContent =
+        `Human ${newsDistMode === 'chunk' ? 'chunks' : 'articles'}: ${human} (${total ? ((human / total) * 100).toFixed(1) : '0.0'}%) | AI ${newsDistMode === 'chunk' ? 'chunks' : 'articles'}: ${ai} (${aiPct.toFixed(1)}%) | Target unit: chunk`;
+    }
+
+    function renderNewsTable() {
       const tbody = document.getElementById('resultsTable');
+      if (!tbody) return;
       tbody.innerHTML = '';
+      if (!allDetails.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--muted);font-weight:900;">No articles found.</td></tr>`;
+        return;
+      }
 
-      details.forEach((article, idx) => {
-        const row     = document.createElement('tr');
+      const query = String(document.getElementById('searchInput')?.value || '').toLowerCase();
+      const label = String(document.getElementById('labelFilter')?.value || 'all');
+      const sort = String(document.getElementById('sortBy')?.value || 'ai_desc');
+
+      let rows = allDetails.map((article, idx) => ({ article, idx }));
+      if (query) rows = rows.filter(({ article }) => String(article.title || '').toLowerCase().includes(query));
+      if (label !== 'all') {
+        rows = rows.filter(({ article }) => {
+          const isHuman = article.prediction === 'Human';
+          return label === 'human' ? isHuman : !isHuman;
+        });
+      }
+      if (sort === 'confidence_asc') {
+        rows.sort((a, b) => (articleConfidence(a.article) ?? 999) - (articleConfidence(b.article) ?? 999));
+      } else if (sort === 'margin_asc') {
+        rows.sort((a, b) => (articleMargin(a.article) ?? 999) - (articleMargin(b.article) ?? 999));
+      } else {
+        rows.sort((a, b) => (metricNumber(b.article.ai_percentage) ?? 0) - (metricNumber(a.article.ai_percentage) ?? 0));
+      }
+
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--muted);font-weight:900;">No articles found.</td></tr>`;
+        return;
+      }
+
+      rows.forEach(({ article, idx }) => {
+        const row = document.createElement('tr');
         const isHuman = article.prediction === 'Human';
-
         row.innerHTML = `
           <td><div class="article-title" title="${article.title}">${article.title || 'Untitled'}</div></td>
-          <td>
-            <span class="badge ${isHuman ? 'human' : 'ai'}">
-              ${isHuman ? '✍️' : '🤖'} ${article.prediction}
-            </span>
-          </td>
+          <td><span class="badge ${isHuman ? 'human' : 'ai'}">${article.prediction}</span></td>
           <td><span class="percentage">${article.human_percentage}%</span></td>
           <td><span class="percentage">${article.ai_percentage}%</span></td>
-          <td><button class="btn-details" data-idx="${idx}">🔍 Show Details</button></td>
+          <td><span class="percentage">${displayPct(articleConfidence(article))}</span></td>
+          <td><span class="percentage">${displayPct(articleMargin(article))}</span></td>
+          <td><button class="btn-details" data-idx="${idx}">View</button></td>
         `;
-
-        row.querySelector('.btn-details').addEventListener('click', () => {
-          showDetails(allDetails[idx]);
-        });
-
+        row.querySelector('.btn-details').addEventListener('click', () => showDetails(allDetails[idx]));
         tbody.appendChild(row);
       });
     }
@@ -845,6 +1560,7 @@ checkIfAlreadySelected();
     document.getElementById('modelSelect').addEventListener('change', () => {
       const modelType = document.getElementById('modelSelect').value;
       if (stageNewsModelSelect) stageNewsModelSelect.value = modelType;
+      updateNewsModelDescription(modelType);
       if (modelsRan[modelType]) {
         // لو المودل اشتغل قبل، نعرض نتائجه المحفوظة
         // بس الحين API ما يحفظ، فنخليه يشغل مرة ثانية
@@ -853,9 +1569,13 @@ checkIfAlreadySelected();
 
     document.getElementById('runAnalysisBtn').addEventListener('click', async () => {
       if (stageNewsModelSelect) stageNewsModelSelect.value = document.getElementById('modelSelect').value;
+      if (document.getElementById('modelSelect').value === 'sota_model') {
+        alert('SOTA Model is coming soon. Please select Logistic Regression or RNN.');
+        return;
+      }
       const btn = document.getElementById('runAnalysisBtn');
       btn.disabled    = true;
-      btn.textContent = '⏳ Analyzing...';
+      btn.textContent = 'Detecting...';
 
       setNewsStage('processing');
       setNewsProgress(8, 'Starting article analysis...');
@@ -870,12 +1590,23 @@ checkIfAlreadySelected();
       setNewsProgress(100, 'Analysis complete.');
 
       btn.disabled    = false;
-      btn.textContent = '🔍 Run Analysis';
+      btn.textContent = 'Run Detection';
     });
 
     stageNewsModelSelect?.addEventListener('change', () => {
       document.getElementById('modelSelect').value = stageNewsModelSelect.value;
+      updateNewsModelDescription(stageNewsModelSelect.value);
     });
+
+    function updateNewsModelDescription(modelType) {
+      const desc = modelType === 'sota_model'
+        ? 'SOTA Model is coming soon. Please select an available baseline model.'
+        : modelType === 'rnn'
+        ? 'Neural baseline for article-level detection using sequence patterns.'
+        : 'Fast classical baseline for article-level detection.';
+      const stageDesc = document.getElementById('stageModelDesc');
+      if (stageDesc) stageDesc.textContent = desc;
+    }
 
     stageNewsRunBtn?.addEventListener('click', () => {
       document.getElementById('modelSelect').value = stageNewsModelSelect.value;
@@ -883,11 +1614,12 @@ checkIfAlreadySelected();
     });
 
     document.getElementById('selectModelBtn').addEventListener('click', async () => {
+      if (newsTaskLocked) return;
       const modelType = document.getElementById('modelSelect').value;
       const btn = document.getElementById('selectModelBtn');
       
       btn.disabled = true;
-      btn.textContent = '⏳ Saving...';
+      btn.textContent = 'Submitting...';
 
       try {
         const res = await fetch(`/api/task/${taskId}/select_model`, {
@@ -901,34 +1633,58 @@ checkIfAlreadySelected();
         if (data.error) {
           alert('Error: ' + data.error);
           btn.disabled = false;
-          btn.textContent = '✅ Select This Model';
+          btn.textContent = 'Submit Results';
           return;
         }
         
-        btn.textContent = '✅ Model Already Selected';
-        btn.disabled = true;
-        document.getElementById('runAnalysisBtn').disabled = true;
-        document.getElementById('modelSelect').disabled = true;
-        setTimeout(() => {
-          window.location.href = `/projectdetailsexaminer/${projectId}`;
-        }, 1500);
+        setNewsSubmitLocked(true, modelType === 'rnn' ? 'RNN' : 'Logistic Regression');
+        document.getElementById('datasetInfo').textContent =
+          'Finalized evaluation is locked. Run Detection remains available as a preview-only rerun.';
         
       } catch (err) {
         console.error(err);
         alert('Failed to save selection');
         btn.disabled = false;
-        btn.textContent = '✅ Select This Model';
+        btn.textContent = 'Submit Results';
       }
     });
 
-    document.getElementById('searchInput').addEventListener('input', (e) => {
-      const query = e.target.value.toLowerCase();
-      document.querySelectorAll('#resultsTable tr').forEach(row => {
-        const titleEl = row.querySelector('.article-title');
-        if (titleEl) {
-          row.style.display = titleEl.textContent.toLowerCase().includes(query) ? '' : 'none';
-        }
+    document.getElementById('searchInput')?.addEventListener('input', renderNewsTable);
+    document.getElementById('labelFilter')?.addEventListener('change', renderNewsTable);
+    document.getElementById('sortBy')?.addEventListener('change', renderNewsTable);
+    document.querySelectorAll('[data-news-dist]')?.forEach(btn => {
+      btn.addEventListener('click', () => {
+        newsDistMode = btn.getAttribute('data-news-dist') || 'article';
+        document.querySelectorAll('[data-news-dist]').forEach(item => {
+          item.classList.toggle('active', item === btn);
+        });
+        renderNewsDistribution(latestNewsSummary, allDetails);
       });
+    });
+
+    document.addEventListener('click', (event) => {
+      if (event.target?.id === 'newsCmOpen') {
+        const grid = document.getElementById('newsCmGrid');
+        const matrix = latestNewsMatrix;
+        grid.innerHTML = matrix ? `
+          <div class="cm-cell"><span>True Negative</span><b>${matrix.tn}</b></div>
+          <div class="cm-cell"><span>False Positive</span><b>${matrix.fp}</b></div>
+          <div class="cm-cell"><span>False Negative</span><b>${matrix.fn}</b></div>
+          <div class="cm-cell"><span>True Positive</span><b>${matrix.tp}</b></div>
+        ` : `<div style="color:var(--muted);font-weight:900;">Confusion matrix is not available.</div>`;
+        document.getElementById('newsCmModal')?.classList.add('open');
+        document.getElementById('newsCmModal')?.setAttribute('aria-hidden', 'false');
+      }
+    });
+    document.getElementById('newsCmClose')?.addEventListener('click', () => {
+      document.getElementById('newsCmModal')?.classList.remove('open');
+      document.getElementById('newsCmModal')?.setAttribute('aria-hidden', 'true');
+    });
+    document.getElementById('newsCmModal')?.addEventListener('click', (event) => {
+      if (event.target?.id === 'newsCmModal') {
+        document.getElementById('newsCmModal')?.classList.remove('open');
+        document.getElementById('newsCmModal')?.setAttribute('aria-hidden', 'true');
+      }
     });
 
     function showDetails(article) {
@@ -962,6 +1718,12 @@ if (article.content && article.chunks && article.chunks.length > 0) {
   if (article.chunks && article.chunks.length > 0) {
     article.chunks.forEach(chunk => {
       const isHumanChunk = chunk.human > chunk.ai;
+      const confidence = Number.isFinite(Number(chunk.confidence))
+        ? Number(chunk.confidence).toFixed(2) + '%'
+        : Math.max(Number(chunk.human) || 0, Number(chunk.ai) || 0).toFixed(2) + '%';
+      const uncertainty = Number.isFinite(Number(chunk.uncertainty))
+        ? Number(chunk.uncertainty).toFixed(2) + '%'
+        : 'Unavailable';
       chunksDiv.innerHTML += `
         <div class="chunk-row">
          <span class="chunk-label">Chunk ${chunk.label.replace('F','')}</span>
@@ -969,7 +1731,13 @@ if (article.content && article.chunks && article.chunks.length > 0) {
             <div class="chunk-bar-fill ${isHumanChunk ? 'human' : 'ai'}"
                  style="width:${isHumanChunk ? chunk.human : chunk.ai}%"></div>
           </div>
-          <span class="chunk-stats">✍️ ${chunk.human}% &nbsp; 🤖 ${chunk.ai}%</span>
+          <div>
+            <div class="chunk-stats">✍️ ${chunk.human}% &nbsp; 🤖 ${chunk.ai}%</div>
+            <div class="chunk-meta">
+              <span class="chunk-chip">Confidence: ${confidence}</span>
+              <span class="chunk-chip">Uncertainty Margin: ${uncertainty}</span>
+            </div>
+          </div>
         </div>
       `;
     });

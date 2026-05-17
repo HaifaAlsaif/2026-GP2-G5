@@ -238,7 +238,9 @@
     .chunk-card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
     .chunk-card.selected { border: 2px solid var(--primary2); background: #eff6ff; }
     .review-target-note { background:#eff6ff; border:1px solid #93c5fd; color:#1d4ed8; border-radius:8px; padding:12px 14px; font-size:14px; font-weight:600; margin-bottom:16px; }
+    .review-priority-note { margin-top:8px; font-size:12px; font-weight:500; color:#475467; line-height:1.45; }
     .chunk-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+    .chunk-uncertainty { margin-top:8px; font-size:12px; color:#475467; font-weight:600; }
     .chunk-bars { display: flex; flex-direction: column; gap: 6px; }
     .chunk-bar { display: flex; align-items: center; gap: 8px; font-size: 12px; }
     .chunk-bar-label { min-width: 50px; font-weight: 600; }
@@ -569,7 +571,7 @@
           return;
         }
 
-        reviewedCount = articles.filter(function(a){ return a.has_feedback; }).length;
+        reviewedCount = articles.filter(function(a){ return isTargetReviewed(a); }).length;
         updateProgress();
 
         document.getElementById('filterSection').style.display = 'flex';
@@ -604,6 +606,22 @@
       return Number.POSITIVE_INFINITY;
     }
 
+    function formatUncertainty(value) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return 'Unavailable';
+      const percent = number <= 1 ? number * 100 : number;
+      return percent.toFixed(2) + '%';
+    }
+
+    function isTargetReviewed(article) {
+      return article.target_status === 'reviewed' || !!article.reviewed_by || !!article.has_feedback;
+    }
+
+    function getTargetPrediction(article) {
+      const selectedChunk = article.selected_chunk || {};
+      return selectedChunk.prediction || article.prediction || '';
+    }
+
     function applySorting() {
       applyArticleFilters();
       return;
@@ -624,10 +642,10 @@
 
     function articleMatchesFilter(article, filterValue) {
       if (filterValue === 'targets') return article.active_learning_selected !== false;
-      if (filterValue === 'pending') return !article.has_feedback;
-      if (filterValue === 'reviewed') return !!article.has_feedback;
-      if (filterValue === 'human') return article.prediction === 'Human';
-      if (filterValue === 'ai') return article.prediction === 'AI';
+      if (filterValue === 'pending') return !isTargetReviewed(article);
+      if (filterValue === 'reviewed') return isTargetReviewed(article);
+      if (filterValue === 'human') return getTargetPrediction(article) === 'Human';
+      if (filterValue === 'ai') return getTargetPrediction(article) === 'AI';
       return true;
     }
 
@@ -649,7 +667,7 @@
         articles.sort(function(a, b){ return getConfidence(b) - getConfidence(a); });
       }
 
-      reviewedCount = articles.filter(function(a){ return a.has_feedback; }).length;
+      reviewedCount = articles.filter(function(a){ return isTargetReviewed(a); }).length;
       updateProgress();
       renderArticles();
     }
@@ -682,7 +700,7 @@
 
       /* status badge */
       let statusBadge;
-      if (article.has_feedback) {
+      if (isTargetReviewed(article)) {
         if (article.feedback && article.feedback.agreed_with_model) {
           statusBadge = '<span class="accordion-badge agreed">✔ Agreed with Model</span>';
         } else {
@@ -723,13 +741,16 @@
   return result;
 }
       const detectionHTML = renderDetectionDetails(article);
-      const feedbackHTML  = article.has_feedback
-        ? renderExistingFeedback(article.feedback)
+      const feedbackHTML  = isTargetReviewed(article)
+        ? renderExistingFeedback(article.feedback, article, index)
         : renderFeedbackForm(article, index);
       const selectedChunk = article.selected_chunk || {};
       const selectedChunkText = selectedChunk.chunk_text || selectedChunk.text || '';
+      const selectedUncertainty = article.selected_chunk_uncertainty;
       const targetNote = article.target_unit === 'chunk'
-        ? '<div class="review-target-note">Review target: Chunk ' + (article.chunk_index || selectedChunk.chunk_index || '') + '</div>' +
+        ? '<div class="review-target-note">Review target: Chunk ' + (article.chunk_index || selectedChunk.chunk_index || '') +
+          '<div class="review-priority-note">Uncertainty distance: ' + formatUncertainty(selectedUncertainty) + '</div>' +
+          '<div class="review-priority-note">Lower uncertainty distance means the model is less certain, so the chunk has higher review priority.</div></div>' +
           '<div class="article-content" style="max-height:180px;">' + (selectedChunkText || 'Selected chunk text is unavailable.') + '</div>'
         : '';
 
@@ -774,6 +795,7 @@
       article.chunks.forEach(function(chunk, i){
         const chunkNumber = i + 1;
         const confidence = Math.max(chunk.human, chunk.ai).toFixed(1);
+        const chunkUncertainty = chunk.uncertainty;
         const selectedClass = chunk.active_learning_selected ? ' selected' : '';
         cardsHTML +=
           '<div class="chunk-card' + selectedClass + '">' +
@@ -790,6 +812,7 @@
                 '<span class="chunk-bar-value">' + chunk.ai + '%</span>' +
               '</div>' +
             '</div>' +
+            '<div class="chunk-uncertainty">Uncertainty distance: ' + formatUncertainty(chunkUncertainty) + '</div>' +
           '</div>';
       });
 
@@ -797,6 +820,7 @@
         '<div class="detection-results">' +
           '<div class="detection-title">🔍 Detection Details</div>' +
           summaryHTML +
+          '<div class="review-priority-note">Lower uncertainty distance means the model is less certain, so the chunk has higher review priority.</div>' +
           '<div class="chunks-grid">' + cardsHTML + '</div>' +
         '</div>'
       );
@@ -905,6 +929,79 @@
     }
 
     /* ─── toggle agree switch ─── */
+    function toggleEditFeedback(index) {
+      const box = document.getElementById('editFeedback-' + index);
+      if (box) box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function renderExistingFeedback(feedback, article, index) {
+      feedback = feedback || {};
+      article = article || {};
+      const locked = !!article.feedback_locked;
+      const canEdit = !!article.can_edit_feedback && !locked;
+      const reviewerName = feedback.reviewed_by_name || feedback.examiner_name || article.reviewed_by_name || 'Examiner';
+      const submittedAt = feedback.submitted_at ? new Date(feedback.submitted_at).toLocaleString() : '';
+      const label = feedback.label || feedback.corrected_label || '-';
+      const explanation = feedback.explanation || feedback.feedback_explanation || '-';
+      const labelClass = label === 'Human' ? 'human' : 'ai';
+      const icon = label === 'Human' ? 'âœچï¸ڈ' : 'ًں¤–';
+      const editBlock = canEdit
+        ? '<button class="btn btn-primary" onclick="toggleEditFeedback(' + index + ')" style="margin-top:12px;">Edit Feedback</button>' +
+          '<div id="editFeedback-' + index + '" style="display:none;margin-top:14px;">' + renderEditFeedbackForm(article, index, feedback) + '</div>'
+        : '<div class="feedback-text" style="color:var(--muted);font-style:italic;">' + (locked ? 'Locked because the labeling task is completed.' : 'Read-only. Reviewed by another examiner.') + '</div>';
+
+      return (
+        '<div class="feedback-exists">' +
+          '<div class="feedback-warning">' + (canEdit ? 'Reviewed by you' : 'This review target already has feedback') + '</div>' +
+          '<div class="feedback-info">' +
+            '<div class="feedback-meta">' +
+              '<span class="feedback-author">' + reviewerName + '</span>' +
+              '<span class="feedback-date">' + submittedAt + '</span>' +
+            '</div>' +
+            (feedback.agreed_with_model
+              ? '<div><span class="feedback-label agreed">âœ” Model Agreement</span></div><div class="feedback-text" style="color:var(--muted);font-style:italic;">The examiner confirmed they agree with the model prediction.</div>'
+              : '<div><span class="feedback-label ' + labelClass + '">' + icon + ' ' + label + '</span></div><div class="feedback-text">' + explanation + '</div>') +
+            editBlock +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    function renderEditFeedbackForm(article, index, existingFeedback) {
+      existingFeedback = existingFeedback || {};
+      const existingLabel = existingFeedback.label || existingFeedback.corrected_label || '';
+      const existingExplanation = existingFeedback.explanation || existingFeedback.feedback_explanation || '';
+
+      return (
+        '<div class="feedback-form-wrapper" id="feedbackFormWrapper-' + index + '">' +
+          '<div class="form-section">' +
+            '<h3 class="form-title">Edit Feedback</h3>' +
+            '<div class="form-group">' +
+              '<label class="form-label">Select Label</label>' +
+              '<div class="radio-group">' +
+                '<div class="radio-option">' +
+                  '<input type="radio" name="label-' + index + '" id="labelHuman-' + index + '" value="Human" ' + (existingLabel === 'Human' ? 'checked' : '') + '>' +
+                  '<label for="labelHuman-' + index + '" class="radio-label human">âœچï¸ڈ Human</label>' +
+                '</div>' +
+                '<div class="radio-option">' +
+                  '<input type="radio" name="label-' + index + '" id="labelAI-' + index + '" value="AI" ' + (existingLabel === 'AI' ? 'checked' : '') + '>' +
+                  '<label for="labelAI-' + index + '" class="radio-label ai">ًں¤– AI</label>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="form-group">' +
+              '<label class="form-label">Explanation</label>' +
+              '<textarea id="explanation-' + index + '" placeholder="Explain why you chose this label..." maxlength="500" oninput="updateCharCount(' + index + ')">' + existingExplanation + '</textarea>' +
+              '<div class="char-count"><span id="charCount-' + index + '">0</span> / 500</div>' +
+            '</div>' +
+            '<div class="form-actions">' +
+              '<button class="btn btn-primary" onclick="submitFeedback(\'' + article.article_id + '\', ' + index + ')">ًں’¾ Update Feedback</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
     function toggleAgree(index) {
       const track      = document.getElementById('toggleTrack-'       + index);
       const label      = document.getElementById('toggleLabel-'       + index);

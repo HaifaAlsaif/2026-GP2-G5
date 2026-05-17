@@ -135,9 +135,9 @@ a{color:inherit}
 .dropdown-divider{height:1px;background:var(--line);margin:4px 0}
 
 /* ---------- Layout ---------- */
-.content-wrapper{flex:1;display:flex;justify-content:center;padding:24px clamp(16px,6vw,134.8px) 40px}
+.content-wrapper{flex:1;display:flex;justify-content:center;padding:24px clamp(14px,3vw,56px) 40px}
 .card{
-  width:100%;max-width:1200px;border:1px solid var(--line);
+  width:100%;max-width:1560px;border:1px solid var(--line);
   border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow);
   overflow:hidden;
 }
@@ -155,6 +155,13 @@ a{color:inherit}
   width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;
   background:rgba(21,93,252,.08);border:1px solid rgba(21,93,252,.18);
   box-shadow:0 10px 15px -10px rgba(21,93,252,.35);flex:0 0 auto;
+}
+.badge-icon::before{
+  content:"AI";
+  font-size:13px;
+  font-weight:900;
+  color:var(--primary2);
+  letter-spacing:0;
 }
 .page-title h1{margin:0;font-size:34px;letter-spacing:-.4px;color:#0f172b;line-height:1.05}
 [data-theme="dark"] .page-title h1{color:var(--text)}
@@ -256,10 +263,30 @@ a{color:inherit}
 
 /* ---------- Select / Inputs ---------- */
 .select{
-  width:100%;border:.8px solid var(--line);border-radius:12px;padding:10px 10px;
-  background:rgba(255,255,255,.55);outline:none;font-weight:800;
+  appearance:none;
+  -webkit-appearance:none;
+  width:100%;
+  min-height:42px;
+  border:.8px solid var(--line);
+  border-radius:12px;
+  padding:0 38px 0 12px;
+  background-color:#fff;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 18px,
+    calc(100% - 12px) 18px;
+  background-size:6px 6px,6px 6px;
+  background-repeat:no-repeat;
+  color:var(--text);
+  outline:none;
+  font:inherit;
+  font-size:14px;
+  font-weight:800;
+  cursor:pointer;
 }
-[data-theme="dark"] .select{background:rgba(255,255,255,.03);color:var(--text)}
+[data-theme="dark"] .select{background-color:#0f172a;color:var(--text);border-color:var(--line)}
 .select-sm{min-width:170px}
 
 /* ---------- Advanced Panel ---------- */
@@ -285,7 +312,7 @@ a{color:inherit}
 .panel-block-title{font-weight:900}
 .panel-block-sub{font-size:12px;color:var(--muted)}
 
-.insights-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.insights-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
 .insight-tile{
   border:.8px solid var(--line);
   border-radius:12px;
@@ -373,7 +400,7 @@ a{color:inherit}
 .eval-empty{padding:10px 12px;color:var(--muted);border:.8px dashed var(--line);border-radius:14px;margin-bottom:14px}
 
 /* ---------- Grid Panels ---------- */
-.grid{display:grid;grid-template-columns:360px 1fr;gap:18px;align-items:start}
+.grid{display:grid;grid-template-columns:minmax(300px,360px) minmax(0,1fr);gap:18px;align-items:start}
 .panel{border-radius:18px;background:var(--card);border:1px solid var(--line);overflow:hidden;box-shadow:var(--shadow)}
 [data-theme="dark"] .panel{background:rgba(255,255,255,.03)}
 .panel-header{
@@ -459,7 +486,7 @@ a{color:inherit}
 [data-theme="dark"] .search{background:rgba(255,255,255,.03);color:var(--text)}
 
 /* ---------- Table ---------- */
-.table-wrap{overflow-y:auto;overflow-x: hidden;}
+.table-wrap{overflow-y:auto;overflow-x:hidden;}
 .table-wrap.table-max{max-height:520px;} /* ✅ vertical scroll after limit */
 
 .fixed-table{width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed;}
@@ -474,15 +501,15 @@ a{color:inherit}
 }
 
 .fixed-table tbody td{
-  padding:12px 14px;border-bottom:.8px solid rgba(0,0,0,.06);vertical-align:middle;
+  padding:12px 10px;border-bottom:.8px solid rgba(0,0,0,.06);vertical-align:middle;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 [data-theme="dark"] .fixed-table tbody td{border-bottom:.8px solid rgba(255,255,255,.08)}
 
-.col-id{width:110px;}
-.col-num{width:78px;}
-.col-label{width:110px;}
-.col-action{width:80px;}
+.col-id{width:17%;}
+.col-num{width:10%;}
+.col-label{width:15%;}
+.col-action{width:96px;}
 
 
 .pill{
@@ -530,7 +557,7 @@ a{color:inherit}
 
 /* خلي الجدول ياخذ عرض أكبر عشان يظهر سكرول أفقي عند الحاجة */
 .turns-table{
-  min-width: 980px;
+  min-width: 900px;
 }
 
 /* ✅ Filter bar inside details */
@@ -581,12 +608,30 @@ a{color:inherit}
 .modal-card{
   position:relative;max-width:520px;margin:8vh auto 0;background:var(--bg);
   border:.8px solid var(--line);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.25);padding:14px;
+  z-index:1;
 }
 .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .modal-title{font-weight:900}
 .modal-x{border:none;background:rgba(0,0,0,.06);border-radius:10px;padding:8px 10px;cursor:pointer}
 [data-theme="dark"] .modal-x{background:rgba(255,255,255,.06)}
-.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35)}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:0}
+
+.details-modal-card{max-width:min(1040px,94vw);max-height:84vh;overflow:auto}
+.details-summary{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;color:var(--muted);font-size:12px}
+.details-turn-list{display:grid;gap:10px}
+.details-turn-card{
+  border:.8px solid var(--line);
+  border-radius:14px;
+  padding:12px;
+  background:rgba(255,255,255,.68);
+}
+[data-theme="dark"] .details-turn-card{background:rgba(255,255,255,.04)}
+.details-turn-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.details-turn-index{font-weight:900}
+.details-turn-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.details-turn-text,.details-turn-prev{font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+.details-turn-prev{margin-top:8px;color:var(--muted);border-top:.8px dashed var(--line);padding-top:8px}
+.details-empty{color:var(--muted);font-weight:900;padding:16px;border:.8px dashed var(--line);border-radius:14px}
 
 .cm-wrap{padding:10px}
 .cm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -613,6 +658,8 @@ a{color:inherit}
   .bar{width:86px}
   .bar-labels{gap:72px}
   .insights-grid{grid-template-columns:1fr}
+  .table-wrap{overflow-x:auto}
+  .fixed-table{min-width:860px}
 }
   </style>
 </head>
@@ -701,8 +748,8 @@ a{color:inherit}
                       <option value="rnn">
                         Baseline — RNN
                       </option>
-                      <option value="sota_model">
-                        State-of-the-Art (SOTA) — LLM-based (Coming soon)
+                      <option value="sota_model" disabled>
+                        SOTA Model (Coming Soon)
                       </option>
                     </select>
 
@@ -780,6 +827,11 @@ a{color:inherit}
             </div>
 
             <!-- ✅ Advanced = Insights + Diagnostics -->
+            <div class="notice" id="uploadedFinalizedBanner" style="display:none;width:100%;margin:0 0 14px;">
+              <b>Finalized Evaluation</b><br>
+              Submitted model is locked, review targets are frozen, and reruns are preview-only.
+            </div>
+
             <div class="advanced-panel" id="advancedPanel" style="display:none;">
               <div class="panel-block">
                 <div class="panel-block-head">
@@ -868,13 +920,44 @@ a{color:inherit}
 
               <div class="eval-grid">
                 <div class="eval-item"><span>Accuracy</span><b id="accVal">—</b></div>
-                <div class="eval-item"><span>F1 Macro</span><b id="f1Val">—</b></div>
+                <div class="eval-item"><span>Macro F1</span><b id="f1Val">—</b></div>
                 <div class="eval-item"><span>Precision Macro</span><b id="precVal">—</b></div>
                 <div class="eval-item"><span>Recall Macro</span><b id="recVal">—</b></div>
               </div>
             </div>
 
             <div class="sub-metrics" id="evalSupportLine" style="display:none;margin-bottom:14px;"></div>
+            <div class="sub-metrics" id="uploadedActiveLearningLine" style="display:none;margin-bottom:14px;">
+              Active Learning: turn-level review targets are frozen after Submit Results.
+            </div>
+
+            <div class="advanced-panel" id="uploadedActiveLearningPanel" style="display:none;">
+              <div class="panel-block">
+                <div class="panel-block-head">
+                  <div class="panel-block-title">Active Learning Insights</div>
+                  <div class="panel-block-sub">Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.</div>
+                </div>
+
+                <div class="insights-grid">
+                  <div class="insight-tile">
+                    <span>Total Review Targets</span>
+                    <b id="uploadedReviewTotal">—</b>
+                  </div>
+                  <div class="insight-tile">
+                    <span>Pending Targets</span>
+                    <b id="uploadedReviewPending">—</b>
+                  </div>
+                  <div class="insight-tile">
+                    <span>Lowest Uncertainty Margin</span>
+                    <b id="uploadedLowestMargin">—</b>
+                  </div>
+                  <div class="insight-tile">
+                    <span>Why Selected</span>
+                    <b>Model uncertainty</b>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div class="eval-empty" id="evalEmpty" style="display:none;">
               Ground truth not provided — metrics are hidden.
@@ -888,8 +971,8 @@ a{color:inherit}
                   <p class="panel-title">Distribution</p>
 
                   <div class="dist-switch">
-                    <button class="switch-btn active" data-dist="turns" type="button">Turn-level</button>
-                    <button class="switch-btn" data-dist="dialogues" type="button">Dialogue-level</button>
+                    <button class="switch-btn active" data-dist="dialogues" type="button">Dialogue-level</button>
+                    <button class="switch-btn" data-dist="turns" type="button">Turn-level</button>
                   </div>
                 </div>
 
@@ -979,6 +1062,18 @@ a{color:inherit}
       <div class="cm-wrap" id="cmWrap"></div>
     </div>
     <div class="modal-backdrop" id="cmBackdrop"></div>
+  </div>
+
+  <div class="modal" id="detailsModal" aria-hidden="true">
+    <div class="modal-card details-modal-card" role="dialog" aria-modal="true" aria-labelledby="detailsModalTitle">
+      <div class="modal-head">
+        <div class="modal-title" id="detailsModalTitle">Dialogue Details</div>
+        <button class="modal-x" id="detailsCloseBtn" type="button">×</button>
+      </div>
+      <div class="details-summary" id="detailsSummary"></div>
+      <div class="details-turn-list" id="detailsTurnList"></div>
+    </div>
+    <div class="modal-backdrop" id="detailsBackdrop"></div>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -1092,7 +1187,7 @@ a{color:inherit}
   cmBtn?.addEventListener("click", openCM);
 
   // Distribution toggle
-  let currentDistMode = "turns"; // "turns" | "dialogues"
+  let currentDistMode = "dialogues"; // "dialogues" | "turns"
   document.querySelectorAll(".switch-btn[data-dist]").forEach(btn=>{
     btn.addEventListener("click",()=>{
       document.querySelectorAll(".switch-btn[data-dist]").forEach(b=>b.classList.remove("active"));
@@ -1130,7 +1225,7 @@ a{color:inherit}
 
     const sub = $("subtitleText");
     if(sub){
-      sub.innerHTML = `Selected model: <b>${escapeHtml(meta.name)}</b> — ${escapeHtml(meta.desc)}`;
+      sub.innerHTML = `Detection model: <b>${escapeHtml(meta.name)}</b> — ${escapeHtml(meta.desc)}`;
     }
 
     const modelDesc = $("modelDesc");
@@ -1153,10 +1248,12 @@ a{color:inherit}
   // ---------- State variables ----------
   let lastSummary = null;
   let lastDialogues = [];
+  let uploadedTaskLocked = false;
 
   // ---------- API ----------
-  async function fetchConversationResults(modelKey){
+  async function fetchConversationResults(modelKey, runId = ""){
     const qs = new URLSearchParams({ model_key: modelKey });
+    if(runId) qs.set("run_id", runId);
     const res = await fetch(`/api/project/${PROJECT_ID}/conversation_analysis_results?${qs.toString()}`);
     if(!res.ok) throw new Error(await res.text() || "Results request failed");
     return await res.json();
@@ -1182,6 +1279,51 @@ a{color:inherit}
     const data = await res.json().catch(()=>({}));
     if(!res.ok && !String(data?.error || "").toLowerCase().includes("already")) {
       throw new Error(data?.error || "Could not save selected model for this task");
+    }
+  }
+
+  function setUploadedSubmitLocked(locked, selectedName = ""){
+    uploadedTaskLocked = locked;
+    if(submitBtn){
+      submitBtn.disabled = locked;
+      submitBtn.textContent = locked
+        ? `Submitted${selectedName ? `: ${selectedName}` : ""}`
+        : "Submit Results";
+      submitBtn.title = locked ? "Model selection is locked for this completed task." : "";
+    }
+    if(startBtn){
+      startBtn.disabled = false;
+      startBtn.title = locked ? "Run Detection is preview-only after Submit." : "";
+    }
+    if(modelSelect){
+      modelSelect.disabled = locked;
+    }
+    const banner = $("uploadedFinalizedBanner");
+    if(banner){
+      banner.style.display = locked ? "block" : "none";
+      if(locked){
+        banner.innerHTML = `<b>Finalized Evaluation</b><br>Submitted${selectedName ? ` with <b>${escapeHtml(selectedName)}</b>` : ""}. Review targets are frozen and reruns are preview-only.`;
+      }
+    }
+  }
+
+  async function loadUploadedTaskSelectionStatus(){
+    if(!PROJECT_ID || !TASK_ID) return;
+    try{
+      const qs = new URLSearchParams({ project_id: PROJECT_ID, task_id: TASK_ID });
+      const res = await fetch(`/api/conversation/selected_model_task?${qs.toString()}`);
+      const data = await res.json().catch(()=>({}));
+      if(data.selected){
+        const selectedKey = data.selected_model === "logreg" ? "tfidf_logreg" : data.selected_model;
+        if(selectedKey && modelSelect) modelSelect.value = selectedKey;
+        updateUIForModel();
+        setUploadedSubmitLocked(true, data.selected_model_name || data.selected_model || "");
+        toast("This task is completed. Model selection is locked.");
+      }else{
+        setUploadedSubmitLocked(false);
+      }
+    }catch(err){
+      console.warn("Could not load task selection status:", err);
     }
   }
 
@@ -1212,13 +1354,8 @@ a{color:inherit}
       if(!runRes.ok) throw new Error(await runRes.text() || "Analyze request failed");
 
       $("apiStatus").textContent = "Analysis complete. Fetching results...";
-      const data = await fetchConversationResults(model_key);
-      try {
-        await saveUploadedTaskModelSelection(model_key);
-      } catch (saveErr) {
-        console.warn("Task model selection save failed:", saveErr);
-        toast("Results updated, but task model selection was not saved");
-      }
+      const runData = await runRes.json().catch(()=>({}));
+      const data = await fetchConversationResults(model_key, runData.run_id || "");
 
       clearInterval(timer);
       setProgress(100);
@@ -1226,7 +1363,7 @@ a{color:inherit}
       showState("stateResults");
       hydrateResults(data, model_key);
 
-      toast("Results updated");
+      toast(uploadedTaskLocked ? "Preview results updated" : "Results updated");
     }catch(err){
       clearInterval(timer);
       setProgress(0);
@@ -1250,6 +1387,10 @@ a{color:inherit}
       toast("Missing task id. Open this page from the model-selection task.");
       return;
     }
+    if(uploadedTaskLocked){
+      toast("Model selection is already submitted for this task.");
+      return;
+    }
 
     const oldText = submitBtn.textContent;
     submitBtn.disabled = true;
@@ -1258,12 +1399,15 @@ a{color:inherit}
     try{
       await saveUploadedTaskModelSelection(lastSummary.model_key || getSelectedModel());
       toast("Model selection submitted");
+      setUploadedSubmitLocked(true, MODEL_META[getSelectedModel()]?.name || getSelectedModel());
     }catch(err){
       console.error(err);
       toast(err?.message || "Could not submit model selection");
     }finally{
-      submitBtn.disabled = false;
-      submitBtn.textContent = oldText;
+      if(!uploadedTaskLocked){
+        submitBtn.disabled = false;
+        submitBtn.textContent = oldText;
+      }
     }
   });
 
@@ -1448,6 +1592,21 @@ a{color:inherit}
     $("aiTurns").textContent = String(aiTurns);
     $("aiPct").textContent = totalTurns>0 ? `${aiPct.toFixed(1)}%` : "—";
     $("humanPct").textContent = totalTurns>0 ? `${(100 - aiPct).toFixed(1)}%` : "—";
+    const uploadedAlLine = $("uploadedActiveLearningLine");
+    if(uploadedAlLine){
+      const targetCount = totalTurns > 0 ? Math.max(1, Math.min(50, Math.ceil(totalTurns * 0.2))) : 0;
+      uploadedAlLine.style.display = "flex";
+      uploadedAlLine.textContent = `Active Learning: ${targetCount} turn-level review targets ${uploadedTaskLocked ? "are frozen" : "will be frozen after Submit Results"}. Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.`;
+      const uploadedPanel = $("uploadedActiveLearningPanel");
+      const lowestMarginRaw = lastSummary?.lowest_uncertainty_margin ?? lastSummary?.min_uncertainty_margin ?? lastSummary?.lowest_uncertainty ?? lastSummary?.min_uncertainty;
+      const lowestMarginNum = Number(lowestMarginRaw);
+      if(uploadedPanel) uploadedPanel.style.display = "block";
+      if($("uploadedReviewTotal")) $("uploadedReviewTotal").textContent = String(targetCount);
+      if($("uploadedReviewPending")) $("uploadedReviewPending").textContent = uploadedTaskLocked ? "Frozen" : String(targetCount);
+      if($("uploadedLowestMargin")) $("uploadedLowestMargin").textContent = Number.isFinite(lowestMarginNum)
+        ? `${(lowestMarginNum <= 1 ? lowestMarginNum * 100 : lowestMarginNum).toFixed(1)}%`
+        : "—";
+    }
 
     // Insights (avg turns/dialogue + top AI dialogue + mixed count)
     const norms = (Array.isArray(lastDialogues) ? lastDialogues : []).map(normalizeDialogueRow);
@@ -1570,7 +1729,7 @@ document.addEventListener("click", (e)=>{
 
 
   // ---------- Distribution ----------
-  function renderDistribution(summary, dialogues){
+  function renderDistributionLegacyUnused(summary, dialogues){
     const barA = $("barA"), barB = $("barB"), barC = $("barC");
     const valA = $("valA"), valB = $("valB"), valC = $("valC");
     const labelA = $("labelA"), labelB = $("labelB"), labelC = $("labelC");
@@ -1613,6 +1772,7 @@ document.addEventListener("click", (e)=>{
       barB.style.setProperty("--h", ((a/maxV)*100).toFixed(1)+"%");
 
       const aiPct = total>0 ? (a/total)*100 : 0;
+      const humanPct = total>0 ? (h/total)*100 : 0;
       distInsight.textContent = total>0
         ? `Machine turns are ${aiPct.toFixed(1)}% of all turns.`
         : "No turns found yet.";
@@ -1668,6 +1828,85 @@ document.addEventListener("click", (e)=>{
       : "—";
   }
 
+  // Distribution labels are rebuilt here so both levels show counts and percentages.
+  function renderDistribution(summary, dialogues){
+    const barA = $("barA"), barB = $("barB"), barC = $("barC");
+    const valA = $("valA"), valB = $("valB"), valC = $("valC");
+    const labelA = $("labelA"), labelB = $("labelB"), labelC = $("labelC");
+    const distTotal = $("distTotal"), distHint = $("distHint");
+    const distInsight = $("distInsight"), distInsightMini = $("distInsightMini");
+    const labelsWrap = $("distLabels");
+
+    summary = summary || {};
+    const norms = (Array.isArray(dialogues) ? dialogues : []).map(normalizeDialogueRow);
+    const avgTurns = norms.length ? (norms.reduce((s,r)=>s + r.turns,0) / norms.length) : 0;
+    let top = null;
+    norms.forEach(r => { if(!top || r.aiPct > top.aiPct) top = r; });
+
+    if(currentDistMode === "turns"){
+      const h = n(summary?.human_turns ?? summary?.humanTurns ?? summary?.human_count);
+      const a = n(summary?.machine_turns ?? summary?.ai_turns ?? summary?.ai_count);
+      const total = n(summary?.total_turns ?? (h + a));
+      const humanPct = total ? (h / total) * 100 : 0;
+      const aiPct = total ? (a / total) * 100 : 0;
+      const maxV = Math.max(h, a, 1);
+
+      barC.style.display = "none";
+      labelC.style.display = "none";
+      labelsWrap.style.gap = "58px";
+      labelA.textContent = "Human";
+      labelB.textContent = "Machine";
+      distHint.textContent = "Turn-level distribution";
+      valA.textContent = String(h);
+      valB.textContent = String(a);
+      distTotal.textContent = String(total);
+      barA.style.setProperty("--h", ((h / maxV) * 100).toFixed(1) + "%");
+      barB.style.setProperty("--h", ((a / maxV) * 100).toFixed(1) + "%");
+      distInsight.textContent = total
+        ? `Machine turns are ${aiPct.toFixed(1)}% of all turns.`
+        : "No turn distribution available yet.";
+      distInsightMini.textContent = total
+        ? `Human turns: ${h} (${humanPct.toFixed(1)}%) | Machine turns: ${a} (${aiPct.toFixed(1)}%) | Avg Turns/Dialogue: ${norms.length ? avgTurns.toFixed(2) : "-"} | Highest AI%: ${top ? `${top.dialogueId} (${top.aiPct.toFixed(1)}%)` : "-"}`
+        : "No turn distribution available yet.";
+      return;
+    }
+
+    let humanD = 0, mixedD = 0, aiHeavyD = 0;
+    norms.forEach(r => {
+      const key = getFinalLabelKey(r.finalLabel);
+      if(key === "ai-heavy") aiHeavyD += 1;
+      else if(key === "mixed") mixedD += 1;
+      else humanD += 1;
+    });
+
+    const totalD = norms.length;
+    const humanPct = totalD ? (humanD / totalD) * 100 : 0;
+    const mixedPct = totalD ? (mixedD / totalD) * 100 : 0;
+    const aiPct = totalD ? (aiHeavyD / totalD) * 100 : 0;
+    const maxV = Math.max(humanD, aiHeavyD, mixedD, 1);
+
+    barC.style.display = "";
+    labelC.style.display = "";
+    labelsWrap.style.gap = "34px";
+    labelA.textContent = "Human";
+    labelB.textContent = "AI-heavy";
+    labelC.textContent = "Mixed";
+    distHint.textContent = "Dialogue-level distribution";
+    valA.textContent = String(humanD);
+    valB.textContent = String(aiHeavyD);
+    valC.textContent = String(mixedD);
+    distTotal.textContent = String(totalD);
+    barA.style.setProperty("--h", ((humanD / maxV) * 100).toFixed(1) + "%");
+    barB.style.setProperty("--h", ((aiHeavyD / maxV) * 100).toFixed(1) + "%");
+    barC.style.setProperty("--h", ((mixedD / maxV) * 100).toFixed(1) + "%");
+    distInsight.textContent = totalD
+      ? `AI-heavy dialogues are ${aiPct.toFixed(1)}% of all dialogues.`
+      : "No dialogue distribution available yet.";
+    distInsightMini.textContent = totalD
+      ? `Human dialogues: ${humanD} (${humanPct.toFixed(1)}%) | Mixed dialogues: ${mixedD} (${mixedPct.toFixed(1)}%) | AI-heavy dialogues: ${aiHeavyD} (${aiPct.toFixed(1)}%)`
+      : "No dialogue distribution available yet.";
+  }
+
   // ---------- Dialogues table + Expand ----------
   const dialoguesTbody = $("dialoguesTbody");
 
@@ -1679,7 +1918,7 @@ document.addEventListener("click", (e)=>{
     const dialogueId = row?.dataset?.dialogueId;
     if(!dialogueId) return;
 
-    await toggleExpandRow(row, dialogueId, lastSummary);
+    await openDialogueDetailsModal(dialogueId, lastSummary);
   });
 
   function closeAnyExpanded(){
@@ -1689,6 +1928,85 @@ document.addEventListener("click", (e)=>{
       const btn=r.querySelector("button[data-action='toggle']");
       if(btn) btn.textContent="View";
     });
+  }
+
+  function closeDetailsModal(){
+    $("detailsModal")?.classList.remove("show");
+    $("detailsModal")?.setAttribute("aria-hidden", "true");
+  }
+
+  $("detailsCloseBtn")?.addEventListener("click", closeDetailsModal);
+  $("detailsBackdrop")?.addEventListener("click", closeDetailsModal);
+
+  function renderDetailCards(turns){
+    if(!Array.isArray(turns) || turns.length === 0){
+      return `<div class="details-empty">No turns found.</div>`;
+    }
+    return turns.map(t=>{
+      const idx = t.turn_index ?? t.turnIndex ?? t.index ?? "-";
+      const sender = t.sender ?? "-";
+      const text = t.text ?? "";
+      const prevText = t.previous_text ?? t.prev_text ?? t.previousText ?? t.context ?? "";
+      const predAI = isPredAI(t);
+      const gtVal = t.ground_truth ?? t.gt ?? null;
+      const gt = (gtVal === 0) ? "Human" : (gtVal === 1 ? "Machine" : (gtVal || "-"));
+      const confPct = getConfidencePercent(t);
+      const conf = (confPct === null) ? "Unavailable" : `${confPct.toFixed(1)}%`;
+      const marginRaw = Number(t.uncertainty);
+      const margin = Number.isFinite(marginRaw)
+        ? `${(marginRaw <= 1 ? marginRaw * 100 : marginRaw).toFixed(1)}%`
+        : "Unavailable";
+      return `
+        <div class="details-turn-card">
+          <div class="details-turn-head">
+            <div class="details-turn-index">Turn ${escapeHtml(idx)}</div>
+            <div class="details-turn-meta">
+              <span class="meta-chip">Sender: <b>${escapeHtml(sender || "-")}</b></span>
+              <span class="pill ${predAI ? "ai" : "human"}">${predAI ? "Machine" : "Human"}</span>
+              <span class="meta-chip">GT: <b>${escapeHtml(gt)}</b></span>
+              <span class="meta-chip">Confidence: <b>${escapeHtml(conf)}</b></span>
+              <span class="meta-chip">Uncertainty Margin: <b>${escapeHtml(margin)}</b></span>
+            </div>
+          </div>
+          <div class="details-turn-text">${escapeHtml(text)}</div>
+          ${String(prevText).trim() ? `<div class="details-turn-prev"><b>Previous:</b> ${escapeHtml(prevText)}</div>` : ""}
+        </div>
+      `;
+    }).join("");
+  }
+
+  async function openDialogueDetailsModal(dialogueId, summary){
+    const buttons = document.querySelectorAll(`tr[data-dialogue-id="${CSS.escape(String(dialogueId))}"] button[data-action='toggle']`);
+    buttons.forEach(btn => btn.textContent = "Loading...");
+    try{
+      const qs = new URLSearchParams({
+        model_key: (summary?.model_key ?? getSelectedModel()),
+        run_id: (summary?.run_id ?? "")
+      });
+      const res = await fetch(`/api/project/${PROJECT_ID}/conversation_dialogue/${encodeURIComponent(dialogueId)}?${qs.toString()}`);
+      if(!res.ok) throw new Error(await res.text() || "Dialogue details failed");
+      const data = await res.json();
+      const header = data?.header || {};
+      const turns = Array.isArray(data?.turns) ? data.turns : [];
+      const total = header.total_turns ?? turns.length;
+      const human = header.human_turns ?? "-";
+      const machine = header.ai_turns ?? header.machine_turns ?? "-";
+      const machinePct = header.ai_percentage ?? header.machine_percentage ?? "-";
+      $("detailsModalTitle").textContent = `Dialogue Details: ${dialogueId}`;
+      $("detailsSummary").innerHTML = `
+        <span class="meta-chip">Total turns: <b>${escapeHtml(total)}</b></span>
+        <span class="meta-chip">Human: <b>${escapeHtml(human)}</b></span>
+        <span class="meta-chip">Machine: <b>${escapeHtml(machine)}</b></span>
+        <span class="meta-chip">Machine %: <b>${escapeHtml(machinePct)}</b></span>
+      `;
+      $("detailsTurnList").innerHTML = renderDetailCards(turns);
+      $("detailsModal")?.classList.add("show");
+      $("detailsModal")?.setAttribute("aria-hidden", "false");
+    }catch(err){
+      toast(`Failed to load dialogue details: ${err?.message || err}`);
+    }finally{
+      buttons.forEach(btn => btn.textContent = "View");
+    }
   }
 
   function normalizeDialogueRow(d){
@@ -1796,11 +2114,12 @@ expandTr.innerHTML = `
               <th>Prediction</th>
               <th>GT</th>
               <th>Confidence</th>
+              <th>Uncertainty Margin</th>
             </tr>
           </thead>
           <tbody id="turnsBody_${domKey}">
             <tr>
-              <td colspan="7" style="color:var(--muted);font-weight:900;">Loading turns...</td>
+              <td colspan="8" style="color:var(--muted);font-weight:900;">Loading turns...</td>
             </tr>
           </tbody>
         </table>
@@ -1839,7 +2158,7 @@ expandTr.innerHTML = `
     }catch(err){
       const body = expandTr.querySelector(`#turnsBody_${CSS.escape(domKey)}`);
       if(body){
-        body.innerHTML = `<tr><td colspan="7" style="color:var(--muted);font-weight:900;">Failed to load: ${escapeHtml(err?.message||err)}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="8" style="color:var(--muted);font-weight:900;">Failed to load: ${escapeHtml(err?.message||err)}</td></tr>`;
       }
     }
   }
@@ -1867,7 +2186,7 @@ expandTr.innerHTML = `
   tbody.innerHTML = "";
 
   if(turns.length === 0){
-    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--muted);font-weight:900;">No turns.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--muted);font-weight:900;">No turns.</td></tr>`;
     return;
   }
 
@@ -1883,6 +2202,10 @@ expandTr.innerHTML = `
 
     const confPct = getConfidencePercent(t);
     const conf = (confPct === null) ? "—" : `${confPct.toFixed(1)}%`;
+    const marginRaw = Number(t.uncertainty);
+    const margin = Number.isFinite(marginRaw)
+      ? `${(marginRaw <= 1 ? marginRaw * 100 : marginRaw).toFixed(1)}%`
+      : "—";
 
     const prevText = (t.previous_text ?? t.prev_text ?? t.previousText ?? t.context ?? "");
     const hasPrev = String(prevText).trim().length > 0;
@@ -1911,6 +2234,7 @@ expandTr.innerHTML = `
         }</td>
 
         <td>${conf}</td>
+        <td>${margin}</td>
       </tr>
     `);
   });
@@ -1918,6 +2242,7 @@ expandTr.innerHTML = `
 
   // ✅ no auto-load
   showState("stateReady");
+  loadUploadedTaskSelectionStatus();
 
 })();
   </script>
