@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8" />
@@ -141,7 +141,7 @@
   padding: 6px 0;
 }
     .chip { padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--chip); color: #2f66ff; display: inline-block; text-align: center; }
-    .details-scroll { max-height: 110px; overflow: auto; padding-right: 4px; }
+    .details-list { max-height: 110px; overflow-x: hidden; overflow-y: auto; padding-right: 4px; }
 
     .prev-btn { border: 1px solid #d8e1ff; background: #eef2ff; color: #2f66ff; font-size: 11px; padding: 2px 8px; border-radius: 999px; cursor: pointer; }
 
@@ -1603,10 +1603,11 @@ body.dark .lang-btn,body.dark .icon-btn{background:rgba(255,255,255,.08);color:v
   gap:8px;
   color:var(--ink);
   text-decoration:none;
-  padding:6px 10px;
+  padding:8px 12px;
   border-radius:10px;
   transition:background .18s ease;
-  font-size:14px;
+  font-size:15px;
+  font-weight:700;
   margin:0;
 }
 .back-link:hover{background:rgba(0,0,0,.04);}
@@ -1626,11 +1627,12 @@ body.dark .back-link:hover{background:rgba(255,255,255,.04);}
   flex:0 0 auto;
 }
 .badge-icon::before{
-  content:"AI";
-  font-size:13px;
-  font-weight:900;
-  color:#155dfc;
-  letter-spacing:0;
+  content:"";
+  width:20px;
+  height:20px;
+  border:2px solid #155dfc;
+  border-radius:50%;
+  box-shadow:10px 10px 0 -7px #155dfc;
 }
 .page-title{
   margin:0;
@@ -1904,10 +1906,8 @@ body.dark select.select{
 .detect-select{
   width: 100%;
 }
-.summary-actions,
-.filters{
-  flex-wrap: wrap;
-}
+.summary-actions{flex-wrap:wrap}
+.filters{flex-wrap:nowrap;min-width:0}
 .filters .input{
   flex: 1 1 260px;
   min-width: 220px;
@@ -1947,9 +1947,7 @@ body.dark select.select{
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.details-scroll{
-  overflow-x: auto;
-}
+.details-list{overflow-x:hidden}
 .dist-note,
 #distLine{
   overflow-wrap: anywhere;
@@ -1958,9 +1956,10 @@ body.dark select.select{
   display: none;
 }
 .details-modal-card{
-  width:min(1040px,94vw);
+  width:min(980px,94vw);
   max-height:84vh;
-  overflow:auto;
+  overflow-y:auto;
+  overflow-x:hidden;
 }
 .details-summary{
   display:flex;
@@ -1970,6 +1969,34 @@ body.dark select.select{
   color:var(--muted);
   font-size:12px;
 }
+.details-controls{
+  display:flex;
+  gap:10px;
+  align-items:stretch;
+  justify-content:flex-end;
+  flex-wrap:nowrap;
+  margin:0 0 12px;
+  position:relative;
+  z-index:2;
+}
+.details-controls .input{flex:1 1 280px;min-width:220px}
+.details-controls .select{
+  flex:0 0 190px;
+  width:190px;
+  min-width:0;
+  max-width:100%;
+  height:42px;
+  box-sizing:border-box;
+  appearance:none;
+  -webkit-appearance:none;
+  border:.8px solid var(--line);
+  border-radius:12px;
+  padding:0 36px 0 12px;
+  background-color:var(--card);
+  color:var(--ink);
+  font-weight:900;
+}
+.details-controls .input,.details-controls .btn{height:42px;box-sizing:border-box}
 .details-turn-list{display:grid;gap:10px}
 .details-turn-card{
   border:.8px solid var(--line);
@@ -1983,6 +2010,9 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
 .details-turn-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .details-turn-text,.details-turn-prev{font-size:13px;line-height:1.55;overflow-wrap:anywhere}
 .details-turn-prev{margin-top:8px;color:var(--muted);border-top:.8px dashed var(--line);padding-top:8px}
+.details-data-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.details-data-row span{display:inline-flex;gap:5px;align-items:center;border:.8px solid var(--line);border-radius:999px;padding:6px 9px;background:rgba(21,93,252,.05);font-size:12px;font-weight:900;color:var(--ink);max-width:100%;overflow-wrap:anywhere}
+.details-data-row em{font-style:normal;color:var(--muted);font-weight:900}
 .details-empty{color:var(--muted);font-weight:900;padding:16px;border:.8px dashed var(--line);border-radius:14px}
 @media (min-width:1100px){
   .stats-grid{
@@ -1993,15 +2023,17 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
   .bottom-grid{
     grid-template-columns: 1fr;
   }
+  .table-head{flex-wrap:wrap;align-items:flex-start}
+  .filters{width:100%;flex-wrap:wrap;justify-content:stretch}
+  .filters .input,.filters .select{flex:1 1 100%;min-width:0}
   .box{
     overflow-x: auto;
   }
   .box table{
     min-width: 860px;
   }
-  .details-row{
-    min-width: 900px;
-  }
+  .details-controls{flex-wrap:wrap;justify-content:stretch}
+  .details-controls .input,.details-controls .select{flex:1 1 100%;min-width:0;width:100%}
 }
 
 
@@ -2051,12 +2083,11 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
   </div>
 
   <div class="page-heading">
-    <div class="title-row">
-      <div class="badge-icon"></div>
+      <div class="title-row">
       <h1 class="page-title" data-i18n="title">Conversation Analysis</h1>
     </div>
     <p class="selected-model" id="selectedModelLine" data-i18n="selected_model">Detection model: —</p>
-    <p class="selected-model" id="taskSelectionLine">Task model selection: Not saved</p>
+    <p class="selected-model" id="taskSelectionLine">Detection Task: Not saved</p>
   </div>
 
   <section class="detect-stage" id="generatedStage">
@@ -2076,7 +2107,7 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
           <select id="stageModelSelect" class="select detect-select">
             <option value="logreg">Baseline TF-IDF + Logistic Regression</option>
             <option value="rnn">RNN</option>
-            <option value="falcon" disabled>SOTA Model (Coming Soon)</option>
+            <option value="sota_model" disabled>SOTA Model (Coming Soon)</option>
           </select>
           <button class="btn primary" id="stageRunBtn" type="button">Run Detection</button>
         </div>
@@ -2111,7 +2142,7 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
       </div>
       <div class="summary-actions">
         <details class="download-dd">
-          <summary class="btn" data-i18n="download">Download ▾</summary>
+          <summary class="btn" data-i18n="download">Detection Dataset ▾</summary>
           <div class="download-menu">
             <button type="button" class="download-item" id="downloadCsvBtn">CSV</button>
             <button type="button" class="download-item" id="downloadJsonBtn">JSON</button>
@@ -2120,10 +2151,9 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
         </details>
           
         <select id="analysisModelSelect" class="select">
-          <option value="">Select model</option>
-          <option value="logreg">Baseline TF-IDF + Logistic Regression</option>
+          <option value="logreg" selected>Baseline TF-IDF + Logistic Regression</option>
           <option value="rnn">RNN</option>
-          <option value="falcon" disabled>SOTA Model (Coming Soon)</option>
+          <option value="sota_model" disabled>SOTA Model (Coming Soon)</option>
         </select>
       
         <button class="btn primary" id="runAnalysisBtn" type="button">Run Detection</button>
@@ -2151,7 +2181,7 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
         <span>📊 Sort Conversations:</span>
         <select id="fbSortSelect" class="select">
           <option value="default">Default Order</option>
-          <option value="most_uncertain">Lowest Uncertainty Margin First</option>
+          <option value="most_uncertain">Lowest Uncertainty First</option>
           <option value="least_uncertain">Least Uncertain First</option>
           <option value="most_pending">Most Pending Targets</option>
         </select>
@@ -2182,7 +2212,7 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
         </select>
       </div>
     </div>
-    <div class="fb-filter-note">Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority. Review targets are used for Active Learning; context turns are shown only to help judgment.</div>
+    <div class="fb-filter-note">Lower value means closer to 50/50 and higher review priority. Review targets are used for Active Learning; context turns are shown only to help judgment.</div>
 
   </div>
 
@@ -2193,12 +2223,12 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
       <div class="stat-card blue"><div class="stat-label" data-i18n="total_dialogues">Total Dialogues</div><div class="stat-value" id="totalDialogs">—</div></div>
       <div class="stat-card blue"><div class="stat-label" data-i18n="total_turns">Total Turns</div><div class="stat-value" id="totalTurns">—</div></div>
       <div class="stat-card green"><div class="stat-label" data-i18n="human_turns">Human Turns</div><div class="stat-value" id="humanTurns">—</div></div>
-      <div class="stat-card orange"><div class="stat-label" data-i18n="machine_turns">Machine Turns</div><div class="stat-value" id="machineTurns">—</div></div>
+      <div class="stat-card orange"><div class="stat-label" data-i18n="machine_turns">AI Turns</div><div class="stat-value" id="machineTurns">—</div></div>
       <div class="stat-card green"><div class="stat-label" data-i18n="human_pct">Human %</div><div class="stat-value" id="humanPct">—</div></div>
-      <div class="stat-card orange"><div class="stat-label" data-i18n="machine_pct">Machine %</div><div class="stat-value" id="machinePct">—</div></div>
+      <div class="stat-card orange"><div class="stat-label" data-i18n="machine_pct">AI %</div><div class="stat-value" id="machinePct">—</div></div>
     </div>
 
-    <div class="mini-line" id="miniLine">Avg Turns/Dialogue: — • AI‑heavy Dialogues: — • Mixed: — • Human: —</div>
+    <div class="mini-line" id="miniLine">Avg Turns/Dialogue: — • AI Dialogues: — • Human Dialogues: —</div>
 
     <div class="eval-row">
       <div style="font-size:14px;font-weight:600;" data-i18n="eval_metrics">Evaluation Metrics</div>
@@ -2239,35 +2269,14 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
           <small>Frozen after Submit Results</small>
         </div>
         <div class="insight-tile">
-          <span>Lowest Uncertainty Margin</span>
+          <span>Lowest Uncertainty</span>
           <b id="generatedLowestMargin">—</b>
-          <small>Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.</small>
+          <small>Lower value means closer to 50/50 and higher review priority.</small>
         </div>
         <div class="insight-tile">
           <span>Why Selected</span>
           <b>Model uncertainty</b>
-          <small>Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.</small>
-        </div>
-      </div>
-    </div>
-
-    <div class="insights-panel" id="generatedDiagnosticsPanel">
-      <div class="section-kicker">Diagnostics</div>
-      <div class="insights-grid">
-        <div class="insight-tile">
-          <span>Highest AI-heavy Task</span>
-          <b id="generatedHighestAiTask">—</b>
-          <small>Highest dialogue-level machine percentage</small>
-        </div>
-        <div class="insight-tile">
-          <span>Evaluation Level</span>
-          <b>Turn-level</b>
-          <small>Ground truth is inferred from sender role and conversation type.</small>
-        </div>
-        <div class="insight-tile">
-          <span>Avg Turns / Dialogue</span>
-          <b id="generatedAvgTurnsDiag">—</b>
-          <small>Average unit density per generated task</small>
+          <small>Lower value means closer to 50/50 and higher review priority.</small>
         </div>
       </div>
     </div>
@@ -2290,15 +2299,15 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
           </div>
           <div>
             <div class="vbar blue"><div class="vbar-inner blue" id="machineBarVal">0</div></div>
-            <div style="text-align:center;font-size:12px;margin-top:6px;" data-i18n="machine" id="machineBarLabel">Machine</div>
+            <div style="text-align:center;font-size:12px;margin-top:6px;" data-i18n="machine" id="machineBarLabel">AI</div>
           </div>
           <div class="dist-third" id="mixedDistColumn">
             <div class="vbar"><div class="vbar-inner" id="mixedBarVal" style="background:#ad46ff;">0</div></div>
-            <div style="text-align:center;font-size:12px;margin-top:6px;" id="mixedBarLabel">Mixed</div>
+            <div style="text-align:center;font-size:12px;margin-top:6px;" id="mixedBarLabel"></div>
           </div>
         </div>
 
-        <div class="dist-note" id="distNote">Machine turns are —</div>
+        <div class="dist-note" id="distNote">AI turns are —</div>
         <div class="mini-line" id="distLine" style="text-align:center;">Avg Turns/Dialogue: — • Highest AI%: —</div>
       </div>
 
@@ -2309,8 +2318,7 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
             <input class="input" id="searchInput" placeholder="Search Dialogue ID..." />
             <select class="select" id="labelFilter">
               <option value="all">All labels</option>
-              <option value="ai">AI-heavy</option>
-              <option value="mix">Mixed</option>
+              <option value="ai">AI</option>
               <option value="human">Human</option>
             </select>
             <select class="select" id="sortSelect">
@@ -2328,8 +2336,8 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
               <th data-i18n="th_dialogue_id">Dialogue ID</th>
               <th data-i18n="th_turns">#Turns</th>
               <th data-i18n="th_human">#Human</th>
-              <th data-i18n="th_machine">#Machine</th>
-              <th data-i18n="th_machine_pct">Machine %</th>
+              <th data-i18n="th_machine">#AI</th>
+              <th data-i18n="th_machine_pct">AI %</th>
               <th data-i18n="th_human_pct">Human %</th>
               <th data-i18n="th_final_label">Final Label</th>
               <th data-i18n="th_action">Action</th>
@@ -2351,6 +2359,15 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
     <button class="cm-close" data-details-close type="button">×</button>
     <div class="cm-title" id="detailsTitle">Dialogue Details</div>
     <div class="details-summary" id="detailsSummary"></div>
+    <div class="details-controls">
+      <input class="input" id="generatedDetailsSearch" type="search" placeholder="Search turn text..." />
+      <select class="select" id="generatedDetailsPredictionFilter">
+        <option value="all">All predictions</option>
+        <option value="human">Human</option>
+        <option value="ai">AI</option>
+      </select>
+      <button class="btn" id="generatedDetailsPrevToggle" type="button" aria-pressed="true">Hide Previous Turn</button>
+    </div>
     <div class="details-turn-list" id="detailsTurnList"></div>
   </div>
 </div>
@@ -2384,8 +2401,8 @@ function cleanParam(v) {
   return s;
 }
 
-const projectId = cleanParam(qs.get("projectId") || qs.get("project_id"));
-const taskId = cleanParam(qs.get("taskId") || qs.get("task_id"));
+const projectId = cleanParam(qs.get("projectId") || qs.get("project_id") || "{{ project_id or '' }}");
+const taskId = cleanParam(qs.get("taskId") || qs.get("task_id") || "{{ task_id or '' }}");
 
 
 const selectedModelLineEl = document.getElementById("selectedModelLine");
@@ -2423,6 +2440,9 @@ let feedbackTaskCompleted = false;
 const feedbackDraft = {};
 
 let activeModel = "";
+let finalizedGeneratedModelKey = "";
+let finalizedGeneratedModelName = "";
+let previewGeneratedModelKey = modelSelectEl?.value || stageModelSelect?.value || "logreg";
 
 function setGeneratedStage(mode) {
   if (!generatedStage || isFeedbackMode) return;
@@ -2439,9 +2459,30 @@ function setGeneratedProgress(value, text) {
 }
 
 function modelLabel(key){
-  if (key === "rnn") return "Baseline — RNN";
-  if (key === "logreg") return "Baseline — TF‑IDF + Logistic Regression (LR)";
+  if (key === "rnn") return "RNN";
+  if (key === "logreg") return "Baseline TF-IDF + Logistic Regression";
   return "—";
+}
+function exportModelName(value){
+  const raw = String(value || "").toLowerCase();
+  if (raw.includes("rnn")) return "RNN";
+  if (raw.includes("sota")) return "SOTA Model";
+  if (raw.includes("logistic") || raw.includes("logreg") || raw.includes("tf-idf") || raw.includes("tfidf") || raw.includes("baseline")) return "Logistic Regression";
+  return value ? String(value) : "";
+}
+function exportActiveLearningState(turn){
+  const hasState = turn?.active_learning_selected !== undefined || turn?.review_target !== undefined || turn?.selected_for_review !== undefined;
+  const selected = Boolean(turn?.active_learning_selected ?? turn?.review_target ?? turn?.selected_for_review);
+  const feedback = turn?.feedback_label ?? turn?.corrected_label;
+  if (selected && feedback !== undefined && feedback !== null && String(feedback).trim() !== "") return "reviewed";
+  if (selected) return "pending";
+  if (!hasState) return "unavailable";
+  return "not_selected_for_review";
+}
+function csvCell(value){
+  let text = String(value ?? "");
+  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 function modelKeyFromName(name){
   const n = String(name || "").toLowerCase().trim();
@@ -2457,7 +2498,15 @@ function modelKeyFromName(name){
 
 
 function setSelectedModelLine(key){
-  selectedModelLineEl.textContent = `Detection model: ${modelLabel(key)}`;
+  const previewLabel = modelLabel(key || previewGeneratedModelKey || "logreg");
+  selectedModelLineEl.textContent = window.__generatedSubmitLocked
+    ? `Finalized model: ${finalizedGeneratedModelName || "Submitted model"} | Preview model: ${previewLabel}`
+    : `Detection model: ${previewLabel}`;
+  const banner = document.getElementById("generatedFinalizedBanner");
+  if (window.__generatedSubmitLocked && banner) {
+    banner.innerHTML =
+      `<strong>Finalized model:</strong> <b>${finalizedGeneratedModelName || "Submitted model"}</b>. Preview model: <b>${previewLabel}</b>. Submit is locked and review targets are frozen.`;
+  }
 }
 
 setSelectedModelLine("");
@@ -2477,20 +2526,21 @@ const backLink = document.getElementById("backToProject");
 let openId = null;
 let currentLang = "en";
 let lastRunAt = null;
-let lastSummary = { avg: "—", ai: "—", mixed: "—", human: "—", pct: "—" };
+let lastSummary = { avg: "—", ai: "—", human: "—", pct: "—" };
+let isModelAlreadySelected = false;
 let distMode = "dialogue";
 let distData = {
   turnHuman: 0,
+  turnAI: 0,
   turnMachine: 0,
   dialogHuman: 0,
+  dialogAI: 0,
   dialogMachine: 0,
-  dialogMixed: 0,
   avg: "—",
   highest: "—",
   turnMachinePct: "0.0",
   dialogMachinePct: "0.0",
   dialogHumanPct: "0.0",
-  dialogMixedPct: "0.0"
 };
 
 function setDistTab(mode) {
@@ -2525,8 +2575,8 @@ function renderDistributionLegacyUnused() {
     distNoteEl.textContent = format(i18n[currentLang].dist_note, { pct: distData.turnMachinePct });
   } else {
     distNoteEl.textContent = currentLang === "ar"
-      ? `حوارات AI-heavy تمثل ${distData.dialogMachinePct}% من جميع الحوارات.`
-      : `AI-heavy dialogues are ${distData.dialogMachinePct}% of all dialogues.`;
+      ? `حوارات AI تمثل ${distData.dialogMachinePct}% من جميع الحوارات.`
+      : `AI dialogues are ${distData.dialogMachinePct}% of all dialogues.`;
   }
 
   distLineEl.textContent = format(i18n[currentLang].dist_line, {
@@ -2538,7 +2588,6 @@ function renderDistributionLegacyUnused() {
 function renderDistribution() {
   const hBar = document.getElementById("humanBarVal");
   const mBar = document.getElementById("machineBarVal");
-  const mixBar = document.getElementById("mixedBarVal");
   const mixCol = document.getElementById("mixedDistColumn");
   const humanLabel = document.getElementById("humanBarLabel");
   const machineLabel = document.getElementById("machineBarLabel");
@@ -2547,8 +2596,7 @@ function renderDistribution() {
   const isTurn = distMode === "turn";
   const humanVal = isTurn ? Number(distData.turnHuman || 0) : Number(distData.dialogHuman || 0);
   const machineVal = isTurn ? Number(distData.turnMachine || 0) : Number(distData.dialogMachine || 0);
-  const mixedVal = isTurn ? 0 : Number(distData.dialogMixed || 0);
-  const maxBar = Math.max(humanVal, machineVal, mixedVal, 1);
+  const maxBar = Math.max(humanVal, machineVal, 1);
 
   if (hBar) {
     hBar.textContent = humanVal;
@@ -2558,39 +2606,35 @@ function renderDistribution() {
     mBar.textContent = machineVal;
     mBar.style.height = `${(machineVal / maxBar) * 100}%`;
   }
-  if (mixBar) {
-    mixBar.textContent = mixedVal;
-    mixBar.style.height = `${(mixedVal / maxBar) * 100}%`;
-  }
-  if (mixCol) mixCol.style.display = isTurn ? "none" : "block";
+  if (mixCol) mixCol.style.display = "none";
   if (humanLabel) humanLabel.textContent = isTurn ? "Human" : "Human";
-  if (machineLabel) machineLabel.textContent = isTurn ? "Machine" : "AI-heavy";
+  if (machineLabel) machineLabel.textContent = "AI";
 
   if (isTurn) {
     const total = humanVal + machineVal;
     const humanPct = total ? (humanVal / total) * 100 : 0;
     if (distNoteEl) {
       distNoteEl.textContent = total
-        ? `Machine turns are ${distData.turnMachinePct}% of all turns.`
+        ? `AI turns are ${distData.turnMachinePct}% of all turns.`
         : "No turn distribution available yet.";
     }
     if (distLineEl) {
       distLineEl.textContent = total
-        ? `Human turns: ${humanVal} (${humanPct.toFixed(1)}%) | Machine turns: ${machineVal} (${distData.turnMachinePct}%)`
+        ? `Human turns: ${humanVal} (${humanPct.toFixed(1)}%) | AI turns: ${machineVal} (${distData.turnMachinePct}%)`
         : "No turn distribution available yet.";
     }
     return;
   }
 
-  const total = humanVal + machineVal + mixedVal;
+  const total = humanVal + machineVal;
   if (distNoteEl) {
     distNoteEl.textContent = total
-      ? `AI-heavy dialogues are ${distData.dialogMachinePct}% of all dialogues.`
+      ? `AI dialogues are ${distData.dialogMachinePct}% of all dialogues.`
       : "No dialogue distribution available yet.";
   }
   if (distLineEl) {
     distLineEl.textContent = total
-      ? `Human dialogues: ${humanVal} (${distData.dialogHumanPct}%) | Mixed dialogues: ${mixedVal} (${distData.dialogMixedPct}%) | AI-heavy dialogues: ${machineVal} (${distData.dialogMachinePct}%)`
+      ? `Human dialogues: ${humanVal} (${distData.dialogHumanPct}%) | AI dialogues: ${machineVal} (${distData.dialogMachinePct}%)`
       : "No dialogue distribution available yet.";
   }
 }
@@ -2611,14 +2655,16 @@ function updateSummaryMeta() {
   const el = document.getElementById("summaryMeta");
   if (!el) return;
 
-  const picked = modelSelectEl.value || activeModel || "";
+  const picked = previewGeneratedModelKey || modelSelectEl.value || activeModel || "";
   const modelTxt = modelLabel(picked);
   const timeTxt = formatRunTime(lastRunAt);
 
   if (currentLang === "ar") {
     el.textContent = `النموذج: ${modelTxt} • الوقت: ${timeTxt} • الحقيقة الأرضية: نعم`;
   } else {
-    el.textContent = `Model: ${modelTxt} • Time: ${timeTxt} • GT: inferred from sender role and conversation type`;
+    el.textContent = isModelAlreadySelected
+      ? `Finalized model: ${finalizedGeneratedModelName || "Submitted model"} | Preview model: ${modelTxt} • Time: ${timeTxt} • GT: inferred from sender role and conversation type`
+      : `Preview model: ${modelTxt} • Time: ${timeTxt} • GT: inferred from sender role and conversation type`;
   }
 }
 
@@ -2630,15 +2676,15 @@ function updateSummaryMeta() {
       selected_model: "Detection model: —",
       summary_title: "Analysis Summary",
       summary_sub: "Model: — • Time: — • GT: inferred from sender role and conversation type",
-      download: "Download ▾",
-      advanced: "Advanced",
+      download: "Detection Dataset ▾",
+      advanced: "",
       submit: "Submit Results",
       total_dialogues: "Total Dialogues",
       total_turns: "Total Turns",
       human_turns: "Human Turns",
-      machine_turns: "Machine Turns",
+      machine_turns: "AI Turns",
       human_pct: "Human %",
-      machine_pct: "Machine %",
+      machine_pct: "AI %",
       eval_metrics: "Evaluation Metrics",
       confusion_matrix: "Confusion Matrix",
       accuracy: "Accuracy",
@@ -2651,8 +2697,8 @@ function updateSummaryMeta() {
       dialogues: "Dialogues",
       search_dialogue: "Search Dialogue ID...",
       all_labels: "All labels",
-      ai_heavy: "AI-heavy",
-      mixed: "Mixed",
+      ai_heavy: "AI",
+      mixed: "AI",
       human: "Human",
       sort_ai_desc: "Sort: AI% (desc)",
       sort_turns_desc: "Sort: #Turns (desc)",
@@ -2661,8 +2707,8 @@ function updateSummaryMeta() {
       th_dialogue_id: "Dialogue ID",
       th_turns: "#Turns",
       th_human: "#Human",
-      th_machine: "#Machine",
-      th_machine_pct: "Machine %",
+      th_machine: "#AI",
+      th_machine_pct: "AI %",
       th_human_pct: "Human %",
       th_final_label: "Final Label",
       th_action: "Action",
@@ -2682,8 +2728,8 @@ function updateSummaryMeta() {
       fp: "False Positive",
       fn: "False Negative",
       tp: "True Positive",
-      mini_line: "Avg Turns/Dialogue: {avg} • AI‑heavy Dialogues: {ai} • Mixed: {mixed} • Human: {human}",
-      dist_note: "Machine turns are {pct}% of all turns.",
+      mini_line: "Avg Turns/Dialogue: {avg} • AI Dialogues: {ai} • Human Dialogues: {human}",
+      dist_note: "AI turns are {pct}% of all turns.",
       dist_line: "Avg Turns/Dialogue: {avg} • Highest AI%: {highest}"
     },
     ar: {
@@ -2692,7 +2738,7 @@ function updateSummaryMeta() {
       selected_model: "النموذج المحدد: —",
       summary_title: "ملخص التحليل",
       summary_sub: "النموذج: — • الوقت: — • الحقيقة الأرضية: نعم",
-      download: "تنزيل ▾",
+      download: "مجموعة بيانات الكشف ▾",
       advanced: "متقدم",
       submit: "إرسال النتائج",
       total_dialogues: "إجمالي الحوارات",
@@ -2713,8 +2759,8 @@ function updateSummaryMeta() {
       dialogues: "الحوارات",
       search_dialogue: "ابحث عن معرف الحوار...",
       all_labels: "كل التصنيفات",
-      ai_heavy: "AI‑كثيف",
-      mixed: "مختلط",
+      ai_heavy: "AI",
+      mixed: "AI",
       human: "بشري",
       sort_ai_desc: "ترتيب: %الآلة (تنازلي)",
       sort_turns_desc: "ترتيب: عدد الأدوار (تنازلي)",
@@ -2744,7 +2790,7 @@ function updateSummaryMeta() {
       fp: "موجب كاذب",
       fn: "سالب كاذب",
       tp: "موجب صحيح",
-      mini_line: "متوسط الأدوار/حوار: {avg} • حوارات AI‑كثيف: {ai} • مختلط: {mixed} • بشري: {human}",
+      mini_line: "متوسط الأدوار/حوار: {avg} • حوارات AI: {ai} • حوارات بشرية: {human}",
       dist_note: "تبادلات الآلة تمثل {pct}% من جميع التبادلات.",
       dist_line: "متوسط الأدوار/حوار: {avg} • أعلى نسبة AI: {highest}"
     }
@@ -2776,8 +2822,7 @@ function updateSummaryMeta() {
     const labelFilter = document.getElementById("labelFilter");
     labelFilter.options[0].text = i18n[lang].all_labels;
     labelFilter.options[1].text = i18n[lang].ai_heavy;
-    labelFilter.options[2].text = i18n[lang].mixed;
-    labelFilter.options[3].text = i18n[lang].human;
+    labelFilter.options[2].text = i18n[lang].human;
 
     const sortSelect = document.getElementById("sortSelect");
     sortSelect.options[0].text = i18n[lang].sort_ai_desc;
@@ -2808,6 +2853,8 @@ function updateSummaryMeta() {
 }
 
 function normalizeTurnPrediction(value) {
+  if (value === 1 || value === "1") return "AI";
+  if (value === 0 || value === "0") return "Human";
   const raw = String(value || "").trim().toLowerCase();
   if (raw === "ai" || raw === "machine" || raw === "machine-generated" || raw.includes("machine")) {
     return "AI";
@@ -2830,9 +2877,7 @@ function showToast(message) {
 }
 
   function labelFor(d){
-    if (d.machinePct >= 60) return "ai";
-    if (d.humanPct >= 60) return "human";
-    return "mix";
+    return d.machinePct >= 50 ? "ai" : "human";
   }
 
   function renderTable(){
@@ -2853,26 +2898,27 @@ function showToast(message) {
     const tbody = document.getElementById("dialogueBody");
     tbody.innerHTML = list.map(d => {
       const idStr = String(d.id);
-      const pillClass = d.label === "ai" ? "ai" : d.label === "human" ? "human" : "mix";
-      const pillText = d.label === "ai" ? i18n[currentLang].ai_heavy :
-                       d.label === "human" ? i18n[currentLang].human : i18n[currentLang].mixed;
+      const pillClass = d.label === "ai" ? "ai" : "human";
+      const pillText = d.label === "ai" ? i18n[currentLang].ai_heavy : i18n[currentLang].human;
       const actionText = i18n[currentLang].view;
 
-      const details = openId === idStr ? `
+      const details = "";
+      /*
+      const oldInlineDetails = openId === idStr ? `
         <tr>
           <td colspan="8">
             <div class="details-box">
               <div class="details-head">
                 <div><strong>${i18n[currentLang].details_title} ${esc(idStr)}</strong></div>
-                <div>Total: ${d.total} | Human: ${d.human} | Machine: ${d.machine} | Machine%: ${d.machinePct.toFixed(1)}</div>
+                <div>Total: ${d.total} | Human: ${d.human} | AI: ${d.machine} | AI%: ${d.machinePct.toFixed(1)}</div>
               </div>
 
               
               <div class="details-row">
-                <strong>#</strong><strong>${i18n[currentLang].sender}</strong><strong>${i18n[currentLang].text}</strong><strong>${i18n[currentLang].prev}</strong><strong>${i18n[currentLang].prediction}</strong><strong>${i18n[currentLang].gt}</strong><strong>${i18n[currentLang].confidence}</strong><strong>Uncertainty Margin</strong>
+                <strong>#</strong><strong>${i18n[currentLang].sender}</strong><strong>${i18n[currentLang].text}</strong><strong>${i18n[currentLang].prev}</strong><strong>${i18n[currentLang].prediction}</strong><strong>${i18n[currentLang].gt}</strong><strong>${i18n[currentLang].confidence}</strong><strong>Uncertainty</strong>
               </div>
 
-              <div class="details-scroll">
+              <div class="details-list">
                 ${d.turns.map((t,i)=> {
                   const prev = (t.prev_text || t.prev || "").trim();
                   const prevCell = prev
@@ -2891,8 +2937,8 @@ if (role.includes("ai") || role.includes("agent") || role.includes("assistant"))
 } else {
   sender = humanName || "Human";
 }
-                  const predLabel = t.prediction === "AI" ? "Machine" : (t.prediction || "—");
-                  const gtLabel = t.gt === "AI" ? "Machine" : (t.gt || "—");
+                  const predLabel = t.prediction === "AI" ? "AI" : (t.prediction || "—");
+                  const gtLabel = t.gt === "AI" ? "AI" : (t.gt || "—");
                   const conf = (t.confidence === 0 || t.confidence) ? (t.confidence * 100).toFixed(1) + "%" : "—";
                   const margin = (t.uncertainty === 0 || t.uncertainty) ? (t.uncertainty * 100).toFixed(1) + "%" : "—";
                   return `
@@ -2913,6 +2959,7 @@ if (role.includes("ai") || role.includes("agent") || role.includes("assistant"))
             </div>
           </td>
         </tr>` : "";
+      */
 
       return `
         <tr>
@@ -2935,6 +2982,17 @@ function closeDetailsModal(){
 document.querySelectorAll("[data-details-close]").forEach((el) => {
   el.addEventListener("click", closeDetailsModal);
 });
+document.getElementById("generatedDetailsSearch")?.addEventListener("input", renderGeneratedDetailsTable);
+document.getElementById("generatedDetailsPredictionFilter")?.addEventListener("change", renderGeneratedDetailsTable);
+document.getElementById("generatedDetailsPrevToggle")?.addEventListener("click", () => {
+  generatedDetailsShowPrevious = !generatedDetailsShowPrevious;
+  const btn = document.getElementById("generatedDetailsPrevToggle");
+  if (btn) {
+    btn.textContent = generatedDetailsShowPrevious ? "Hide Previous Turn" : "Show Previous Turn";
+    btn.setAttribute("aria-pressed", generatedDetailsShowPrevious ? "true" : "false");
+  }
+  renderGeneratedDetailsTable();
+});
 
 function formatMaybePct(value) {
   const n = Number(value);
@@ -2942,54 +3000,82 @@ function formatMaybePct(value) {
   return `${(n <= 1 ? n * 100 : n).toFixed(1)}%`;
 }
 
+let generatedDetailsItem = null;
+let generatedDetailsShowPrevious = true;
+
+function renderGeneratedDetailsTable() {
+  const list = document.getElementById("detailsTurnList");
+  if (!list || !generatedDetailsItem) return;
+  const turns = Array.isArray(generatedDetailsItem.turns) ? generatedDetailsItem.turns : [];
+  const query = String(document.getElementById("generatedDetailsSearch")?.value || "").trim().toLowerCase();
+  const predFilter = String(document.getElementById("generatedDetailsPredictionFilter")?.value || "all");
+  let filtered = turns;
+  if (query) filtered = filtered.filter(t => String(t.text || "").toLowerCase().includes(query));
+  if (predFilter !== "all") filtered = filtered.filter(t => normalizeTurnPrediction(t.prediction).toLowerCase() === predFilter);
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="details-empty">No turns match the selected filters.</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map((t, i) => {
+            const turnIdx = Number(t.turn_index || (i + 1));
+            const prev = (t.prev_text || t.prev || "").trim();
+            const role = String(t.sender_role || t.sender_type || t.role || t.sender || "").toLowerCase();
+            const humanName = t.sender_name || t.user_name || t.human_name || t.name || "";
+            let sender = "-";
+            if (role.includes("ai") || role.includes("agent") || role.includes("assistant")) sender = "Agent";
+            else if (role.includes("human") || role.includes("user")) sender = humanName || "Human";
+            else if ((t.prediction || "").toUpperCase() === "AI") sender = "Agent";
+            else sender = humanName || "Human";
+            const predLabel = normalizeTurnPrediction(t.prediction);
+            const gtLabel = normalizeTurnPrediction(t.gt || t.ground_truth);
+            const conf = formatMaybePct(t.confidence);
+            const margin = formatMaybePct(t.uncertainty);
+            return `
+              <div class="details-turn-card">
+                <div class="details-turn-head">
+                  <div class="details-turn-index">Turn ${esc(turnIdx)}</div>
+                  <div class="details-turn-meta">
+                    <span class="chip">${esc(sender)}</span>
+                    <span class="pill ${predLabel === "AI" ? "ai" : "human"}">${esc(predLabel)}</span>
+                  </div>
+                </div>
+                <div class="details-turn-text">${esc(t.text || "-")}</div>
+                <div class="details-turn-prev"><b>Previous Turn:</b> ${generatedDetailsShowPrevious ? esc(prev || "-") : "Hidden"}</div>
+                <div class="details-data-row">
+                  <span><em>Prediction</em>${esc(predLabel)}</span>
+                  <span><em>Ground Truth</em>${esc(gtLabel)}</span>
+                  <span><em>Confidence</em>${esc(conf)}</span>
+                  <span><em>Uncertainty</em>${esc(margin)}</span>
+                </div>
+              </div>
+            `;
+          }).join("");
+}
+
 function openGeneratedDetailsModal(item) {
   if (!item) return;
+  generatedDetailsItem = item;
+  generatedDetailsShowPrevious = true;
   const title = document.getElementById("detailsTitle");
   const summary = document.getElementById("detailsSummary");
-  const list = document.getElementById("detailsTurnList");
   if (title) title.textContent = `Dialogue Details: ${item.id}`;
   if (summary) {
     summary.innerHTML = `
       <span class="chip">Total turns: ${esc(item.total)}</span>
       <span class="chip">Human: ${esc(item.human)}</span>
-      <span class="chip">Machine: ${esc(item.machine)}</span>
-      <span class="chip">Machine %: ${esc(item.machinePct.toFixed(1))}%</span>
+      <span class="chip">AI: ${esc(item.machine)}</span>
+      <span class="chip">AI %: ${esc(item.machinePct.toFixed(1))}%</span>
     `;
   }
-  if (list) {
-    const turns = Array.isArray(item.turns) ? item.turns : [];
-    list.innerHTML = turns.length ? turns.map((t, i) => {
-      const turnIdx = Number(t.turn_index || (i + 1));
-      const prev = (t.prev_text || t.prev || "").trim();
-      const role = String(t.sender_role || t.sender_type || t.role || t.sender || "").toLowerCase();
-      const humanName = t.sender_name || t.user_name || t.human_name || t.name || "";
-      let sender = "-";
-      if (role.includes("ai") || role.includes("agent") || role.includes("assistant")) sender = "Agent";
-      else if (role.includes("human") || role.includes("user")) sender = humanName || "Human";
-      else if ((t.prediction || "").toUpperCase() === "AI") sender = "Agent";
-      else sender = humanName || "Human";
-      const predLabel = t.prediction === "AI" ? "Machine" : (t.prediction || "-");
-      const gtLabel = t.gt === "AI" ? "Machine" : (t.gt || "-");
-      const conf = formatMaybePct(t.confidence);
-      const margin = formatMaybePct(t.uncertainty);
-      return `
-        <div class="details-turn-card">
-          <div class="details-turn-head">
-            <div class="details-turn-index">Turn ${esc(turnIdx)}</div>
-            <div class="details-turn-meta">
-              <span class="chip">Sender: ${esc(sender)}</span>
-              <span class="chip">${esc(predLabel)}</span>
-              <span class="chip">GT: ${esc(gtLabel)}</span>
-              <span class="chip">Confidence: ${esc(conf)}</span>
-              <span class="chip">Uncertainty Margin: ${esc(margin)}</span>
-            </div>
-          </div>
-          <div class="details-turn-text">${esc(t.text || "")}</div>
-          ${prev ? `<div class="details-turn-prev"><strong>Previous:</strong> ${esc(prev)}</div>` : ""}
-        </div>
-      `;
-    }).join("") : `<div class="details-empty">No turns found.</div>`;
+  if (document.getElementById("generatedDetailsSearch")) document.getElementById("generatedDetailsSearch").value = "";
+  if (document.getElementById("generatedDetailsPredictionFilter")) document.getElementById("generatedDetailsPredictionFilter").value = "all";
+  if (document.getElementById("generatedDetailsPrevToggle")) {
+    document.getElementById("generatedDetailsPrevToggle").textContent = "Hide Previous Turn";
+    document.getElementById("generatedDetailsPrevToggle").setAttribute("aria-pressed", "true");
   }
+  renderGeneratedDetailsTable();
   const modal = document.getElementById("detailsModal");
   modal?.classList.add("active");
   modal?.setAttribute("aria-hidden", "false");
@@ -3093,19 +3179,19 @@ cmModal?.addEventListener("click", (e) => { if (e.target.matches("[data-close]")
 
   let totalDialogs = results.length;
   let totalTurns = 0, humanTurns = 0, machineTurns = 0;
-  let aiHeavy = 0, mixed = 0, humanHeavy = 0;
+  let aiHeavy = 0, humanHeavy = 0;
 
   dialogues = results.map((r, i) => {
     const turns = r.turns || [];
     let human = 0, machine = 0;
-    turns.forEach(t => t.prediction === "AI" ? machine++ : human++);
+    turns.forEach(t => normalizeTurnPrediction(t.prediction) === "AI" ? machine++ : human++);
     const total = turns.length || (r.turns_count || 0);
     const machinePct = total ? (machine / total) * 100 : 0;
     const humanPct = total ? (human / total) * 100 : 0;
     const label = labelFor({machinePct, humanPct});
 
     totalTurns += total; humanTurns += human; machineTurns += machine;
-    if (label === "ai") aiHeavy++; else if (label === "human") humanHeavy++; else mixed++;
+    if (label === "ai") aiHeavy++; else humanHeavy++;
 
     const rawId = r.task_id || r.task_name || String(i+1);
     const displayId = /^\d+$/.test(String(rawId)) ? String(rawId) : String(i+1);
@@ -3131,7 +3217,6 @@ cmModal?.addEventListener("click", (e) => { if (e.target.matches("[data-close]")
   const highestAI = dialogues.length ? Math.max(...dialogues.map(d => d.machinePct)) : 0;
   const dialogueMachinePct = totalDialogs ? (aiHeavy / totalDialogs * 100) : 0;
   const dialogueHumanPct = totalDialogs ? (humanHeavy / totalDialogs * 100) : 0;
-  const dialogueMixedPct = totalDialogs ? (mixed / totalDialogs * 100) : 0;
  
 
   document.getElementById("totalDialogs").textContent = totalDialogs || "—";
@@ -3142,7 +3227,7 @@ cmModal?.addEventListener("click", (e) => { if (e.target.matches("[data-close]")
   document.getElementById("machinePct").textContent = machinePct.toFixed(1) + "%";
   const activeLine = document.getElementById("activeLearningLine");
   if (activeLine) {
-    activeLine.textContent = `Active Learning: ${reviewTargetCount} turn-level review targets ${isModelAlreadySelected ? "are frozen" : "will be frozen after Submit Results"}. Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.`;
+    activeLine.textContent = `Active Learning: ${reviewTargetCount} turn-level review targets ${isModelAlreadySelected ? "are frozen" : "will be frozen after Submit Results"}. Lower value means closer to 50/50 and higher review priority.`;
   }
   const margins = dialogues.flatMap(d => (d.turns || []).map(t => Number(t.uncertainty ?? t.margin)).filter(Number.isFinite));
   const lowestMargin = margins.length ? Math.min(...margins) : null;
@@ -3156,14 +3241,13 @@ cmModal?.addEventListener("click", (e) => { if (e.target.matches("[data-close]")
   const avgTurnsDiagEl = document.getElementById("generatedAvgTurnsDiag");
   if (reviewTotalEl) reviewTotalEl.textContent = String(reviewTargetCount);
   if (reviewPendingEl) reviewPendingEl.textContent = isModelAlreadySelected ? "Frozen" : String(reviewTargetCount);
-  if (lowestMarginEl) lowestMarginEl.textContent = lowestMargin === null ? "—" : `${(lowestMargin <= 1 ? lowestMargin * 100 : lowestMargin).toFixed(1)}%`;
+  if (lowestMarginEl) lowestMarginEl.textContent = lowestMargin === null ? "Unavailable" : `${(lowestMargin <= 1 ? lowestMargin * 100 : lowestMargin).toFixed(1)}%`;
   if (highestAiTaskEl) highestAiTaskEl.textContent = highestTask ? `${highestTask.id || "Task"} (${Number(highestTask.machinePct || 0).toFixed(1)}%)` : "—";
   if (avgTurnsDiagEl) avgTurnsDiagEl.textContent = avgTurns.toFixed(2);
 
   lastSummary = {
   avg: avgTurns.toFixed(2),
   ai: aiHeavy,
-  mixed: mixed,
   human: humanHeavy,
   pct: machinePct.toFixed(1),
   highest: `${highestAI.toFixed(1)}%`
@@ -3171,16 +3255,16 @@ cmModal?.addEventListener("click", (e) => { if (e.target.matches("[data-close]")
 
 distData = {
   turnHuman: humanTurns,
+  turnAI: machineTurns,
   turnMachine: machineTurns,
   dialogHuman: humanHeavy,
+  dialogAI: aiHeavy,
   dialogMachine: aiHeavy,
-  dialogMixed: mixed,
   avg: avgTurns.toFixed(2),
   highest: `${highestAI.toFixed(1)}%`,
   turnMachinePct: machinePct.toFixed(1),
   dialogMachinePct: dialogueMachinePct.toFixed(1),
   dialogHumanPct: dialogueHumanPct.toFixed(1),
-  dialogMixedPct: dialogueMixedPct.toFixed(1)
 };
 
 document.getElementById("miniLine").textContent =
@@ -3410,7 +3494,7 @@ function sortTurnsForView(turns) {
 function updateTurnSortBtnLabel() {
   if (!fbTurnSortBtn) return;
   if (turnSortMode === "least_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Least Uncertain";
-  else if (turnSortMode === "most_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Lowest Uncertainty Margin";
+  else if (turnSortMode === "most_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Lowest Uncertainty";
   else fbTurnSortBtn.textContent = "Turn Sort: Default";
 }
 
@@ -3453,7 +3537,7 @@ const statusText = isLocked ? "Reviewed" : "Pending";
   const turnIdx = Number(t.turn_index || (idx + 1));
   const pred = normalizeTurnPrediction(t.prediction);
 const predCls = pred === "AI" ? "ai" : "human";
-const sender = t.sender || (pred === "AI" ? "Machine" : "Human");
+const sender = t.sender || (pred === "AI" ? "AI" : "Human");
 const uncertainty = (t.uncertainty === 0 || t.uncertainty) ? `${Number(t.uncertainty).toFixed(2)}%` : "N/A";
 const isActiveTarget = t.active_learning_selected !== false;
 const conf = (t.confidence === 0 || t.confidence) ? `${Number(t.confidence).toFixed(2)}%` : "—";
@@ -3533,7 +3617,7 @@ return `
   <div>
     ${isActiveTarget ? `<span class="fb-badge pending" style="display:inline-block;margin-bottom:6px;">Review target</span>` : `<span class="fb-badge context" style="display:inline-block;margin-bottom:6px;">Context</span>`}
     <div>${esc(t.text || "")}</div>
-    <div style="margin-top:6px;color:#6b7280;font-size:12px;">Uncertainty Margin: ${esc(uncertainty)}</div>
+    <div style="margin-top:6px;color:#6b7280;font-size:12px;">Uncertainty: ${esc(uncertainty)}</div>
   </div>
   <div><span class="fb-pred ${predCls}">${pred}</span></div>
   <div>${esc(conf)}</div>
@@ -3591,7 +3675,7 @@ const myBox = isLocked ? `
       <span style="font-size:12px;font-weight:700;color:#5b657a;">Turn Sort:</span>
       <select class="select fb-turn-sort-select" data-turn-sort="${esc(id)}">
         <option value="default" ${turnSortMode === "default" ? "selected" : ""}>Default</option>
-        <option value="most_uncertain" ${turnSortMode === "most_uncertain" ? "selected" : ""}>Lowest Uncertainty Margin</option>
+        <option value="most_uncertain" ${turnSortMode === "most_uncertain" ? "selected" : ""}>Lowest Uncertainty</option>
         <option value="least_uncertain" ${turnSortMode === "least_uncertain" ? "selected" : ""}>Least Uncertain</option>
       </select>
     </div>
@@ -3884,7 +3968,6 @@ themeToggle.addEventListener("click", () => {
     "#evalNote",
     "#activeLearningLine",
     "#generatedActiveLearningPanel",
-    "#generatedDiagnosticsPanel",
     ".bottom-grid"
   ];
   toHide.forEach((sel) => {
@@ -3900,11 +3983,9 @@ themeToggle.addEventListener("click", () => {
 applyPageModeUI();
 applyLang("en");
 
-
-let isModelAlreadySelected = false;
-
 function setSubmitModelLocked(locked, selectedName = "") {
   isModelAlreadySelected = locked;
+  window.__generatedSubmitLocked = locked;
   if (saveModelBtn) {
     saveModelBtn.classList.toggle("is-locked", locked);
     saveModelBtn.setAttribute("aria-disabled", locked ? "true" : "false");
@@ -3916,12 +3997,18 @@ function setSubmitModelLocked(locked, selectedName = "") {
       ? `Model already selected${selectedName ? `: ${selectedName}` : ""}`
       : "";
   }
-  if (modelSelectEl) modelSelectEl.disabled = locked;
-  if (stageModelSelect) stageModelSelect.disabled = locked;
+  if (modelSelectEl) {
+    modelSelectEl.disabled = false;
+    modelSelectEl.title = locked ? "Select a preview model. Submit remains locked for the finalized model." : "";
+  }
+  if (stageModelSelect) {
+    stageModelSelect.disabled = false;
+    stageModelSelect.title = locked ? "Select a preview model. Submit remains locked for the finalized model." : "";
+  }
   document.getElementById("generatedFinalizedBanner")?.classList.toggle("show", locked);
   if (locked && document.getElementById("generatedFinalizedBanner")) {
     document.getElementById("generatedFinalizedBanner").innerHTML =
-      `<strong>Finalized Evaluation</strong><br>Submitted${selectedName ? ` with <b>${selectedName}</b>` : ""}. Review targets are frozen and reruns are preview-only.`;
+      `<strong>Finalized model:</strong> ${selectedName ? `<b>${selectedName}</b>` : "Submitted model"}. Preview model: <b>${modelLabel(previewGeneratedModelKey)}</b>. Submit is locked and review targets are frozen.`;
   }
   if (runAnalysisBtn) runAnalysisBtn.disabled = false;
   if (stageRunBtn) stageRunBtn.disabled = false;
@@ -3955,14 +4042,16 @@ if (!isFeedbackMode) {
 if (modelFromUrl && ["logreg", "rnn"].includes(modelFromUrl)) {
   modelSelectEl.value = modelFromUrl; // تعبئة فقط
   if (stageModelSelect) stageModelSelect.value = modelFromUrl;
+  previewGeneratedModelKey = modelFromUrl;
 }
-modelSelectEl.addEventListener("change", () => {
+modelSelectEl?.addEventListener("change", () => {
   if (stageModelSelect) stageModelSelect.value = modelSelectEl.value || "logreg";
-  setSelectedModelLine(modelSelectEl.value || "");
+  previewGeneratedModelKey = modelSelectEl.value || "logreg";
+  setSelectedModelLine(previewGeneratedModelKey);
   updateSummaryMeta();
 });
 
-setSelectedModelLine(modelSelectEl.value || "");
+setSelectedModelLine(previewGeneratedModelKey || modelSelectEl.value || "");
 updateSummaryMeta();
 
 async function ensureDialoguesForExport() {
@@ -3974,15 +4063,32 @@ async function ensureDialoguesForExport() {
 }
 function buildTurnExportRows() {
   const out = [];
+  const timestamp = new Date().toISOString();
+  const modelUsed = exportModelName(modelSelectEl?.value || activeModel || previewGeneratedModelKey || "logreg");
   dialogues.forEach((d) => {
     (d.turns || []).forEach((t, idx) => {
+      const prediction = normalizeTurnPrediction(t.prediction);
+      const gtRaw = t.gt ?? t.ground_truth ?? "";
+      const gt = gtRaw === "" || gtRaw === null || gtRaw === undefined ? "" : normalizeTurnPrediction(gtRaw);
+      const feedbackLabelRaw = t.feedback_label ?? t.corrected_label ?? "";
+      const feedbackLabel = feedbackLabelRaw ? normalizeTurnPrediction(feedbackLabelRaw) : "";
       out.push({
-  dialogue_id: d.id ?? "",
-  turn_id: Number(t.turn_index || (idx + 1)),
-  message: t.text || "",
-  previous_message: t.prev_text || t.prev || "",
-  detection: t.prediction || ""
-});
+        dialogue_id: d.id ?? "",
+        turn_index: Number(t.turn_index || (idx + 1)),
+        sender: t.sender || (prediction === "AI" ? "AI" : "Human"),
+        text: t.text || "",
+        previous_turn: t.prev_text || t.prev || "",
+        ground_truth: gt,
+        prediction,
+        confidence: t.confidence ?? "",
+        uncertainty: t.uncertainty ?? "",
+        review_target: Boolean(t.active_learning_selected ?? t.review_target ?? t.selected_for_review ?? false),
+        feedback_label: feedbackLabel,
+        final_label: feedbackLabel || prediction,
+        model_used: modelUsed,
+        active_learning_state: exportActiveLearningState(t),
+        timestamp
+      });
 
     });
   });
@@ -3997,20 +4103,13 @@ async function downloadDialoguesCsv() {
   }
 
   const turnRows = buildTurnExportRows();
-  const headers = ["Dialogue ID", "Turn ID", "Message", "Previous Message", "Detection"];
-const rows = turnRows.map(r => [
-  r.dialogue_id,
-  r.turn_id,
-  r.message,
-  r.previous_message,
-  r.detection
-]);
+  const headers = Object.keys(turnRows[0]);
+const rows = turnRows.map(r => headers.map(h => r[h]));
 
 
-  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = [headers, ...rows].map(r => r.map(esc).join(",")).join("\n");
+  const csv = [headers, ...rows].map(r => r.map(csvCell).join(",")).join("\n");
 
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -4065,12 +4164,12 @@ function setTaskSelectionLine(text, ok = false) {
 
 function ensureIdsForTaskActions(showAlert = false) {
   if (!projectId) {
-    setTaskSelectionLine("Task model selection: Missing projectId in URL");
+    setTaskSelectionLine("Detection Task: Missing projectId in URL");
     if (showAlert) alert("Missing projectId in URL. Open this page from project/task page.");
     return false;
   }
   if (!taskId) {
-    setTaskSelectionLine("Task model selection: Missing taskId in URL");
+    setTaskSelectionLine("Detection Task: Missing taskId in URL");
     if (showAlert) alert("Missing taskId in URL. Open this page from task page.");
     return false;
   }
@@ -4105,20 +4204,22 @@ async function loadTaskSelectionStatus() {
         : modelKeyFromName(rawName);
 
     if (isSelected && (rawName || keyFromRaw)) {
-      if (keyFromRaw) modelSelectEl.value = keyFromRaw;
-      if (stageModelSelect && keyFromRaw) stageModelSelect.value = keyFromRaw;
-      activeModel = keyFromRaw || activeModel;
+      finalizedGeneratedModelKey = keyFromRaw || modelKeyFromName(rawName) || "logreg";
+      finalizedGeneratedModelName = rawName || modelLabel(finalizedGeneratedModelKey);
+      if (!previewGeneratedModelKey) previewGeneratedModelKey = finalizedGeneratedModelKey;
+      if (modelSelectEl) modelSelectEl.value = previewGeneratedModelKey;
+      if (stageModelSelect) stageModelSelect.value = previewGeneratedModelKey;
 
-      setSelectedModelLine(keyFromRaw || modelSelectEl.value || "");
-      setTaskSelectionLine(`Task model selection: Saved (${rawName || modelLabel(keyFromRaw)})`, true);
-      setSubmitModelLocked(true, rawName || modelLabel(keyFromRaw));
+      setSelectedModelLine(previewGeneratedModelKey);
+      setTaskSelectionLine(`Detection Task: Saved (${rawName || modelLabel(keyFromRaw)})`, true);
+      setSubmitModelLocked(true, finalizedGeneratedModelName);
     } else {
-      setTaskSelectionLine("Task model selection: Not saved (click Submit Results)");
+      setTaskSelectionLine("Detection Task: Not saved (click Submit Results)");
       setSubmitModelLocked(false);
       setSelectedModelLine(modelSelectEl.value || "");
     }
   } catch (e) {
-    setTaskSelectionLine("Task model selection: Status unavailable");
+    setTaskSelectionLine("Detection Task: Status unavailable");
     setSubmitModelLocked(false);
   }
 
@@ -4131,7 +4232,7 @@ async function loadTaskSelectionStatus() {
 async function saveTaskModelSelection() {
   const picked = modelSelectEl.value;
   if (!picked) {
-    setTaskSelectionLine("Task model selection: Choose model first");
+    setTaskSelectionLine("Detection Task: Choose model first");
     return;
   }
   if (!ensureIdsForTaskActions(true)) return;
@@ -4158,17 +4259,19 @@ async function saveTaskModelSelection() {
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok || data.error) {
-      setTaskSelectionLine(`Task model selection: Failed (${data.error || "error"})`);
+      setTaskSelectionLine(`Detection Task: Failed (${data.error || "error"})`);
       return;
     }
 
     const txt = picked === "rnn" ? "RNN" : "Logistic Regression";
-    setTaskSelectionLine(`Task model selection: Saved (${txt})`, true);
+    finalizedGeneratedModelKey = picked;
+    finalizedGeneratedModelName = modelLabel(picked);
+    setTaskSelectionLine(`Detection Task: Saved (${txt})`, true);
     alert("✅ Model selected successfully!");
-    setSubmitModelLocked(true, txt);
+    setSubmitModelLocked(true, finalizedGeneratedModelName);
     await loadTaskSelectionStatus();
   } catch {
-    setTaskSelectionLine("Task model selection: Save failed");
+    setTaskSelectionLine("Detection Task: Save failed");
   } finally {
     if (!isModelAlreadySelected) {
       saveModelBtn.disabled = false;
@@ -4190,7 +4293,7 @@ async function handleRunAnalysis() {
     alert("Please select a model first.");
     return;
   }
-  if (picked === "falcon" || picked === "sota_model") {
+  if (picked === "sota_model") {
     alert("SOTA Model is coming soon. Please select Logistic Regression or RNN.");
     return;
   }
@@ -4201,6 +4304,7 @@ async function handleRunAnalysis() {
     `&task_id=${encodeURIComponent(taskId || "")}` +
     `&taskId=${encodeURIComponent(taskId || "")}`;
 
+  previewGeneratedModelKey = picked;
   activeModel = picked;
   lastRunAt = new Date();
   setSelectedModelLine(activeModel);
@@ -4258,11 +4362,13 @@ async function handleRunAnalysis() {
 runAnalysisBtn?.addEventListener("click", handleRunAnalysis);
 stageModelSelect?.addEventListener("change", () => {
   if (modelSelectEl) modelSelectEl.value = stageModelSelect.value;
-  setSelectedModelLine(stageModelSelect.value || "");
+  previewGeneratedModelKey = stageModelSelect.value || "logreg";
+  setSelectedModelLine(previewGeneratedModelKey);
   updateSummaryMeta();
 });
 stageRunBtn?.addEventListener("click", () => {
   if (modelSelectEl && stageModelSelect) modelSelectEl.value = stageModelSelect.value;
+  previewGeneratedModelKey = stageModelSelect?.value || modelSelectEl?.value || previewGeneratedModelKey || "logreg";
   handleRunAnalysis();
 });
 

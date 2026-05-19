@@ -56,6 +56,36 @@ CONV_RNN_KEY = "rnn"
 CONV_RNN_AI_CLASS_IS_ONE = False 
 CONV_RNN_MAX_LEN = 300
 
+CONV_MODEL_OPTIONS = {
+    "logreg": {
+        "result_key": CONV_LOGREG_KEY,
+        "task_key": "logreg",
+        "name": "Logistic Regression",
+    },
+    "rnn": {
+        "result_key": CONV_RNN_KEY,
+        "task_key": "rnn",
+        "name": "RNN",
+    },
+}
+
+
+def _normalize_conversation_model_key(value, for_results=False):
+    raw = _safe_str(value).strip().lower()
+    if raw in ("rnn", "baseline_rnn", "conv_rnn"):
+        key = "rnn"
+    elif raw in ("", "logreg", "logistic", "logistic_regression", "tfidf_logreg", "tf-idf", "tfidf"):
+        key = "logreg"
+    else:
+        key = "logreg"
+    model = CONV_MODEL_OPTIONS[key]
+    return model["result_key"] if for_results else model["task_key"]
+
+
+def _conversation_model_name(value):
+    key = _normalize_conversation_model_key(value)
+    return CONV_MODEL_OPTIONS[key]["name"]
+
 # مسارات موديلات المحادثات
 CONV_LOGREG_MODEL_PATH = "models/conversation_logistic_regression.joblib"
 CONV_RNN_MODEL_PATH = "Model-Gen-Con/rnn_v2_model.keras"
@@ -208,6 +238,49 @@ def _machine_probability_from_proba(model, proba_row):
         return float(proba_row[1])
     except Exception:
         return None
+
+
+def _news_probability_pair(proba_row, model=None, warn_on_fallback=True):
+    """
+    Returns (p_human, p_ai) for News predict_proba output using classes_ when available.
+    Falls back to the existing [Human, AI] column order if model metadata is missing.
+    """
+    probs = np.asarray(proba_row, dtype=float).reshape(-1).tolist()
+    classes_raw = getattr(model, "classes_", None) if model is not None else None
+    classes = list(classes_raw) if classes_raw is not None else []
+
+    def _class_key(value):
+        return str(value).strip().lower().replace("-", "").replace("_", "").replace(" ", "")
+
+    ai_idx = None
+    human_idx = None
+    for idx, cls in enumerate(classes):
+        if idx >= len(probs):
+            continue
+        key = _class_key(cls)
+        if cls == 1 or key in {"1", "ai", "machine", "machinegen", "machinegenerated"}:
+            ai_idx = idx
+        elif cls == 0 or key in {"0", "human", "real", "genuine", "authentic", "notai"}:
+            human_idx = idx
+
+    if ai_idx is not None:
+        p_ai = float(probs[ai_idx])
+        if human_idx is not None:
+            p_human = float(probs[human_idx])
+        elif len(probs) == 2:
+            p_human = float(probs[1 - ai_idx])
+        else:
+            p_human = float(1.0 - p_ai)
+        return p_human, p_ai
+
+    if warn_on_fallback and not getattr(_news_probability_pair, "_warned_fallback", False):
+        app.logger.warning("News model classes_ missing or unexpected (%s); using [Human, AI] probability order.", classes)
+        _news_probability_pair._warned_fallback = True
+
+    try:
+        return float(probs[0]), float(probs[1])
+    except Exception:
+        return 0.0, 0.0
 
 
 GROUND_TRUTH_COLUMN_NAMES = (
@@ -4113,8 +4186,9 @@ def analyze_all_articles(project_id):
                     probabilities = news_pipeline.predict_proba([chunk])[0]
 
            #  نحولها إلى float عادي
-                human_scores.append(float(probabilities[0]))
-                ai_scores.append(float(probabilities[1]))
+                h_score, a_score = _news_probability_pair(probabilities, None if selected_model == "rnn" else news_pipeline, selected_model != "rnn")
+                human_scores.append(h_score)
+                ai_scores.append(a_score)
 
 
             
@@ -4349,8 +4423,7 @@ def api_run_model(task_id):
                 else:
                     probabilities = news_pipeline.predict_proba([chunk])[0]
                 
-                h_score = float(probabilities[0])
-                a_score = float(probabilities[1])
+                h_score, a_score = _news_probability_pair(probabilities, None if model_type == "rnn" else news_pipeline, model_type != "rnn")
                 
                 human_scores.append(h_score)
                 ai_scores.append(a_score)
@@ -4485,8 +4558,7 @@ def api_select_model(task_id):
                     else:
                         probabilities = news_pipeline.predict_proba([chunk])[0]
 
-                    h = float(probabilities[0])
-                    a = float(probabilities[1])
+                    h, a = _news_probability_pair(probabilities, None if selected_model == "rnn" else news_pipeline, selected_model != "rnn")
                     human_scores.append(h)
                     ai_scores.append(a)
 
@@ -5222,9 +5294,9 @@ def _sender_label(sender_type, conversation_type):
 @app.route("/api/run_analysis_project/<project_id>", methods=["POST"])
 def api_run_analysis_project(project_id):
     try:
-        selected_model = (request.args.get("model") or "logreg").lower()
-        model_key = CONV_RNN_KEY if selected_model == CONV_RNN_KEY else CONV_LOGREG_KEY
-        selected_model_name = "RNN" if selected_model == "rnn" else "Logistic Regression"
+        selected_model = _normalize_conversation_model_key(request.args.get("model") or "logreg")
+        model_key = _normalize_conversation_model_key(selected_model, for_results=True)
+        selected_model_name = _conversation_model_name(selected_model)
         task_id_from_query = (request.args.get("task_id") or request.args.get("taskId") or "").strip()
 
         if not session.get("idToken"):
@@ -5357,8 +5429,8 @@ def api_run_analysis_project(project_id):
 # =========================
 @app.route("/api/analysis_project/<project_id>", methods=["GET"])
 def api_analysis_project(project_id):
-    selected_model = (request.args.get("model") or "logreg").lower()
-    model_key = CONV_RNN_KEY if selected_model == CONV_RNN_KEY else CONV_LOGREG_KEY
+    selected_model = _normalize_conversation_model_key(request.args.get("model") or "logreg")
+    model_key = _normalize_conversation_model_key(selected_model, for_results=True)
     run_id = _safe_str(request.args.get("run_id"))
 
     if not session.get("idToken"):
@@ -5417,9 +5489,7 @@ def api_conversation_select_model_task():
 
     project_id = (data.get("project_id") or "").strip()
     task_id = (data.get("task_id") or "").strip()
-    selected_model = (data.get("model") or "").strip().lower()
-    if selected_model == "tfidf_logreg":
-        selected_model = "logreg"
+    selected_model = _normalize_conversation_model_key(data.get("model"))
 
     if selected_model not in ("logreg", "rnn"):
         return jsonify({"error": "Invalid model"}), 400
@@ -5431,11 +5501,11 @@ def api_conversation_select_model_task():
         return guard_error
 
     now_iso = datetime.utcnow().isoformat() + "Z"
-    model_name = "RNN" if selected_model == "rnn" else "Logistic Regression"
+    model_name = _conversation_model_name(selected_model)
 
     project = get_project_basic_info(project_id) or {}
     result_type = detect_project_result_type(project)
-    selected_key_for_results = CONV_RNN_KEY if selected_model == "rnn" else CONV_LOGREG_KEY
+    selected_key_for_results = _normalize_conversation_model_key(selected_model, for_results=True)
     model_version = _active_learning_model_version(project_id, selected_key_for_results)
     analysis_run_id = None
     freeze_candidates = []
@@ -5498,12 +5568,12 @@ def api_conversation_selected_model_task():
     if task_data.get("project_ID") != project_id:
         return jsonify({"selected": False}), 200
 
-    model_key = (task_data.get("selected_model") or "").strip().lower()
+    model_key = _normalize_conversation_model_key(task_data.get("selected_model")) if task_data.get("selected_model") else ""
     model_name = (task_data.get("selected_model_name") or "").strip()
 
     if model_key in ("rnn", "logreg") or model_name:
         if not model_name:
-            model_name = "RNN" if model_key == "rnn" else "Logistic Regression"
+            model_name = _conversation_model_name(model_key)
 
         return jsonify({
             "selected": True,
@@ -7892,6 +7962,13 @@ def _flatten_json_for_csv(value):
     return value
 
 
+def _excel_safe_csv_cell(value):
+    value = _flatten_json_for_csv(value)
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@"):
+        return "'" + value
+    return value
+
+
 def _safe_csv_response(rows, filename, columns=None):
     output = io.StringIO()
     if columns is None:
@@ -7904,7 +7981,7 @@ def _safe_csv_response(rows, filename, columns=None):
     writer = csv.DictWriter(output, fieldnames=columns, extrasaction="ignore")
     writer.writeheader()
     for row in rows:
-        writer.writerow({key: _flatten_json_for_csv(row.get(key)) for key in columns})
+        writer.writerow({key: _excel_safe_csv_cell(row.get(key)) for key in columns})
 
     return Response(
         "\ufeff" + output.getvalue(),
@@ -9783,11 +9860,7 @@ def analyze_all_conversations(project_id):
     if not dataset_id:
         return jsonify({"error": "No dataset found"}), 404
 
-    model_key = _safe_str(req.get("model_key")) or "tfidf_logreg"
-    if model_key in ("baseline_rnn", "conv_rnn"):
-        model_key = CONV_RNN_KEY
-    elif model_key not in (CONV_LOGREG_KEY, CONV_RNN_KEY):
-        model_key = CONV_LOGREG_KEY
+    model_key = _normalize_conversation_model_key(req.get("model_key"), for_results=True)
 
     try:
         threshold = float(req.get("threshold", 0.5))
@@ -10043,7 +10116,7 @@ def get_one_dialogue_details(project_id, dialogue_id):
     if err:
         return err
 
-    model_key = _safe_str(request.args.get("model_key")) or "tfidf_logreg"
+    model_key = _normalize_conversation_model_key(request.args.get("model_key"), for_results=True)
     run_id = _safe_str(request.args.get("run_id"))
 
     base_ref = rtdb.reference(f"analysis_results/conversations/{model_key}/{project_id}")
@@ -10094,7 +10167,7 @@ def get_conversation_analysis_results(project_id):
     if err:
         return err
 
-    model_key = _safe_str(request.args.get("model_key")) or "tfidf_logreg"
+    model_key = _normalize_conversation_model_key(request.args.get("model_key"), for_results=True)
     run_id = _safe_str(request.args.get("run_id"))
 
     base_ref = rtdb.reference(f"analysis_results/conversations/{model_key}/{project_id}")
@@ -10125,7 +10198,7 @@ def export_conversation_enriched_dataset(project_id):
     if err:
         return err
 
-    model_key = _safe_str(request.args.get("model_key")) or "tfidf_logreg"
+    model_key = _normalize_conversation_model_key(request.args.get("model_key"), for_results=True)
     run_id = _safe_str(request.args.get("run_id"))
 
     base_ref = rtdb.reference(f"analysis_results/conversations/{model_key}/{project_id}")

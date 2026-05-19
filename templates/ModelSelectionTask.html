@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="initial-scale=1, width=device-width"/>
-  <title>Model Selection • TrustLens</title>
+  <title>Detection Task • TrustLens</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
     :root {
@@ -161,8 +161,8 @@
     .back-link {
       display: inline-flex; align-items: center; gap: 8px;
       color: var(--text); text-decoration: none;
-      font-size: 14px; margin-bottom: 16px;
-      padding: 6px 10px; border-radius: 10px;
+      font-size: 15px; font-weight: 700; margin-bottom: 18px;
+      padding: 8px 12px; border-radius: 10px;
     }
     .back-link:hover { background: rgba(0,0,0,.04); color: var(--text); }
     body.dark .back-link:hover { background: rgba(255,255,255,.04); }
@@ -179,11 +179,12 @@
       flex: 0 0 auto;
     }
     .badge-icon::before {
-      content: "AI";
-      font-size: 13px;
-      font-weight: 900;
-      color: var(--primary2);
-      letter-spacing: 0;
+      content: "";
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--primary2);
+      border-radius: 50%;
+      box-shadow: 10px 10px 0 -7px var(--primary2);
     }
 
     .detect-stage { margin-bottom: 28px; order: 2; }
@@ -487,10 +488,11 @@
       align-items: center;
       justify-content: flex-end;
       flex-wrap: nowrap;
+      min-width: 0;
     }
-    .table-tools .search-input { min-width: 240px; }
+    .table-tools .search-input { flex: 1 1 260px; min-width: 220px; }
     .table-tools .search-input { padding: 0 10px; }
-    .table-tools .model-dropdown { min-width: 160px; }
+    .table-tools .model-dropdown { flex: 0 0 auto; min-width: 160px; }
 
     .action-bar {
       background: var(--bg);
@@ -622,9 +624,9 @@
     }
     .modal-overlay.open { display: flex; }
     .modal {
-      background: #fff; border-radius: var(--radius); padding: 32px;
-      max-width: 860px; width: 90%; max-height: 85vh;
-      overflow-y: auto; position: relative;
+      background: #fff; border-radius: var(--radius); padding: 24px;
+      max-width: min(980px, 94vw); width: 94vw; max-height: 86vh;
+      overflow-y: auto; overflow-x: hidden; position: relative;
     }
     .modal-close {
       position: absolute; top: 16px; right: 16px;
@@ -641,6 +643,83 @@
       font-size: 14px; line-height: 1.6; color: var(--text);
       background: #f9f9fb; padding: 12px; border-radius: 8px;
       max-height: 150px; overflow-y: auto;
+    }
+    .chunk-filter-bar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: nowrap;
+      margin: 0 0 10px;
+    }
+    .chunk-filter-bar .model-dropdown {
+      flex: 0 0 210px;
+      width: 210px;
+      max-width: 100%;
+      height: 40px;
+      box-sizing: border-box;
+      appearance: none;
+      -webkit-appearance: none;
+      background-position: right 12px center;
+      background-repeat: no-repeat;
+      background-size: 12px;
+    }
+    .chunk-card-list {
+      display: grid;
+      gap: 10px;
+    }
+    .chunk-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(255,255,255,.62);
+      min-width: 0;
+    }
+    .chunk-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .chunk-card-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .chunk-preview {
+      width: 100%;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .chunk-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+      gap: 8px;
+    }
+    .chunk-metric {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      background: rgba(249,249,251,.78);
+      min-width: 0;
+    }
+    .chunk-metric span {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+    .chunk-metric b {
+      display: block;
+      font-size: 13px;
+      color: var(--text);
+      overflow-wrap: anywhere;
     }
     .chunk-row {
       display: grid; grid-template-columns: 92px 1fr minmax(150px, auto); align-items: center; gap: 12px;
@@ -702,12 +781,18 @@
       .content-grid { grid-template-columns: 1fr; }
       .card-inner { padding: 18px; }
       .action-bar { flex-direction: column; align-items: stretch; }
+      .panel-header { flex-wrap: wrap; align-items: flex-start; }
+      .table-tools { width: 100%; flex-wrap: wrap; justify-content: stretch; }
+      .table-tools .search-input { flex: 1 1 100%; min-width: 0; }
+      .table-tools .model-dropdown { flex: 1 1 180px; }
       .search-box { max-width: none; }
       .action-buttons { justify-content: stretch; }
       .btn { flex: 1; }
       th, td { padding: 12px; }
       .article-title { max-width: 200px; }
       .chunk-row { grid-template-columns: 1fr; }
+      .chunk-filter-bar { flex-wrap: wrap; justify-content: stretch; }
+      .chunk-filter-bar .model-dropdown { flex: 1 1 100%; min-width: 0; width: 100%; }
     }
 
     /* Final dashboard layout repair */
@@ -882,7 +967,6 @@
     <div class="page-header">
       <a href="/projectdetailsexaminer/{{ project_id }}" class="back-link">← Back to Project</a>
       <div class="title-row">
-        <div class="badge-icon"></div>
         <h1 class="page-title">News Detection</h1>
       </div>
       <p class="page-subtitle" id="datasetInfo">Select a model, then run article detection.</p>
@@ -900,13 +984,13 @@
           <div class="detect-copy">
             <div class="detect-kicker">News article detection</div>
             <h2 class="detect-title">Ready to analyze article dataset</h2>
-            <p class="detect-sub">Choose a detector to classify uploaded articles as Human-written or AI-generated, then review the detailed article results.</p>
+            <p class="detect-sub">Choose a detector to classify uploaded articles as Human or AI, then review the detailed article results.</p>
           </div>
           <div class="detect-actions">
             <label for="stageNewsModelSelect" class="model-label">Model</label>
             <select id="stageNewsModelSelect" class="model-dropdown detect-select">
-              <option value="logistic" selected>Logistic Regression (TF-IDF)</option>
-              <option value="rnn">RNN (BiGRU)</option>
+              <option value="logistic" selected>Baseline TF-IDF + Logistic Regression</option>
+              <option value="rnn">RNN</option>
               <option value="sota_model" disabled>SOTA Model (Coming Soon)</option>
             </select>
             <div class="card-subtitle" id="stageModelDesc">Fast classical baseline for article-level detection.</div>
@@ -985,35 +1069,14 @@
           <small>Frozen after Submit Results</small>
         </div>
         <div class="insight-tile">
-          <span>Lowest Uncertainty Margin</span>
+          <span>Lowest Uncertainty</span>
           <b id="newsLowestMargin">-</b>
-          <small>Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.</small>
+          <small>Lower value means closer to 50/50 and higher review priority.</small>
         </div>
         <div class="insight-tile">
           <span>Why selected?</span>
           <b id="newsTargetReason">Model uncertainty</b>
-          <small>Lower uncertainty margin means the prediction is closer to the 50/50 decision boundary and therefore has higher review priority.</small>
-        </div>
-      </div>
-    </div>
-
-    <div class="insights-panel is-hidden" id="newsDiagnosticsPanel">
-      <div class="section-kicker">Diagnostics</div>
-      <div class="insights-grid">
-        <div class="insight-tile">
-          <span>Lowest Confidence Article</span>
-          <b id="newsLowestConfidence">-</b>
-          <small>Model confidence toward the predicted class</small>
-        </div>
-        <div class="insight-tile">
-          <span>Most AI-heavy Article</span>
-          <b id="newsMostAiArticle">-</b>
-          <small>Highest article-level P(AI)</small>
-        </div>
-        <div class="insight-tile">
-          <span>Evaluation Level</span>
-          <b>Article-level</b>
-          <small>Chunk analysis supports explainability and review targets.</small>
+          <small>Lower value means closer to 50/50 and higher review priority.</small>
         </div>
       </div>
     </div>
@@ -1028,8 +1091,8 @@
       <div class="model-select">
         <label for="modelSelect" class="model-label">Model:</label>
         <select id="modelSelect" class="model-dropdown">
-          <option value="logistic" selected>Logistic Regression (TF-IDF)</option>
-          <option value="rnn">RNN (BiGRU)</option>
+          <option value="logistic" selected>Baseline TF-IDF + Logistic Regression</option>
+          <option value="rnn">RNN</option>
           <option value="sota_model" disabled>SOTA Model (Coming Soon)</option>
         </select>
       </div>
@@ -1037,6 +1100,8 @@
       <div class="action-buttons">
         <button class="btn btn-primary" id="runAnalysisBtn">Run Detection</button>
         <button class="btn btn-success" id="selectModelBtn" style="display:none;">Submit Results</button>
+        <button class="btn btn-secondary" id="newsExportCsvBtn" type="button">Export CSV</button>
+        <button class="btn btn-secondary" id="newsExportJsonBtn" type="button">Export JSON</button>
       </div>
       <div class="finalized-note" id="newsFinalizedNote">Finalized Evaluation: the submitted model is locked, review targets are frozen, and reruns are preview-only.</div>
     </div>
@@ -1092,7 +1157,7 @@
             <select class="model-dropdown" id="sortBy">
               <option value="ai_desc">Sort: AI% (desc)</option>
               <option value="confidence_asc">Sort: Confidence (asc)</option>
-              <option value="margin_asc">Sort: Uncertainty Margin (asc)</option>
+              <option value="margin_asc">Sort: Uncertainty (asc)</option>
             </select>
           </div>
         </div>
@@ -1104,7 +1169,7 @@
               <th>P(Human)</th>
               <th>P(AI)</th>
               <th>Confidence</th>
-              <th>Uncertainty Margin</th>
+              <th>Uncertainty</th>
               <th>Details</th>
             </tr>
           </thead>
@@ -1130,7 +1195,15 @@
       </div>
       
       <div class="modal-section">
-        <div class="modal-section-title">📊 Analysis by Chunk</div>
+        <div class="modal-section-title">Analysis by Chunk</div>
+        <div class="chunk-filter-bar">
+          <select class="model-dropdown" id="modalChunkFilter" aria-label="Filter chunks">
+            <option value="all">All chunks</option>
+            <option value="targets">Review targets only</option>
+            <option value="ai">AI chunks</option>
+            <option value="human">Human chunks</option>
+          </select>
+        </div>
         <div id="modalChunks"></div>
         <div class="overall-row">
           <span class="overall-label">Overall</span>
@@ -1169,7 +1242,6 @@
     const newsContentGrid = document.getElementById('newsContentGrid');
     const resultsContainer = document.getElementById('resultsContainer');
     const newsActiveLearningPanel = document.getElementById('newsActiveLearningPanel');
-    const newsDiagnosticsPanel = document.getElementById('newsDiagnosticsPanel');
     const newsProgressFill = document.getElementById('newsProgressFill');
     const newsProgressPct = document.getElementById('newsProgressPct');
     const newsProgressText = document.getElementById('newsProgressText');
@@ -1180,6 +1252,30 @@
     const themeBtn = document.getElementById('themeBtn');
     const langBtn = document.getElementById('langBtn');
     let newsTaskLocked = false;
+    let finalizedNewsModelKey = '';
+    let finalizedNewsModelName = '';
+    let previewNewsModelKey = normalizeNewsModelKey(stageNewsModelSelect?.value || document.getElementById('modelSelect')?.value || 'logistic');
+
+    function newsModelName(key) {
+      return normalizeNewsModelKey(key) === 'rnn' ? 'RNN' : 'Baseline TF-IDF + Logistic Regression';
+    }
+
+    function setNewsPreviewModel(key) {
+      previewNewsModelKey = normalizeNewsModelKey(key);
+      const resultSelect = document.getElementById('modelSelect');
+      if (resultSelect) resultSelect.value = previewNewsModelKey;
+      if (stageNewsModelSelect) stageNewsModelSelect.value = previewNewsModelKey;
+      updateNewsModelDescription(previewNewsModelKey);
+      if (newsTaskLocked) {
+        document.getElementById('datasetInfo').textContent =
+          `Detection Task | Finalized model: ${finalizedNewsModelName || 'Submitted model'} | Preview model: ${newsModelName(previewNewsModelKey)}. Submit remains locked.`;
+        const note = document.getElementById('newsFinalizedNote');
+        if (note) {
+          note.innerHTML =
+            `Finalized model: <b>${finalizedNewsModelName || 'Submitted model'}</b>. Preview model: <b>${newsModelName(previewNewsModelKey)}</b>. Submit is locked and review targets are frozen.`;
+        }
+      }
+    }
 
     function setNewsSubmitLocked(locked, selectedName = '') {
       newsTaskLocked = locked;
@@ -1197,12 +1293,12 @@
       document.getElementById('newsFinalizedNote')?.classList.toggle('show', locked);
       if (locked && document.getElementById('newsFinalizedNote')) {
         document.getElementById('newsFinalizedNote').innerHTML =
-          `Finalized Evaluation: submitted${selectedName ? ` with <b>${selectedName}</b>` : ''}. Review targets are frozen and reruns are preview-only.`;
+          `Finalized model: <b>${selectedName || finalizedNewsModelName || 'Submitted model'}</b>. Preview model: <b>${newsModelName(previewNewsModelKey)}</b>. Submit is locked and review targets are frozen.`;
       }
 
-      // بعد الإرسال يبقى تشغيل التحليل متاح كمعاينة، لكن اختيار الموديل النهائي لا يتغير.
-      if (modelSelect) modelSelect.disabled = locked;
-      if (stageNewsModelSelect) stageNewsModelSelect.disabled = locked;
+      // يقفل الإرسال النهائي فقط، ويبقى اختيار النموذج متاح للمعاينات.
+      if (modelSelect) modelSelect.disabled = false;
+      if (stageNewsModelSelect) stageNewsModelSelect.disabled = false;
       const runBtn = document.getElementById('runAnalysisBtn');
       if (runBtn) runBtn.disabled = false;
       if (stageNewsRunBtn) stageNewsRunBtn.disabled = false;
@@ -1216,7 +1312,6 @@
       newsContentGrid?.classList.toggle('is-hidden', mode !== 'results');
       resultsContainer?.classList.toggle('is-hidden', mode !== 'results');
       newsActiveLearningPanel?.classList.toggle('is-hidden', mode !== 'results');
-      newsDiagnosticsPanel?.classList.toggle('is-hidden', mode !== 'results');
     }
 
     function setNewsProgress(value, text) {
@@ -1244,13 +1339,14 @@ async function checkIfAlreadySelected() {
   const data = await res.json();
     if (data.selected_model) {
     const selectedKey = normalizeNewsModelKey(data.selected_model);
-    const selectedName = selectedKey === 'rnn' ? 'RNN' : 'Logistic Regression';
-    document.getElementById('modelSelect').value = selectedKey;
-    if (stageNewsModelSelect) stageNewsModelSelect.value = selectedKey;
-    updateNewsModelDescription(selectedKey);
+    const selectedName = newsModelName(selectedKey);
+    finalizedNewsModelKey = selectedKey;
+    finalizedNewsModelName = selectedName;
+    if (!previewNewsModelKey) previewNewsModelKey = selectedKey;
+    setNewsPreviewModel(previewNewsModelKey);
     setNewsSubmitLocked(true, selectedName);
     document.getElementById('datasetInfo').textContent =
-      'Finalized evaluation is locked. Run Detection remains available as a preview-only rerun.';
+      `Detection Task | Finalized model: ${selectedName} | Preview model: ${newsModelName(previewNewsModelKey)}. Submit remains locked.`;
   } else {
     setNewsSubmitLocked(false);
     document.getElementById('selectModelBtn').style.display = 'none';
@@ -1260,7 +1356,8 @@ async function checkIfAlreadySelected() {
 checkIfAlreadySelected();
    async function loadAnalysisResults() {
   try {
-    const modelType = document.getElementById('modelSelect').value;
+    const modelType = normalizeNewsModelKey(document.getElementById('modelSelect').value);
+    previewNewsModelKey = modelType;
     const response = await fetch(`/api/task/${taskId}/run_model`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1276,7 +1373,9 @@ checkIfAlreadySelected();
       const taskCheck = await fetch(`/api/tasks/${taskId}`);
       const taskData = await taskCheck.json();
       if (taskData.selected_model) {
-        setNewsSubmitLocked(true, taskData.selected_model === 'rnn' ? 'RNN' : 'Logistic Regression');
+        finalizedNewsModelKey = normalizeNewsModelKey(taskData.selected_model);
+        finalizedNewsModelName = newsModelName(finalizedNewsModelKey);
+        setNewsSubmitLocked(true, finalizedNewsModelName);
       } else {
         document.getElementById('selectModelBtn').style.display = 'inline-flex';
         setNewsSubmitLocked(false);
@@ -1299,7 +1398,6 @@ checkIfAlreadySelected();
       document.getElementById('tableWrapper').style.display = 'none';
       document.getElementById('newsMetricsPanel').classList.add('is-hidden');
       newsActiveLearningPanel?.classList.add('is-hidden');
-      newsDiagnosticsPanel?.classList.add('is-hidden');
     }
 
     function metricNumber(value) {
@@ -1320,6 +1418,16 @@ checkIfAlreadySelected();
     function displayPct(value) {
       const number = metricNumber(value);
       return number === null ? '-' : `${number.toFixed(2)}%`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[char]));
     }
 
     function articleConfidence(article) {
@@ -1358,23 +1466,10 @@ checkIfAlreadySelected();
       });
       const lowestTarget = sortedTargets[0];
       const lowestMargin = lowestTarget ? (metricNumber(lowestTarget.chunk?.uncertainty) ?? articleMargin(lowestTarget.article)) : null;
-      const lowestConfidenceArticle = [...(details || [])].sort((a, b) => {
-        return (articleConfidence(a) ?? Number.POSITIVE_INFINITY) - (articleConfidence(b) ?? Number.POSITIVE_INFINITY);
-      })[0];
-      const mostAiArticle = [...(details || [])].sort((a, b) => {
-        return (metricNumber(b.ai_percentage) ?? -1) - (metricNumber(a.ai_percentage) ?? -1);
-      })[0];
-
       document.getElementById('newsReviewTotal').textContent = String(targetCount);
       document.getElementById('newsReviewPending').textContent = locked ? 'Frozen' : String(targetCount);
       document.getElementById('newsReviewUnit').textContent = `Target unit: ${chunks.length ? 'chunk' : 'article'}`;
       document.getElementById('newsLowestMargin').textContent = displayPct(lowestMargin);
-      document.getElementById('newsLowestConfidence').textContent = lowestConfidenceArticle
-        ? `${lowestConfidenceArticle.title || 'Untitled'} (${displayPct(articleConfidence(lowestConfidenceArticle))})`
-        : '-';
-      document.getElementById('newsMostAiArticle').textContent = mostAiArticle
-        ? `${mostAiArticle.title || 'Untitled'} (${displayPct(metricNumber(mostAiArticle.ai_percentage))})`
-        : '-';
     }
 
     function normalizeMatrix(matrix) {
@@ -1459,9 +1554,9 @@ checkIfAlreadySelected();
       document.getElementById('avgChunks').textContent = details.length ? avgChunks.toFixed(2) : '-';
       document.getElementById('summaryReviewTargets').textContent = String(totalChunks ? Math.max(1, Math.min(50, Math.ceil(totalChunks * 0.2))) : 0);
 
-      const modelName = (summary.model_type === "rnn") ? "RNN (BiGRU)" : "Logistic Regression (TF-IDF)";
+      const modelName = (summary.model_type === "rnn") ? "RNN" : "Baseline TF-IDF + Logistic Regression";
       document.getElementById('datasetInfo').textContent = newsTaskLocked
-        ? `Finalized evaluation with ${modelName}. Preview-only reruns remain available.`
+        ? `Finalized model: ${finalizedNewsModelName || 'Submitted model'} | Preview model: ${modelName}. Preview-only reruns remain available.`
         : `Preview detection results from ${modelName}. Submit Results to finalize.`;
       document.getElementById('newsSummaryMeta').textContent =
         `Model: ${modelName} | Articles: ${summary.total_articles || details.length || 0} | Unit: chunk`;
@@ -1559,8 +1654,7 @@ checkIfAlreadySelected();
 
     document.getElementById('modelSelect').addEventListener('change', () => {
       const modelType = document.getElementById('modelSelect').value;
-      if (stageNewsModelSelect) stageNewsModelSelect.value = modelType;
-      updateNewsModelDescription(modelType);
+      setNewsPreviewModel(modelType);
       if (modelsRan[modelType]) {
         // لو المودل اشتغل قبل، نعرض نتائجه المحفوظة
         // بس الحين API ما يحفظ، فنخليه يشغل مرة ثانية
@@ -1568,8 +1662,8 @@ checkIfAlreadySelected();
     });
 
     document.getElementById('runAnalysisBtn').addEventListener('click', async () => {
-      if (stageNewsModelSelect) stageNewsModelSelect.value = document.getElementById('modelSelect').value;
-      if (document.getElementById('modelSelect').value === 'sota_model') {
+      setNewsPreviewModel(document.getElementById('modelSelect').value);
+      if (previewNewsModelKey === 'sota_model') {
         alert('SOTA Model is coming soon. Please select Logistic Regression or RNN.');
         return;
       }
@@ -1594,8 +1688,7 @@ checkIfAlreadySelected();
     });
 
     stageNewsModelSelect?.addEventListener('change', () => {
-      document.getElementById('modelSelect').value = stageNewsModelSelect.value;
-      updateNewsModelDescription(stageNewsModelSelect.value);
+      setNewsPreviewModel(stageNewsModelSelect.value);
     });
 
     function updateNewsModelDescription(modelType) {
@@ -1608,14 +1701,106 @@ checkIfAlreadySelected();
       if (stageDesc) stageDesc.textContent = desc;
     }
 
+    function normalizeDisplayLabel(value, fallbackPrediction) {
+      const raw = String(value ?? fallbackPrediction ?? '').toLowerCase();
+      if (!raw || raw === '-' || raw === 'none' || raw === 'null') return '';
+      if (raw === '1' || raw.includes('ai') || raw.includes('machine')) return 'AI';
+      if (raw === '0' || raw.includes('human')) return 'Human';
+      return fallbackPrediction === 'AI' ? 'AI' : (fallbackPrediction === 'Human' ? 'Human' : '');
+    }
+
+    function exportModelName(key) {
+      const raw = String(key || '').toLowerCase();
+      if (raw.includes('rnn')) return 'RNN';
+      if (raw.includes('sota')) return 'SOTA Model';
+      if (raw.includes('logistic') || raw.includes('logreg') || raw.includes('tf-idf') || raw.includes('tfidf') || raw.includes('baseline')) return 'Logistic Regression';
+      return key ? String(key) : '';
+    }
+
+    function exportActiveLearningState(item) {
+      const selected = Boolean(item?.active_learning_selected || item?.review_target || item?.selected_for_review);
+      const feedback = item?.feedback_label ?? item?.corrected_label;
+      if (selected && feedback !== undefined && feedback !== null && String(feedback).trim() !== '') return 'reviewed';
+      if (selected) return 'pending';
+      return 'not_selected_for_review';
+    }
+
+    function csvCell(value) {
+      let text = String(value ?? '');
+      if (/^[=+\-@]/.test(text)) text = `'${text}`;
+      return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+    }
+
+    function buildNewsExportRows() {
+      const modelName = newsTaskLocked
+        ? exportModelName(finalizedNewsModelName || previewNewsModelKey)
+        : exportModelName(previewNewsModelKey);
+      const timestamp = new Date().toISOString();
+      const rows = [];
+      (allDetails || []).forEach((article, articleIndex) => {
+        const chunks = Array.isArray(article.chunks) && article.chunks.length ? article.chunks : [null];
+        chunks.forEach((chunk, chunkIndex) => {
+          const prediction = chunk
+            ? normalizeDisplayLabel(chunk.prediction, Number(chunk.ai ?? chunk.ai_percentage ?? 0) >= Number(chunk.human ?? chunk.human_percentage ?? 0) ? 'AI' : 'Human')
+            : normalizeDisplayLabel(article.prediction, article.prediction);
+          const confidence = chunk
+            ? (metricNumber(chunk.confidence) ?? Math.max(metricNumber(chunk.human ?? chunk.human_percentage) ?? 0, metricNumber(chunk.ai ?? chunk.ai_percentage) ?? 0))
+            : articleConfidence(article);
+          const uncertainty = chunk
+            ? metricNumber(chunk.uncertainty)
+            : articleMargin(article);
+          rows.push({
+            article_id: article.article_id ?? article.id ?? articleIndex + 1,
+            chunk_id: chunk ? (chunk.chunk_id ?? chunk.index ?? chunkIndex + 1) : '',
+            title: article.title ?? '',
+            text: chunk ? chunkTextPreview(article, chunkIndex) : (article.content ?? article.text ?? ''),
+            ground_truth: normalizeDisplayLabel(article.ground_truth ?? article.label ?? article.MachineGen, ''),
+            prediction,
+            confidence: confidence === null || confidence === undefined ? '' : confidence,
+            uncertainty: uncertainty === null || uncertainty === undefined ? '' : uncertainty,
+            review_target: Boolean(chunk?.active_learning_selected || chunk?.review_target || chunk?.selected_for_review),
+            feedback_label: normalizeDisplayLabel(chunk?.feedback_label ?? article.feedback_label, ''),
+            final_label: normalizeDisplayLabel(chunk?.final_label ?? article.final_label ?? prediction, prediction),
+            model_used: modelName,
+            active_learning_state: exportActiveLearningState(chunk || article),
+            timestamp
+          });
+        });
+      });
+      return rows;
+    }
+
+    function downloadRows(rows, filename, format) {
+      if (!rows.length) {
+        alert('Run Detection first to export the enriched dataset.');
+        return;
+      }
+      let blob;
+      if (format === 'json') {
+        blob = new Blob([JSON.stringify({ rows }, null, 2)], { type: 'application/json;charset=utf-8;' });
+      } else {
+        const headers = Object.keys(rows[0]);
+        const csv = [headers.join(','), ...rows.map(row => headers.map(header => csvCell(row[header])).join(','))].join('\n');
+        blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
     stageNewsRunBtn?.addEventListener('click', () => {
-      document.getElementById('modelSelect').value = stageNewsModelSelect.value;
+      setNewsPreviewModel(stageNewsModelSelect.value);
       document.getElementById('runAnalysisBtn').click();
     });
 
     document.getElementById('selectModelBtn').addEventListener('click', async () => {
       if (newsTaskLocked) return;
-      const modelType = document.getElementById('modelSelect').value;
+      const modelType = previewNewsModelKey || normalizeNewsModelKey(document.getElementById('modelSelect').value);
       const btn = document.getElementById('selectModelBtn');
       
       btn.disabled = true;
@@ -1637,9 +1822,11 @@ checkIfAlreadySelected();
           return;
         }
         
-        setNewsSubmitLocked(true, modelType === 'rnn' ? 'RNN' : 'Logistic Regression');
+        finalizedNewsModelKey = modelType;
+        finalizedNewsModelName = newsModelName(modelType);
+        setNewsSubmitLocked(true, finalizedNewsModelName);
         document.getElementById('datasetInfo').textContent =
-          'Finalized evaluation is locked. Run Detection remains available as a preview-only rerun.';
+          `Finalized model: ${finalizedNewsModelName}. Run Detection remains available as a preview-only rerun.`;
         
       } catch (err) {
         console.error(err);
@@ -1652,6 +1839,8 @@ checkIfAlreadySelected();
     document.getElementById('searchInput')?.addEventListener('input', renderNewsTable);
     document.getElementById('labelFilter')?.addEventListener('change', renderNewsTable);
     document.getElementById('sortBy')?.addEventListener('change', renderNewsTable);
+    document.getElementById('newsExportCsvBtn')?.addEventListener('click', () => downloadRows(buildNewsExportRows(), 'news_detection_dataset.csv', 'csv'));
+    document.getElementById('newsExportJsonBtn')?.addEventListener('click', () => downloadRows(buildNewsExportRows(), 'news_detection_dataset.json', 'json'));
     document.querySelectorAll('[data-news-dist]')?.forEach(btn => {
       btn.addEventListener('click', () => {
         newsDistMode = btn.getAttribute('data-news-dist') || 'article';
@@ -1687,80 +1876,124 @@ checkIfAlreadySelected();
       }
     });
 
-    function showDetails(article) {
-  document.getElementById('modalTitle').textContent = article.title || 'Untitled';
-  const contentEl = document.getElementById('modalContent');
-if (article.content && article.chunks && article.chunks.length > 0) {
-  const words = article.content.split(' ');
-  const chunkSize = Math.ceil(words.length / article.chunks.length);
-  const chunkColors = article.chunks.map(chunk => chunk.human > chunk.ai ? 'human' : 'ai');
-  
-  let highlighted = '';
-  article.chunks.forEach((chunk, i) => {
-    const start = i * chunkSize;
-    const end = Math.min(start + chunkSize, words.length);
-    const chunkWords = words.slice(start, end).join(' ');
-    const isHuman = chunk.human > chunk.ai;
-    const bgColor = isHuman ? 'rgba(10,122,57,0.12)' : 'rgba(245,158,11,0.12)';
-    const borderColor = isHuman ? '#84fab0' : '#fbbf24';
-    const label = `Chunk ${i + 1}`;
-    highlighted += `<span style="background:${bgColor};border-bottom:2px solid ${borderColor};border-radius:3px;padding:1px 0;" title="${label}: ${isHuman ? '✍️ Human' : '🤖 AI'} — Human ${chunk.human}% / AI ${chunk.ai}%">${chunkWords}</span> `;
-  });
-  
-  contentEl.innerHTML = highlighted;
-} else {
-  contentEl.textContent = article.content || 'No content available';
-}
+    let currentArticleDetails = null;
 
-  const chunksDiv = document.getElementById('modalChunks');
-  chunksDiv.innerHTML = '';
+    function chunkLabel(chunk, index) {
+      const raw = String(chunk?.label || index + 1).replace('F', '');
+      return `Chunk ${raw}`;
+    }
 
-  if (article.chunks && article.chunks.length > 0) {
-    article.chunks.forEach(chunk => {
-      const isHumanChunk = chunk.human > chunk.ai;
-      const confidence = Number.isFinite(Number(chunk.confidence))
-        ? Number(chunk.confidence).toFixed(2) + '%'
-        : Math.max(Number(chunk.human) || 0, Number(chunk.ai) || 0).toFixed(2) + '%';
-      const uncertainty = Number.isFinite(Number(chunk.uncertainty))
-        ? Number(chunk.uncertainty).toFixed(2) + '%'
-        : 'Unavailable';
-      chunksDiv.innerHTML += `
-        <div class="chunk-row">
-         <span class="chunk-label">Chunk ${chunk.label.replace('F','')}</span>
-          <div class="chunk-bar">
-            <div class="chunk-bar-fill ${isHumanChunk ? 'human' : 'ai'}"
-                 style="width:${isHumanChunk ? chunk.human : chunk.ai}%"></div>
-          </div>
-          <div>
-            <div class="chunk-stats">✍️ ${chunk.human}% &nbsp; 🤖 ${chunk.ai}%</div>
-            <div class="chunk-meta">
-              <span class="chunk-chip">Confidence: ${confidence}</span>
-              <span class="chunk-chip">Uncertainty Margin: ${uncertainty}</span>
-            </div>
-          </div>
+    function chunkTextPreview(article, index) {
+      const content = String(article?.content || '');
+      const chunks = Array.isArray(article?.chunks) ? article.chunks : [];
+      if (!content || !chunks.length) return 'No preview available';
+      const words = content.split(/\s+/);
+      const chunkSize = Math.max(1, Math.ceil(words.length / chunks.length));
+      return words.slice(index * chunkSize, Math.min((index + 1) * chunkSize, words.length)).join(' ');
+    }
+
+    function isReviewTargetChunk(chunk) {
+      return Boolean(
+        chunk?.active_learning_selected ||
+        chunk?.review_target ||
+        chunk?.is_review_target ||
+        chunk?.selected_for_review ||
+        chunk?.target
+      );
+    }
+
+    function renderModalChunks() {
+      const article = currentArticleDetails;
+      const chunksDiv = document.getElementById('modalChunks');
+      const filter = document.getElementById('modalChunkFilter')?.value || 'all';
+      if (!chunksDiv || !article) return;
+
+      let chunks = Array.isArray(article.chunks)
+        ? article.chunks.map((chunk, index) => ({ chunk, index }))
+        : [];
+
+      if (filter === 'targets') chunks = chunks.filter(({ chunk }) => isReviewTargetChunk(chunk));
+      if (filter === 'ai') chunks = chunks.filter(({ chunk }) => Number(chunk.ai || chunk.ai_percentage || 0) >= Number(chunk.human || chunk.human_percentage || 0));
+      if (filter === 'human') chunks = chunks.filter(({ chunk }) => Number(chunk.ai || chunk.ai_percentage || 0) < Number(chunk.human || chunk.human_percentage || 0));
+
+      if (!chunks.length) {
+        chunksDiv.innerHTML = '<p style="color:var(--muted);font-size:14px;">No chunk data for this filter.</p>';
+        return;
+      }
+
+      chunksDiv.innerHTML = `
+        <div class="chunk-card-list">
+          ${chunks.map(({ chunk, index }) => {
+                const human = Number(chunk.human ?? chunk.human_percentage ?? 0);
+                const ai = Number(chunk.ai ?? chunk.ai_percentage ?? 0);
+                const isHumanChunk = human > ai;
+                const confidence = Number.isFinite(Number(chunk.confidence))
+                  ? `${Number(chunk.confidence).toFixed(2)}%`
+                  : `${Math.max(human, ai).toFixed(2)}%`;
+                const uncertainty = Number.isFinite(Number(chunk.uncertainty))
+                  ? `${Number(chunk.uncertainty).toFixed(2)}%`
+                  : 'Unavailable';
+                return `
+                  <div class="chunk-card">
+                    <div class="chunk-card-head">
+                      <div class="chunk-card-title">${escapeHtml(chunkLabel(chunk, index))}</div>
+                      <span class="badge ${isHumanChunk ? 'human' : 'ai'}">${isHumanChunk ? 'Human' : 'AI'}</span>
+                    </div>
+                    <div class="chunk-preview">${escapeHtml(chunkTextPreview(article, index))}</div>
+                    <div class="chunk-metrics">
+                      <div class="chunk-metric"><span>P(Human)</span><b>${human.toFixed(2)}%</b></div>
+                      <div class="chunk-metric"><span>P(AI)</span><b>${ai.toFixed(2)}%</b></div>
+                      <div class="chunk-metric"><span>Confidence</span><b>${escapeHtml(confidence)}</b></div>
+                      <div class="chunk-metric"><span>Uncertainty</span><b>${escapeHtml(uncertainty)}</b></div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
         </div>
       `;
-    });
-  } else {
-    chunksDiv.innerHTML = '<p style="color:var(--muted);font-size:14px;">No chunk data.</p>';
-  }
+    }
 
-  const isHuman = article.prediction === 'Human';
-  document.getElementById('modalOverall').innerHTML = `
-    <span class="badge ${isHuman ? 'human' : 'ai'}">
-      ${isHuman ? '✍️' : '🤖'} ${article.prediction}
-    </span>
-    &nbsp; ✍️ ${article.human_percentage}% &nbsp; 🤖 ${article.ai_percentage}%
-  `;
+    function showDetails(article) {
+      currentArticleDetails = article || {};
+      document.getElementById('modalTitle').textContent = currentArticleDetails.title || 'Untitled';
+      const contentEl = document.getElementById('modalContent');
 
-  document.getElementById('detailsModal').classList.add('open');
-}
-function closeModal() {
-  document.getElementById('detailsModal').classList.remove('open');
-}
-function closeModal() {
-  document.getElementById('detailsModal').classList.remove('open');
-}
+      if (currentArticleDetails.content && currentArticleDetails.chunks && currentArticleDetails.chunks.length > 0) {
+        const words = String(currentArticleDetails.content).split(/\s+/);
+        const chunkSize = Math.ceil(words.length / currentArticleDetails.chunks.length);
+        let highlighted = '';
+        currentArticleDetails.chunks.forEach((chunk, i) => {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize, words.length);
+          const chunkWords = escapeHtml(words.slice(start, end).join(' '));
+          const isHuman = Number(chunk.human || 0) > Number(chunk.ai || 0);
+          const bgColor = isHuman ? 'rgba(10,122,57,0.12)' : 'rgba(245,158,11,0.12)';
+          const borderColor = isHuman ? '#84fab0' : '#fbbf24';
+          highlighted += `<span style="background:${bgColor};border-bottom:2px solid ${borderColor};border-radius:3px;padding:1px 0;">${chunkWords}</span> `;
+        });
+        contentEl.innerHTML = highlighted;
+      } else {
+        contentEl.textContent = currentArticleDetails.content || 'No content available';
+      }
+
+      const filter = document.getElementById('modalChunkFilter');
+      if (filter) filter.value = 'all';
+      renderModalChunks();
+
+      const isHuman = currentArticleDetails.prediction === 'Human';
+      document.getElementById('modalOverall').innerHTML = `
+        <span class="badge ${isHuman ? 'human' : 'ai'}">${isHuman ? 'Human' : 'AI'}</span>
+        &nbsp; Human ${escapeHtml(currentArticleDetails.human_percentage)}% &nbsp; AI ${escapeHtml(currentArticleDetails.ai_percentage)}%
+      `;
+
+      document.getElementById('detailsModal').classList.add('open');
+    }
+
+    document.getElementById('modalChunkFilter')?.addEventListener('change', renderModalChunks);
+
+    function closeModal() {
+      document.getElementById('detailsModal').classList.remove('open');
+    }
 
   </script>
 </body>

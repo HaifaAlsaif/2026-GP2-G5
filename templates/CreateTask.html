@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
@@ -364,8 +364,8 @@ body{ top:0 !important; }
   <div class="label">Task Type</div>
   <div class="conv-toggle" id="taskTypeToggle">
     <button type="button" class="conv-pill" data-value="model_selection">
-      <div class="pill-title">Model Selection</div>
-      <div class="pill-sub">Choose best model for dataset</div>
+      <div class="pill-title">Detection Task</div>
+      <div class="pill-sub">Predict whether the content is AI-generated or Human-written.</div>
     </button>
     <button type="button" class="conv-pill" data-value="labeling">
       <div class="pill-title">Labeling & Feedback</div>
@@ -388,8 +388,8 @@ body{ top:0 !important; }
                 <div class="pill-sub">Exactly 2 examiners</div>
               </button>
               <button type="button" class="conv-pill" data-value="model_selection">
-                <div class="pill-title">Model Selection</div>
-                <div class="pill-sub">Exactly 1 examiner</div>
+                <div class="pill-title">Detection Task</div>
+                <div class="pill-sub">Predict whether the content is AI-generated or Human-written.</div>
               </button>
               <button type="button" class="conv-pill" data-value="labeling">
                 <div class="pill-title">Labeling & Feedback</div>
@@ -576,8 +576,8 @@ function updateGeneratedDescVisibility() {
 
   if (show) {
     if (mode === "model_selection") {
-      label.textContent = "Model Selection Description";
-      input.placeholder = "Add description for model selection...";
+      label.textContent = "Detection Task Description";
+      input.placeholder = "Predict whether the content is AI-generated or Human-written.";
     } else {
       label.textContent = "Labeling Description";
       input.placeholder = "Add description for labeling & feedback...";
@@ -770,7 +770,7 @@ if (!isValid) {
     const mode = (document.getElementById("genTaskMode")?.value || "human-ai");
 
     if (mode === "model_selection") {
-      alert(`Please assign exactly 1 examiner for Model Selection. You selected ${selectedExaminers.length}.`);
+      alert(`Please assign exactly 1 examiner for Detection Task. You selected ${selectedExaminers.length}.`);
     } else if (mode === "labeling") {
       alert(`Please assign at least 1 examiner for Labeling & Feedback. You selected ${selectedExaminers.length}.`);
     } else if (mode === "human-human") {
@@ -785,7 +785,7 @@ if (!isValid) {
   if (projectCategory === "article" || isUploadedConversation) {
     const taskType = document.getElementById("taskType").value;
     if (taskType === "model_selection") {
-      alert(`Please assign exactly 1 examiner for Model Selection. You selected ${selectedExaminers.length}.`);
+      alert(`Please assign exactly 1 examiner for Detection Task. You selected ${selectedExaminers.length}.`);
     } else {
       alert(`Please assign at least 1 examiner for Labeling & Feedback. You selected ${selectedExaminers.length}.`);
     }
