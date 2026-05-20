@@ -131,6 +131,11 @@
       font-family: inherit;
       background: #fff;
       cursor: pointer;
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, #717182 50%), linear-gradient(135deg, #717182 50%, transparent 50%);
+      background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
     }
 
     .filter-select:focus { outline: none; border-color: var(--primary1); }
@@ -501,23 +506,36 @@
       <div class="progress-text" id="progressText">0 / 0 chunks reviewed</div>
     </div>
 
+    <div class="progress-bar" id="ownerNotesPanel">
+      <div class="progress-label">Owner Notes</div>
+      <div id="ownerNotesText" style="color:var(--muted);font-size:14px;">Loading notes...</div>
+    </div>
+
     <div class="filter-section" id="filterSection" style="display: none;">
-      <span class="filter-label">📊 Sort by Confidence:</span>
+      <span class="filter-label">Samples are ordered by review priority: lowest distance from 50/50 and lowest confidence first. Lower distance means higher review priority.</span>
       <select class="filter-select" id="confidenceFilter" onchange="applySorting()">
-        <option value="default">Default Order</option>
-        <option value="most-uncertain">Most Uncertain First</option>
-        <option value="least-uncertain">Least Uncertain First</option>
+        <option value="default">Highest Review Priority First</option>
+        <option value="most-uncertain">Lowest Distance from 50/50 First</option>
+        <option value="least-uncertain">Least Review Priority First</option>
         <option value="lowest-confidence">Lowest Confidence First</option>
-        <option value="highest-confidence">Highest Confidence First</option>
       </select>
       <select class="filter-select" id="articleViewFilter" onchange="applyArticleFilters()">
         <option value="all">All shown samples</option>
         <option value="targets">Review targets only</option>
         <option value="pending">Pending only</option>
-        <option value="reviewed">Reviewed only</option>
+        <option value="draft">Draft saved</option>
+        <option value="submitted">Submitted only</option>
+        <option value="mine">Assigned to me</option>
         <option value="human">Human prediction</option>
         <option value="ai">AI prediction</option>
       </select>
+    </div>
+
+    <div class="progress-bar" id="finalSubmitPanel" style="display:none;">
+      <div class="progress-label">Final Submission</div>
+      <div style="color:var(--muted);font-size:14px;margin-bottom:12px;">Drafts are editable until you submit this feedback task. Submitted samples become locked for evaluation.</div>
+      <div id="finalSubmitReason" style="color:var(--warning);font-size:13px;margin-bottom:12px;"></div>
+      <button class="btn btn-primary" id="finalSubmitBtn" onclick="submitFeedbackTask()" disabled>Submit Feedback Task</button>
     </div>
 
     <div class="toast" id="toast"></div>
@@ -537,13 +555,13 @@
     const taskId    = "{{ task_id }}";
     const projectId = "{{ project_id }}";
     const datasetId = "{{ dataset_id }}";
-
-    const sortLabel = document.querySelector('.filter-label');
-    if (sortLabel) sortLabel.textContent = 'Sort by Review Priority:';
+    const currentUserId = "{{ user_uid }}";
 
     let articles         = [];
     let originalArticles = [];
     let reviewedCount    = 0;
+    let submittedCount   = 0;
+    let currentVersionId = 'v1';
 
     /* ─── load ─── */
     async function loadArticles() {
@@ -563,6 +581,8 @@
 
         articles         = data.articles || [];
         originalArticles = JSON.parse(JSON.stringify(articles));
+        currentVersionId = data?.active_learning?.model_version || currentVersionId;
+        await loadOwnerNotes();
 
         if (articles.length === 0) {
           document.getElementById('loadingState').style.display = 'none';
@@ -571,16 +591,29 @@
           return;
         }
 
-        reviewedCount = articles.filter(function(a){ return isTargetReviewed(a); }).length;
+        reviewedCount = articles.filter(function(a){ return isTargetStarted(a); }).length;
+        submittedCount = articles.filter(function(a){ return isTargetSubmitted(a); }).length;
         updateProgress();
 
         document.getElementById('filterSection').style.display = 'flex';
 
         applyArticleFilters();
+        document.getElementById('finalSubmitPanel').style.display = 'block';
         document.getElementById('loadingState').style.display = 'none';
 
       } catch (err) {
         alert('Failed to load articles: ' + err.message);
+      }
+    }
+
+    async function loadOwnerNotes() {
+      try {
+        const res = await fetch('/api/project/' + encodeURIComponent(projectId) + '/version/' + encodeURIComponent(currentVersionId) + '/owner_notes');
+        const data = await res.json();
+        const note = data?.notes?.text || '';
+        document.getElementById('ownerNotesText').textContent = note || 'No owner notes for this version yet.';
+      } catch (err) {
+        document.getElementById('ownerNotesText').textContent = 'Owner notes are unavailable.';
       }
     }
 
@@ -613,13 +646,69 @@
       return percent.toFixed(2) + '%';
     }
 
+    function normalizeLabel(value) {
+      const text = String(value || '').trim().toLowerCase();
+      if (text === 'human' || text === 'human-written' || text === 'human written' || text === '0') return 'Human';
+      if (text === 'ai' || text === 'machine-generated' || text === 'machine generated' || text === 'machine' || text === '1') return 'AI';
+      return '';
+    }
+
+    function escapeHTML(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function getAIProbability(item) {
+      const direct = Number(item.ai);
+      if (Number.isFinite(direct)) return direct;
+      const aiPercentage = Number(item.ai_percentage);
+      if (Number.isFinite(aiPercentage)) return aiPercentage;
+      const machineProbability = Number(item.p_machine);
+      if (Number.isFinite(machineProbability)) return machineProbability;
+      return NaN;
+    }
+
+    function getChunkUncertainty(chunk) {
+      const direct = Number(chunk && chunk.uncertainty);
+      if (Number.isFinite(direct)) return direct;
+      const aiValue = getAIProbability(chunk || {});
+      if (!Number.isFinite(aiValue)) return NaN;
+      const aiRatio = aiValue > 1 ? aiValue / 100 : aiValue;
+      return Math.abs(aiRatio - 0.5);
+    }
+
+    function getReviewState(article) {
+      const state = String(article.review_state || article.target_status || '').toLowerCase();
+      if (article.feedback_locked || state === 'locked') return 'locked';
+      if (state === 'submitted') return 'submitted';
+      if (state === 'draft_saved' || state === 'reviewed' || article.has_feedback) return 'draft_saved';
+      return 'pending';
+    }
+
+    function isTargetStarted(article) {
+      return getReviewState(article) !== 'pending';
+    }
+
+    function isTargetSubmitted(article) {
+      const state = getReviewState(article);
+      return state === 'submitted' || state === 'locked';
+    }
+
+    function isAssignedToMe(article) {
+      return !article.reviewed_by || article.reviewed_by === currentUserId || article.is_my_feedback;
+    }
+
     function isTargetReviewed(article) {
-      return article.target_status === 'reviewed' || !!article.reviewed_by || !!article.has_feedback;
+      return isTargetStarted(article);
     }
 
     function getTargetPrediction(article) {
       const selectedChunk = article.selected_chunk || {};
-      return selectedChunk.prediction || article.prediction || '';
+      return normalizeLabel(selectedChunk.prediction || article.prediction || '');
     }
 
     function applySorting() {
@@ -642,8 +731,10 @@
 
     function articleMatchesFilter(article, filterValue) {
       if (filterValue === 'targets') return article.active_learning_selected !== false;
-      if (filterValue === 'pending') return !isTargetReviewed(article);
-      if (filterValue === 'reviewed') return isTargetReviewed(article);
+      if (filterValue === 'pending') return getReviewState(article) === 'pending';
+      if (filterValue === 'draft') return getReviewState(article) === 'draft_saved';
+      if (filterValue === 'submitted') return isTargetSubmitted(article);
+      if (filterValue === 'mine') return isAssignedToMe(article);
       if (filterValue === 'human') return getTargetPrediction(article) === 'Human';
       if (filterValue === 'ai') return getTargetPrediction(article) === 'AI';
       return true;
@@ -657,7 +748,7 @@
         return articleMatchesFilter(article, filterValue);
       });
 
-      if (sortValue === 'most-uncertain') {
+      if (sortValue === 'most-uncertain' || sortValue === 'default') {
         articles.sort(function(a, b){ return getUncertainty(a) - getUncertainty(b); });
       } else if (sortValue === 'least-uncertain') {
         articles.sort(function(a, b){ return getUncertainty(b) - getUncertainty(a); });
@@ -667,7 +758,8 @@
         articles.sort(function(a, b){ return getConfidence(b) - getConfidence(a); });
       }
 
-      reviewedCount = articles.filter(function(a){ return isTargetReviewed(a); }).length;
+      reviewedCount = articles.filter(function(a){ return isTargetStarted(a); }).length;
+      submittedCount = articles.filter(function(a){ return isTargetSubmitted(a); }).length;
       updateProgress();
       renderArticles();
     }
@@ -675,9 +767,30 @@
     /* ─── progress ─── */
     function updateProgress() {
       const total  = articles.length;
-      const pct    = total > 0 ? (reviewedCount / total) * 100 : 0;
+      const pct    = total > 0 ? (submittedCount / total) * 100 : 0;
       document.getElementById('progressFill').style.width = pct + '%';
-      document.getElementById('progressText').textContent = reviewedCount + ' / ' + total + ' chunks reviewed';
+      document.getElementById('progressText').textContent = submittedCount + ' / ' + total + ' chunks submitted (' + reviewedCount + ' draft/reviewed)';
+      updateFinalSubmitState();
+    }
+
+    function updateFinalSubmitState() {
+      const btn = document.getElementById('finalSubmitBtn');
+      const reason = document.getElementById('finalSubmitReason');
+      if (!btn || !reason) return;
+      const total = originalArticles.length;
+      const drafts = originalArticles.filter(function(a){ return getReviewState(a) === 'draft_saved' && isAssignedToMe(a); }).length;
+      const submitted = originalArticles.filter(function(a){ return isTargetSubmitted(a) && isAssignedToMe(a); }).length;
+      const remaining = Math.max(total - drafts - submitted, 0);
+      const alreadySubmitted = total > 0 && submitted >= total;
+      btn.disabled = remaining > 0 || alreadySubmitted;
+      btn.style.display = alreadySubmitted ? 'none' : '';
+      if (alreadySubmitted) {
+        reason.textContent = 'Feedback task has already been submitted and locked.';
+      } else if (remaining > 0) {
+        reason.textContent = 'Complete ' + remaining + ' remaining review targets before final submission.';
+      } else {
+        reason.textContent = 'All required targets have saved drafts. You can submit the feedback task.';
+      }
     }
 
     /* ─── render list ─── */
@@ -700,23 +813,26 @@
 
       /* status badge */
       let statusBadge;
-      if (isTargetReviewed(article)) {
+      const reviewState = getReviewState(article);
+      if (reviewState === 'submitted' || reviewState === 'locked') {
+        statusBadge = '<span class="accordion-badge reviewed">Submitted</span>';
+      } else if (reviewState === 'draft_saved') {
         if (article.feedback && article.feedback.agreed_with_model) {
-          statusBadge = '<span class="accordion-badge agreed">✔ Agreed with Model</span>';
+          statusBadge = '<span class="accordion-badge agreed">Draft: Agreed with Model</span>';
         } else {
-          statusBadge = '<span class="accordion-badge reviewed">✅ Reviewed</span>';
+          statusBadge = '<span class="accordion-badge reviewed">Draft Saved</span>';
         }
       } else {
-        statusBadge = '<span class="accordion-badge pending">⏳ Pending</span>';
+        statusBadge = '<span class="accordion-badge pending">Pending</span>';
       }
 
       /* detection badge */
       let detectionBadge = '';
       if (article.prediction) {
-        const predClass  = article.prediction === 'Human' ? 'human' : 'ai';
-        const predIcon   = article.prediction === 'Human' ? '✍️' : '🤖';
-        const percentage = article.prediction === 'Human' ? article.human_percentage : article.ai_percentage;
-        detectionBadge   = '<span class="accordion-badge ' + predClass + '">' + predIcon + ' ' + article.prediction + ' ' + percentage + '%</span>';
+        const displayPrediction = normalizeLabel(article.prediction) || article.prediction;
+        const predClass  = displayPrediction === 'Human' ? 'human' : 'ai';
+        const percentage = displayPrediction === 'Human' ? article.human_percentage : article.ai_percentage;
+        detectionBadge   = '<span class="accordion-badge ' + predClass + '">' + displayPrediction + ' ' + percentage + '%</span>';
 
         const conf = getConfidence(article);
         if (conf > 0) {
@@ -746,24 +862,25 @@
         : renderFeedbackForm(article, index);
       const selectedChunk = article.selected_chunk || {};
       const selectedChunkText = selectedChunk.chunk_text || selectedChunk.text || '';
-      const selectedUncertainty = article.selected_chunk_uncertainty;
+      const directSelectedUncertainty = Number(article.selected_chunk_uncertainty);
+      const selectedUncertainty = Number.isFinite(directSelectedUncertainty) ? directSelectedUncertainty : getChunkUncertainty(selectedChunk);
       const targetNote = article.target_unit === 'chunk'
         ? '<div class="review-target-note">Review target: Chunk ' + (article.chunk_index || selectedChunk.chunk_index || '') +
-          '<div class="review-priority-note">Uncertainty distance: ' + formatUncertainty(selectedUncertainty) + '</div>' +
-          '<div class="review-priority-note">Lower uncertainty distance means the model is less certain, so the chunk has higher review priority.</div></div>' +
-          '<div class="article-content" style="max-height:180px;">' + (selectedChunkText || 'Selected chunk text is unavailable.') + '</div>'
+          '<div class="review-priority-note">Uncertainty Distance: ' + formatUncertainty(selectedUncertainty) + '</div>' +
+          '<div class="review-priority-note">Lower distance means the sample is closer to 50/50, so it has higher review priority.</div></div>' +
+          '<div class="article-content" style="max-height:180px;">' + escapeHTML(selectedChunkText || 'Selected chunk text is unavailable.') + '</div>'
         : '';
 
       div.innerHTML =
         '<div class="accordion-header" onclick="toggleAccordion(' + index + ')">' +
-          '<div class="accordion-title">' + (article.title || 'Untitled') + '</div>' +
+          '<div class="accordion-title">' + escapeHTML(article.title || 'Untitled') + '</div>' +
           '<div class="accordion-badges">' + detectionBadge + statusBadge + '</div>' +
           '<div class="accordion-icon">▼</div>' +
         '</div>' +
         '<div class="accordion-body" id="body-' + index + '">' +
           '<div class="accordion-content">' +
         targetNote +
-        '<div class="article-content" id="articleContent-' + index + '">' + highlightChunks(article.content, article.chunks) + '</div>' +
+        '<div class="article-content" id="articleContent-' + index + '">' + highlightChunks(escapeHTML(article.content || ''), article.chunks) + '</div>' +
             detectionHTML +
             feedbackHTML +
           '</div>' +
@@ -778,14 +895,14 @@
         return '<div style="color:var(--muted);font-size:14px;margin-bottom:24px;">ℹ️ No detection results available</div>';
       }
 
-      const predIcon  = article.prediction === 'Human' ? '✍️' : '🤖';
-      const predClass = article.prediction === 'Human' ? 'human' : 'ai';
-      const percentage = article.prediction === 'Human' ? article.human_percentage : article.ai_percentage;
+      const displayPrediction = normalizeLabel(article.prediction) || article.prediction;
+      const predClass = displayPrediction === 'Human' ? 'human' : 'ai';
+      const percentage = displayPrediction === 'Human' ? article.human_percentage : article.ai_percentage;
 
       const summaryHTML =
         '<div style="margin-bottom:16px;padding:12px;background:#fff;border-radius:8px;display:flex;align-items:center;gap:12px;">' +
           '<span class="accordion-badge ' + predClass + '" style="font-size:14px;padding:8px 16px;">' +
-            predIcon + ' ' + article.prediction + ' — ' + percentage + '%' +
+            displayPrediction + ' - ' + percentage + '%' +
           '</span>' +
         '</div>';
 
@@ -795,7 +912,7 @@
       article.chunks.forEach(function(chunk, i){
         const chunkNumber = i + 1;
         const confidence = Math.max(chunk.human, chunk.ai).toFixed(1);
-        const chunkUncertainty = chunk.uncertainty;
+        const chunkUncertainty = getChunkUncertainty(chunk);
         const selectedClass = chunk.active_learning_selected ? ' selected' : '';
         cardsHTML +=
           '<div class="chunk-card' + selectedClass + '">' +
@@ -812,7 +929,7 @@
                 '<span class="chunk-bar-value">' + chunk.ai + '%</span>' +
               '</div>' +
             '</div>' +
-            '<div class="chunk-uncertainty">Uncertainty distance: ' + formatUncertainty(chunkUncertainty) + '</div>' +
+            '<div class="chunk-uncertainty">Uncertainty Distance: ' + formatUncertainty(chunkUncertainty) + '</div>' +
           '</div>';
       });
 
@@ -820,7 +937,7 @@
         '<div class="detection-results">' +
           '<div class="detection-title">🔍 Detection Details</div>' +
           summaryHTML +
-          '<div class="review-priority-note">Lower uncertainty distance means the model is less certain, so the chunk has higher review priority.</div>' +
+          '<div class="review-priority-note">Lower distance means the sample is closer to 50/50, so it has higher review priority.</div>' +
           '<div class="chunks-grid">' + cardsHTML + '</div>' +
         '</div>'
       );
@@ -900,11 +1017,11 @@
               '<div class="radio-group">' +
                 '<div class="radio-option">' +
                   '<input type="radio" name="label-' + index + '" id="labelHuman-' + index + '" value="Human">' +
-                  '<label for="labelHuman-' + index + '" class="radio-label human">✍️ Human</label>' +
+                  '<label for="labelHuman-' + index + '" class="radio-label human">Human</label>' +
                 '</div>' +
                 '<div class="radio-option">' +
                   '<input type="radio" name="label-' + index + '" id="labelAI-' + index + '" value="AI">' +
-                  '<label for="labelAI-' + index + '" class="radio-label ai">🤖 AI</label>' +
+                  '<label for="labelAI-' + index + '" class="radio-label ai">AI</label>' +
                 '</div>' +
               '</div>' +
             '</div>' +
@@ -914,7 +1031,7 @@
               '<div class="char-count"><span id="charCount-' + index + '">0</span> / 500</div>' +
             '</div>' +
             '<div class="form-actions">' +
-              '<button class="btn btn-primary" onclick="submitFeedback(\'' + article.article_id + '\', ' + index + ')">💾 Submit Feedback</button>' +
+              '<button class="btn btn-primary" onclick="submitFeedback(\'' + article.article_id + '\', ' + index + ')">Save Draft</button>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -922,7 +1039,7 @@
         /* ── Agree submit button (hidden by default) ── */
         '<div id="agreeSubmitArea-' + index + '" style="display:none;margin-top:12px;">' +
           '<div class="form-actions">' +
-            '<button class="btn btn-agree" onclick="submitAgreement(\'' + article.article_id + '\', ' + index + ')">✔ Confirm Agreement</button>' +
+            '<button class="btn btn-agree" onclick="submitAgreement(\'' + article.article_id + '\', ' + index + ')">Save Agreement Draft</button>' +
           '</div>' +
         '</div>'
       );
@@ -938,29 +1055,34 @@
       feedback = feedback || {};
       article = article || {};
       const locked = !!article.feedback_locked;
-      const canEdit = !!article.can_edit_feedback && !locked;
       const reviewerName = feedback.reviewed_by_name || feedback.examiner_name || article.reviewed_by_name || 'Examiner';
-      const submittedAt = feedback.submitted_at ? new Date(feedback.submitted_at).toLocaleString() : '';
-      const label = feedback.label || feedback.corrected_label || '-';
-      const explanation = feedback.explanation || feedback.feedback_explanation || '-';
+      const state = getReviewState(article);
+      const stateText = state === 'locked' ? 'Locked' : (state === 'submitted' ? 'Submitted' : 'Draft Saved');
+      const whenRaw = feedback.finalized_at || feedback.submitted_at || feedback.draft_updated_at || feedback.updated_at || article.reviewed_at || '';
+      const submittedAt = whenRaw ? new Date(whenRaw).toLocaleString() : '';
+      const label = normalizeLabel(feedback.corrected_label_text || feedback.corrected_label || feedback.label || article.reviewed_label || article.corrected_label) || '-';
+      const explanation = feedback.explanation || feedback.feedback_explanation || article.feedback_explanation || '-';
       const labelClass = label === 'Human' ? 'human' : 'ai';
-      const icon = label === 'Human' ? 'âœچï¸ڈ' : 'ًں¤–';
+      const isMine = !!article.is_my_feedback || (feedback.examiner_uid && feedback.examiner_uid === currentUserId) || (article.reviewed_by && article.reviewed_by === currentUserId);
+      const canEdit = (!!article.can_edit_feedback || isMine) && !locked;
+      const prediction = getTargetPrediction(article);
+      const outcome = feedback.agreed_with_model || label === prediction ? 'Agreed with Model' : 'Corrected Model';
       const editBlock = canEdit
-        ? '<button class="btn btn-primary" onclick="toggleEditFeedback(' + index + ')" style="margin-top:12px;">Edit Feedback</button>' +
+        ? '<button class="btn btn-primary" onclick="toggleEditFeedback(' + index + ')" style="margin-top:12px;">Update Feedback</button>' +
           '<div id="editFeedback-' + index + '" style="display:none;margin-top:14px;">' + renderEditFeedbackForm(article, index, feedback) + '</div>'
         : '<div class="feedback-text" style="color:var(--muted);font-style:italic;">' + (locked ? 'Locked because the labeling task is completed.' : 'Read-only. Reviewed by another examiner.') + '</div>';
 
       return (
         '<div class="feedback-exists">' +
-          '<div class="feedback-warning">' + (canEdit ? 'Reviewed by you' : 'This review target already has feedback') + '</div>' +
+          '<div class="feedback-warning">' + (isMine ? 'Reviewed by you' : 'Reviewed by another examiner') + '</div>' +
           '<div class="feedback-info">' +
             '<div class="feedback-meta">' +
-              '<span class="feedback-author">' + reviewerName + '</span>' +
-              '<span class="feedback-date">' + submittedAt + '</span>' +
+              '<span class="feedback-author">' + escapeHTML(reviewerName) + '</span>' +
+              '<span class="feedback-date">' + escapeHTML(stateText + (submittedAt ? ' · ' + submittedAt : '')) + '</span>' +
             '</div>' +
             (feedback.agreed_with_model
-              ? '<div><span class="feedback-label agreed">âœ” Model Agreement</span></div><div class="feedback-text" style="color:var(--muted);font-style:italic;">The examiner confirmed they agree with the model prediction.</div>'
-              : '<div><span class="feedback-label ' + labelClass + '">' + icon + ' ' + label + '</span></div><div class="feedback-text">' + explanation + '</div>') +
+              ? '<div><span class="feedback-label agreed">' + escapeHTML(outcome) + '</span></div><div class="feedback-text">Reviewed label: ' + escapeHTML(label) + '</div><div class="feedback-text" style="color:var(--muted);font-style:italic;">The examiner confirmed they agree with the model prediction.</div>'
+              : '<div><span class="feedback-label ' + labelClass + '">Reviewed label: ' + escapeHTML(label) + '</span></div><div class="feedback-text"><strong>' + escapeHTML(outcome) + '</strong></div><div class="feedback-text">' + escapeHTML(explanation) + '</div>') +
             editBlock +
           '</div>' +
         '</div>'
@@ -969,7 +1091,7 @@
 
     function renderEditFeedbackForm(article, index, existingFeedback) {
       existingFeedback = existingFeedback || {};
-      const existingLabel = existingFeedback.label || existingFeedback.corrected_label || '';
+      const existingLabel = normalizeLabel(existingFeedback.corrected_label_text || existingFeedback.corrected_label || existingFeedback.label) || '';
       const existingExplanation = existingFeedback.explanation || existingFeedback.feedback_explanation || '';
 
       return (
@@ -981,21 +1103,21 @@
               '<div class="radio-group">' +
                 '<div class="radio-option">' +
                   '<input type="radio" name="label-' + index + '" id="labelHuman-' + index + '" value="Human" ' + (existingLabel === 'Human' ? 'checked' : '') + '>' +
-                  '<label for="labelHuman-' + index + '" class="radio-label human">âœچï¸ڈ Human</label>' +
+                  '<label for="labelHuman-' + index + '" class="radio-label human">Human</label>' +
                 '</div>' +
                 '<div class="radio-option">' +
                   '<input type="radio" name="label-' + index + '" id="labelAI-' + index + '" value="AI" ' + (existingLabel === 'AI' ? 'checked' : '') + '>' +
-                  '<label for="labelAI-' + index + '" class="radio-label ai">ًں¤– AI</label>' +
+                  '<label for="labelAI-' + index + '" class="radio-label ai">AI</label>' +
                 '</div>' +
               '</div>' +
             '</div>' +
             '<div class="form-group">' +
               '<label class="form-label">Explanation</label>' +
-              '<textarea id="explanation-' + index + '" placeholder="Explain why you chose this label..." maxlength="500" oninput="updateCharCount(' + index + ')">' + existingExplanation + '</textarea>' +
+              '<textarea id="explanation-' + index + '" placeholder="Explain why you chose this label..." maxlength="500" oninput="updateCharCount(' + index + ')">' + escapeHTML(existingExplanation) + '</textarea>' +
               '<div class="char-count"><span id="charCount-' + index + '">0</span> / 500</div>' +
             '</div>' +
             '<div class="form-actions">' +
-              '<button class="btn btn-primary" onclick="submitFeedback(\'' + article.article_id + '\', ' + index + ')">ًں’¾ Update Feedback</button>' +
+              '<button class="btn btn-primary" onclick="submitFeedback(\'' + article.article_id + '\', ' + index + ')">Update Draft</button>' +
             '</div>' +
           '</div>' +
         '</div>'
@@ -1014,6 +1136,14 @@
       label.textContent = isOn ? 'On' : 'Off';
 
       if (isOn) {
+        document.querySelectorAll('input[name="label-' + index + '"]').forEach(function(item){ item.checked = false; });
+        const article = articles[index] || {};
+        const predicted = getTargetPrediction(article);
+        const explanationEl = document.getElementById('explanation-' + index);
+        if (explanationEl) {
+          explanationEl.value = '';
+          updateCharCount(index);
+        }
         formWrap.classList.add('hidden');
         confirmed.classList.add('visible');
         submitArea.style.display = 'block';
@@ -1027,11 +1157,15 @@
     /* ─── submit: agree with model ─── */
     async function submitAgreement(articleId, index) {
       try {
+        const article = articles[index] || {};
+        const predicted = getTargetPrediction(article);
         const res  = await fetch('/api/article/' + articleId + '/submit_feedback', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             agreed_with_model: true,
+            label: predicted,
+            explanation: '',
             dataset_id: datasetId,
             chunk_index: articles[index]?.chunk_index || articles[index]?.selected_chunk?.chunk_index || null
           })
@@ -1039,7 +1173,7 @@
         const data = await res.json();
         if (data.error) { alert('Error: ' + data.error); return; }
 
-        showToast('✔ Agreement saved successfully!', '#dbeafe', '#1d4ed8');
+        showToast('Agreement draft saved.', '#dbeafe', '#1d4ed8');
         reviewedCount++;
         updateProgress();
         await loadArticles();
@@ -1054,9 +1188,11 @@
       const labelEl   = document.querySelector('input[name="label-' + index + '"]:checked');
       const label     = labelEl ? labelEl.value : null;
       const explanation = document.getElementById('explanation-' + index).value.trim();
+      const article = articles[index] || {};
+      const predicted = getTargetPrediction(article);
 
       if (!label)       { alert('Please select a label');          return; }
-      if (!explanation) { alert('Please provide an explanation');  return; }
+      if (label !== predicted && !explanation) { alert('Please provide an explanation when correcting the model');  return; }
 
       try {
         const res  = await fetch('/api/article/' + articleId + '/submit_feedback', {
@@ -1065,6 +1201,7 @@
           body: JSON.stringify({
             label,
             explanation,
+            agreed_with_model: label === predicted,
             dataset_id: datasetId,
             chunk_index: articles[index]?.chunk_index || articles[index]?.selected_chunk?.chunk_index || null
           })
@@ -1072,13 +1209,33 @@
         const data = await res.json();
         if (data.error) { alert('Error: ' + data.error); return; }
 
-        showToast('✅ Feedback submitted successfully!', '#d1fae5', '#0A7A39');
+        showToast('Feedback draft saved.', '#d1fae5', '#0A7A39');
         reviewedCount++;
         updateProgress();
         await loadArticles();
 
       } catch (err) {
         alert('Failed to submit feedback');
+      }
+    }
+
+    async function submitFeedbackTask() {
+      const remaining = originalArticles.filter(function(a){ return !(isAssignedToMe(a) && (getReviewState(a) === 'draft_saved' || isTargetSubmitted(a))); }).length;
+      if (remaining > 0) {
+        alert('Complete ' + remaining + ' remaining review targets before final submission.');
+        return;
+      }
+      try {
+        const res = await fetch('/api/project/' + encodeURIComponent(projectId) + '/version/' + encodeURIComponent(currentVersionId) + '/submit_feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (data.error) { alert('Error: ' + data.error); return; }
+        showToast('Feedback task submitted and locked for evaluation.', '#d1fae5', '#0A7A39');
+        setTimeout(function(){ window.location.href = '/projectdetailsexaminer/' + encodeURIComponent(projectId); }, 900);
+      } catch (err) {
+        alert('Failed to submit feedback task: ' + err.message);
       }
     }
 

@@ -1701,96 +1701,36 @@ checkIfAlreadySelected();
       if (stageDesc) stageDesc.textContent = desc;
     }
 
-    function normalizeDisplayLabel(value, fallbackPrediction) {
-      const raw = String(value ?? fallbackPrediction ?? '').toLowerCase();
-      if (!raw || raw === '-' || raw === 'none' || raw === 'null') return '';
-      if (raw === '1' || raw.includes('ai') || raw.includes('machine')) return 'AI';
-      if (raw === '0' || raw.includes('human')) return 'Human';
-      return fallbackPrediction === 'AI' ? 'AI' : (fallbackPrediction === 'Human' ? 'Human' : '');
+    let currentNewsVersionId = 'v1';
+    async function getCurrentNewsVersionId() {
+      try {
+        const res = await fetch(`/api/project/${encodeURIComponent(projectId)}/current_version`);
+        const data = await res.json();
+        if (res.ok && data.current_version) currentNewsVersionId = data.current_version;
+        return data;
+      } catch (err) {
+        console.warn('Current version lookup failed', err);
+      }
+      return { current_version: currentNewsVersionId || 'v1', detection_ready: false };
     }
 
-    function exportModelName(key) {
-      const raw = String(key || '').toLowerCase();
-      if (raw.includes('rnn')) return 'RNN';
-      if (raw.includes('sota')) return 'SOTA Model';
-      if (raw.includes('logistic') || raw.includes('logreg') || raw.includes('tf-idf') || raw.includes('tfidf') || raw.includes('baseline')) return 'Logistic Regression';
-      return key ? String(key) : '';
-    }
-
-    function exportActiveLearningState(item) {
-      const selected = Boolean(item?.active_learning_selected || item?.review_target || item?.selected_for_review);
-      const feedback = item?.feedback_label ?? item?.corrected_label;
-      if (selected && feedback !== undefined && feedback !== null && String(feedback).trim() !== '') return 'reviewed';
-      if (selected) return 'pending';
-      return 'not_selected_for_review';
-    }
-
-    function csvCell(value) {
-      let text = String(value ?? '');
-      if (/^[=+\-@]/.test(text)) text = `'${text}`;
-      return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-    }
-
-    function buildNewsExportRows() {
-      const modelName = newsTaskLocked
-        ? exportModelName(finalizedNewsModelName || previewNewsModelKey)
-        : exportModelName(previewNewsModelKey);
-      const timestamp = new Date().toISOString();
-      const rows = [];
-      (allDetails || []).forEach((article, articleIndex) => {
-        const chunks = Array.isArray(article.chunks) && article.chunks.length ? article.chunks : [null];
-        chunks.forEach((chunk, chunkIndex) => {
-          const prediction = chunk
-            ? normalizeDisplayLabel(chunk.prediction, Number(chunk.ai ?? chunk.ai_percentage ?? 0) >= Number(chunk.human ?? chunk.human_percentage ?? 0) ? 'AI' : 'Human')
-            : normalizeDisplayLabel(article.prediction, article.prediction);
-          const confidence = chunk
-            ? (metricNumber(chunk.confidence) ?? Math.max(metricNumber(chunk.human ?? chunk.human_percentage) ?? 0, metricNumber(chunk.ai ?? chunk.ai_percentage) ?? 0))
-            : articleConfidence(article);
-          const uncertainty = chunk
-            ? metricNumber(chunk.uncertainty)
-            : articleMargin(article);
-          rows.push({
-            article_id: article.article_id ?? article.id ?? articleIndex + 1,
-            chunk_id: chunk ? (chunk.chunk_id ?? chunk.index ?? chunkIndex + 1) : '',
-            title: article.title ?? '',
-            text: chunk ? chunkTextPreview(article, chunkIndex) : (article.content ?? article.text ?? ''),
-            ground_truth: normalizeDisplayLabel(article.ground_truth ?? article.label ?? article.MachineGen, ''),
-            prediction,
-            confidence: confidence === null || confidence === undefined ? '' : confidence,
-            uncertainty: uncertainty === null || uncertainty === undefined ? '' : uncertainty,
-            review_target: Boolean(chunk?.active_learning_selected || chunk?.review_target || chunk?.selected_for_review),
-            feedback_label: normalizeDisplayLabel(chunk?.feedback_label ?? article.feedback_label, ''),
-            final_label: normalizeDisplayLabel(chunk?.final_label ?? article.final_label ?? prediction, prediction),
-            model_used: modelName,
-            active_learning_state: exportActiveLearningState(chunk || article),
-            timestamp
-          });
-        });
-      });
-      return rows;
-    }
-
-    function downloadRows(rows, filename, format) {
-      if (!rows.length) {
-        alert('Run Detection first to export the enriched dataset.');
+    async function downloadVersionedNewsExport(format) {
+      if (!projectId) {
+        alert('Missing project ID.');
         return;
       }
-      let blob;
-      if (format === 'json') {
-        blob = new Blob([JSON.stringify({ rows }, null, 2)], { type: 'application/json;charset=utf-8;' });
-      } else {
-        const headers = Object.keys(rows[0]);
-        const csv = [headers.join(','), ...rows.map(row => headers.map(header => csvCell(row[header])).join(','))].join('\n');
-        blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      const versionInfo = await getCurrentNewsVersionId();
+      if (!versionInfo.detection_ready) {
+        alert(versionInfo.message || 'Submit detection results before exporting enhanced dataset.');
+        return;
       }
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      const versionId = versionInfo.current_version || currentNewsVersionId || 'v1';
+      const url = `/api/project/${encodeURIComponent(projectId)}/version/${encodeURIComponent(versionId)}/enhanced_dataset?format=${encodeURIComponent(format)}`;
+      if (format === 'json') {
+        window.open(url, '_blank');
+      } else {
+        window.location.href = url;
+      }
     }
 
     stageNewsRunBtn?.addEventListener('click', () => {
@@ -1839,8 +1779,8 @@ checkIfAlreadySelected();
     document.getElementById('searchInput')?.addEventListener('input', renderNewsTable);
     document.getElementById('labelFilter')?.addEventListener('change', renderNewsTable);
     document.getElementById('sortBy')?.addEventListener('change', renderNewsTable);
-    document.getElementById('newsExportCsvBtn')?.addEventListener('click', () => downloadRows(buildNewsExportRows(), 'news_detection_dataset.csv', 'csv'));
-    document.getElementById('newsExportJsonBtn')?.addEventListener('click', () => downloadRows(buildNewsExportRows(), 'news_detection_dataset.json', 'json'));
+    document.getElementById('newsExportCsvBtn')?.addEventListener('click', () => downloadVersionedNewsExport('csv'));
+    document.getElementById('newsExportJsonBtn')?.addEventListener('click', () => downloadVersionedNewsExport('json'));
     document.querySelectorAll('[data-news-dist]')?.forEach(btn => {
       btn.addEventListener('click', () => {
         newsDistMode = btn.getAttribute('data-news-dist') || 'article';

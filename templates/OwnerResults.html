@@ -169,14 +169,57 @@
   function badge(text, cls='badge-gray'){ return `<span class="badge ${cls}">${text}</span>`; }
   function metricCard(label, number){ return `<div class="summary-card"><div class="summary-number">${number}</div><div class="summary-label">${label}</div></div>`; }
   function placeholder(message){ alert(message); }
-  function exportUrl(format, stage){
-    return `/api/project/${encodeURIComponent(PROJECT_ID)}/final_dataset_export?format=${format}&stage=${stage}`;
+  let currentVersionId = 'v1';
+  let versionRegistry = null;
+  async function getCurrentVersionId(){
+    try {
+      const res = await fetch(`/api/project/${encodeURIComponent(PROJECT_ID)}/current_version`);
+      const data = await res.json();
+      if (res.ok && data.current_version) currentVersionId = data.current_version;
+      return data;
+    } catch (err) {
+      console.warn('Current version lookup failed', err);
+    }
+    return { current_version: currentVersionId || 'v1', detection_ready: false };
   }
-  function downloadExport(format, stage){
-    window.location.href = exportUrl(format, stage);
+  async function fetchVersionRegistry(){
+    const res = await fetch(`/api/project/${encodeURIComponent(PROJECT_ID)}/versions`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Unable to load version registry.');
+    versionRegistry = data.registry || {};
+    if (versionRegistry.current_version) currentVersionId = versionRegistry.current_version;
+    return versionRegistry;
   }
-  function openJsonExport(stage){
-    window.open(exportUrl('json', stage), '_blank');
+  function versionNumber(versionId){
+    const match = String(versionId || '').match(/^v(\d+)$/i);
+    return match ? Number(match[1]) : 0;
+  }
+  function versionList(registry){
+    const versions = (registry && registry.versions) || {};
+    return Object.keys(versions)
+      .sort((a,b) => versionNumber(a) - versionNumber(b))
+      .map(id => ({version_id:id, ...versions[id]}));
+  }
+  function enhancedExportUrl(format, versionId){
+    return `/api/project/${encodeURIComponent(PROJECT_ID)}/version/${encodeURIComponent(versionId || currentVersionId || 'v1')}/enhanced_dataset?format=${format}`;
+  }
+  async function downloadExport(format){
+    const versionInfo = await getCurrentVersionId();
+    if (!versionInfo.detection_ready) {
+      alert(versionInfo.message || 'Submit detection results before exporting enhanced dataset.');
+      return;
+    }
+    const versionId = versionInfo.current_version || currentVersionId || 'v1';
+    window.location.href = enhancedExportUrl(format, versionId);
+  }
+  async function openJsonExport(){
+    const versionInfo = await getCurrentVersionId();
+    if (!versionInfo.detection_ready) {
+      alert(versionInfo.message || 'Submit detection results before exporting enhanced dataset.');
+      return;
+    }
+    const versionId = versionInfo.current_version || currentVersionId || 'v1';
+    window.open(enhancedExportUrl('json', versionId), '_blank');
   }
   function empty(message){ return `<div class="empty-state">${message}</div>`; }
 
@@ -242,7 +285,7 @@
       metricCard('Human Count', intValue(s.human_count)),
       metricCard('AI Count', intValue(s.ai_count)),
       metricCard('Average Confidence', pct(s.avg_confidence)),
-      metricCard('Average Uncertainty', pct(s.avg_uncertainty)),
+      metricCard('Average Distance from 50/50', pct(s.avg_uncertainty)),
       metricCard('Feedback Targets', intValue(c.feedback_targets)),
       metricCard('Reviewed Feedback Targets', intValue(c.reviewed_feedback_targets)),
       metricCard('Corrected Labels', intValue(s.corrected_labels)),
@@ -252,7 +295,7 @@
     document.getElementById('overview').innerHTML = `
       <div class="notice notice-info">
         This overview summarizes how the selected model classified the project data and how much feedback is still needed.
-        Confidence means how sure the model is about its prediction. Uncertainty is based on distance from 0.5; lower uncertainty means the model is less certain and the sample is more useful for feedback.
+        Confidence means how sure the model is about its prediction. Distance from 50/50 is lower when the sample is closer to the decision boundary and higher priority for review.
         Percentages shown here are converted from the stored detection values, not recalculated separately.
       </div>
       ${warnings}
@@ -288,22 +331,22 @@
     `).join('');
     document.getElementById('detection').innerHTML = `
       <div class="notice notice-info">Detection values come from the stored model outputs used by results_summary. Confidence and uncertainty are displayed as percentages for readability; uncertainty is calculated using distance from 0.5, so lower values indicate samples that are better candidates for examiner feedback.</div>
-      ${samples.length ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Title / Dialogue</th><th>Text Preview</th><th>Prediction</th><th>Confidence %</th><th>Uncertainty %</th><th>Review Target</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('No detection samples are available yet.')}
+      ${samples.length ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Title / Dialogue</th><th>Text Preview</th><th>Prediction</th><th>Confidence %</th><th>Distance from 50/50 %</th><th>Review Target</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('No detection samples are available yet.')}
       <h3 style="margin:22px 0 10px">Examiner Feedback Explanations</h3>
-      ${explanations.length ? `<div class="table-wrap"><table><thead><tr><th>Text Preview</th><th>Model Prediction</th><th>Corrected Label</th><th>Examiner</th><th>Explanation</th><th>Submitted At</th><th>Confidence</th><th>Uncertainty</th></tr></thead><tbody>${explanationRows}</tbody></table></div>` : empty('No examiner explanations submitted yet.')}
+      ${explanations.length ? `<div class="table-wrap"><table><thead><tr><th>Text Preview</th><th>Model Prediction</th><th>Corrected Label</th><th>Examiner</th><th>Explanation</th><th>Submitted At</th><th>Confidence</th><th>Distance from 50/50</th></tr></thead><tbody>${explanationRows}</tbody></table></div>` : empty('No examiner explanations submitted yet.')}
       <div class="button-row">
-        <button class="action-btn action-secondary" onclick="downloadExport('csv','detection')">Download Detection CSV</button>
-        <button class="action-btn action-secondary" onclick="openJsonExport('detection')">Download Detection JSON</button>
+        <button class="action-btn action-secondary" onclick="downloadExport('csv')">Download Detection CSV</button>
+        <button class="action-btn action-secondary" onclick="openJsonExport()">Download Detection JSON</button>
       </div>
     `;
   }
 
   function uncertaintyLevel(v){
     const n = Number(v);
-    if (Number.isNaN(n)) return {label:'Unknown uncertainty', cls:'badge-gray'};
-    if (n <= 0.15) return {label:'High uncertainty', cls:'badge-red'};
-    if (n <= 0.30) return {label:'Medium uncertainty', cls:'badge-orange'};
-    return {label:'Low uncertainty', cls:'badge-green'};
+    if (Number.isNaN(n)) return {label:'Unknown distance', cls:'badge-gray'};
+    if (n <= 0.15) return {label:'High review priority', cls:'badge-red'};
+    if (n <= 0.30) return {label:'Medium review priority', cls:'badge-orange'};
+    return {label:'Low review priority', cls:'badge-green'};
   }
   function examinerInitials(name){
     const parts = String(name || 'Examiner').trim().split(/\s+/).filter(Boolean);
@@ -339,8 +382,8 @@
           <option value="all" ${insightState.filter === 'all' ? 'selected' : ''}>All feedback</option>
           <option value="corrections" ${insightState.filter === 'corrections' ? 'selected' : ''}>Corrections only</option>
           <option value="agreements" ${insightState.filter === 'agreements' ? 'selected' : ''}>Agreements only</option>
-          <option value="high_uncertainty" ${insightState.filter === 'high_uncertainty' ? 'selected' : ''}>High uncertainty</option>
-          <option value="low_uncertainty" ${insightState.filter === 'low_uncertainty' ? 'selected' : ''}>Low uncertainty</option>
+          <option value="high_uncertainty" ${insightState.filter === 'high_uncertainty' ? 'selected' : ''}>Highest review priority</option>
+          <option value="low_uncertainty" ${insightState.filter === 'low_uncertainty' ? 'selected' : ''}>Lowest review priority</option>
         </select>
         <select id="insightExaminer">
           <option value="all">All examiners</option>
@@ -418,7 +461,7 @@
               <div class="review-box"><span class="insight-label">Original prediction</span><strong>${badge(esc(item.prediction), String(item.prediction || '').toLowerCase().includes('ai') ? 'badge-orange' : 'badge-green')}</strong></div>
               <div class="review-box"><span class="insight-label">Corrected label</span><strong>${badge(esc(item.corrected_label), String(item.corrected_label || '').toLowerCase().includes('ai') ? 'badge-orange' : 'badge-green')}</strong></div>
               <div class="review-box"><span class="insight-label">Confidence</span><strong>${pct(item.confidence)}</strong></div>
-              <div class="review-box"><span class="insight-label">Uncertainty</span><strong>${pct(item.uncertainty)} ${badge(level.label, level.cls)}</strong></div>
+              <div class="review-box"><span class="insight-label">Distance from 50/50</span><strong>${pct(item.uncertainty)} ${badge(level.label, level.cls)}</strong></div>
             </div>
             <div class="hero-badges" style="margin-top:10px">
               ${changed ? badge('Correction Changed Prediction','badge-red') : badge('Prediction Confirmed','badge-green')}
@@ -446,7 +489,7 @@
         ${metricCard('Total Feedback Explanations', intValue(explanations.length))}
         ${metricCard('Corrections Submitted', intValue(corrections))}
         ${metricCard('Agreements Submitted', intValue(agreements))}
-        ${metricCard('High Uncertainty Reviews', intValue(highUncertainty))}
+        ${metricCard('High Priority Reviews', intValue(highUncertainty))}
         ${metricCard('Examiners Participated', intValue(examinerCount))}
       </div>
       ${renderInsightFilters()}
@@ -512,6 +555,181 @@
       correctPredictions: matrix.tp + matrix.tn
     };
   }
+  function metricValue(metrics, key){
+    if (!metrics) return null;
+    const aliases = {
+      macro_f1: ['macro_f1', 'f1_macro'],
+      macro_precision: ['macro_precision', 'precision_macro'],
+      macro_recall: ['macro_recall', 'recall_macro'],
+      ai_f1: ['ai_f1', 'f1_ai'],
+      ai_precision: ['ai_precision', 'precision_ai'],
+      ai_recall: ['ai_recall', 'recall_ai']
+    };
+    const keys = aliases[key] || [key];
+    for (const candidate of keys) {
+      if (metrics[candidate] !== null && metrics[candidate] !== undefined) return metrics[candidate];
+    }
+    return null;
+  }
+  function metricText(metrics, key){ return pct(metricValue(metrics, key)); }
+  function deltaText(value, invert=false){
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return '-';
+    const n = Number(value);
+    const improved = invert ? n < 0 : n > 0;
+    const worsened = invert ? n > 0 : n < 0;
+    const cls = improved ? 'badge-green' : worsened ? 'badge-red' : 'badge-gray';
+    const sign = n > 0 ? '+' : '';
+    return badge(`${sign}${(n * 100).toFixed(1)}%`, cls);
+  }
+  function metricComparisonRow(label, key, snapshot, invert=false){
+    const baseline = snapshot.baseline_metrics || {};
+    const enhanced = snapshot.enhanced_metrics || {};
+    const comparison = snapshot.comparison || {};
+    const deltaKey = key === 'macro_f1' ? 'macro_f1_delta'
+      : key === 'ai_f1' ? 'ai_f1_delta'
+      : key === 'false_positive_rate' ? 'fpr_delta'
+      : key === 'false_negative_rate' ? 'fnr_delta'
+      : key === 'error_rate' ? 'error_rate_delta'
+      : `${key}_delta`;
+    let delta = comparison[deltaKey];
+    if (delta === null || delta === undefined) {
+      const baseValue = metricValue(baseline, key);
+      const enhancedValue = metricValue(enhanced, key);
+      delta = baseValue === null || enhancedValue === null ? null : Number(enhancedValue) - Number(baseValue);
+    }
+    return `<tr><td>${label}</td><td>${metricText(baseline, key)}</td><td>${metricText(enhanced, key)}</td><td>${deltaText(delta, invert)}</td></tr>`;
+  }
+  function matrixCounts(metrics){
+    const values = matrixValues(metrics && metrics.confusion_matrix);
+    return values || {tn:0, fp:0, fn:0, tp:0};
+  }
+  function comparisonBar(label, baseline, enhanced, invert=false){
+    const b = Number(baseline || 0);
+    const e = Number(enhanced || 0);
+    const max = Math.max(b, e, 0.01);
+    const changed = invert ? e < b : e > b;
+    return `
+      <div class="summary-card">
+        <div class="summary-label">${label}</div>
+        <div style="display:grid;gap:8px;margin-top:12px">
+          <div><span class="meta-label">Baseline ${pct(b)}</span><div style="height:8px;background:#e4ebf5;border-radius:999px;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(4, (b/max)*100)}%;background:#8fa3bf"></span></div></div>
+          <div><span class="meta-label">Enhanced ${pct(e)}</span><div style="height:8px;background:#e4ebf5;border-radius:999px;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(4, (e/max)*100)}%;background:${changed ? '#1d9a66' : '#2f66ff'}"></span></div></div>
+        </div>
+      </div>
+    `;
+  }
+  async function fetchEvaluationSnapshot(rebuild=false){
+    const versionInfo = await getCurrentVersionId();
+    const versionId = versionInfo.current_version || currentVersionId || 'v1';
+    const suffix = rebuild ? '?rebuild=1' : '';
+    const res = await fetch(`/api/project/${encodeURIComponent(PROJECT_ID)}/version/${encodeURIComponent(versionId)}/evaluation_snapshot${suffix}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || data.message || 'Evaluation snapshot is not available yet.');
+    return data.snapshot || data;
+  }
+  async function buildEvaluationSnapshot(){
+    const panel = document.getElementById('performance');
+    panel.innerHTML = `<div class="empty-state">Building evaluation snapshot...</div>`;
+    try {
+      const snapshot = await fetchEvaluationSnapshot(true);
+      renderPerformanceSnapshot(snapshot);
+      renderIterations();
+    } catch (err) {
+      console.error('Evaluation snapshot build failed', err);
+      panel.innerHTML = `
+        <div class="notice notice-warn">${esc(err.message || 'Could not build evaluation snapshot.')}</div>
+        <div class="button-row"><button class="action-btn action-primary" onclick="buildEvaluationSnapshot()">Retry Build Evaluation Snapshot</button></div>
+      `;
+    }
+  }
+  function renderEvaluationEmpty(message){
+    const text = message || 'Evaluation snapshot is not available yet. Run evaluation after feedback is completed.';
+    const rebuild = /rebuild required|stale|submitted feedback/i.test(text);
+    document.getElementById('performance').innerHTML = `
+      <div class="empty-state">${esc(rebuild ? 'Rebuild required after submitted feedback.' : text)}</div>
+      <div class="button-row"><button class="action-btn action-primary" onclick="buildEvaluationSnapshot()">${rebuild ? 'Rebuild Evaluation Snapshot' : 'Build Evaluation Snapshot'}</button></div>
+      ${!isLogistic() ? `<div class="notice notice-info" style="margin-top:16px">Feedback review and evaluation are available for this model. Reopen/retraining cycles are currently supported for Logistic Regression only.</div>` : ''}
+    `;
+  }
+  function renderMetricPair(title, pair, derivedNote){
+    const baseline = (pair || {}).baseline_metrics || {};
+    const enhanced = (pair || {}).enhanced_metrics || {};
+    return `
+      <h3 style="margin:20px 0 10px">${title}</h3>
+      ${derivedNote ? `<div class="notice notice-info" style="margin-bottom:10px">${derivedNote}</div>` : ''}
+      <div class="table-wrap"><table><thead><tr><th>Metric</th><th>Baseline</th><th>Enhanced</th></tr></thead><tbody>
+        <tr><td>Accuracy</td><td>${metricText(baseline,'accuracy')}</td><td>${metricText(enhanced,'accuracy')}</td></tr>
+        <tr><td>Macro F1</td><td>${metricText(baseline,'macro_f1')}</td><td>${metricText(enhanced,'macro_f1')}</td></tr>
+        <tr><td>AI F1</td><td>${metricText(baseline,'ai_f1')}</td><td>${metricText(enhanced,'ai_f1')}</td></tr>
+        <tr><td>False Positive Rate</td><td>${metricText(baseline,'false_positive_rate')}</td><td>${metricText(enhanced,'false_positive_rate')}</td></tr>
+        <tr><td>False Negative Rate</td><td>${metricText(baseline,'false_negative_rate')}</td><td>${metricText(enhanced,'false_negative_rate')}</td></tr>
+        <tr><td>Error Rate</td><td>${metricText(baseline,'error_rate')}</td><td>${metricText(enhanced,'error_rate')}</td></tr>
+      </tbody></table></div>
+    `;
+  }
+  function renderPerformanceSnapshot(snapshot){
+    const baseline = snapshot.baseline_metrics || {};
+    const enhanced = snapshot.enhanced_metrics || {};
+    const review = snapshot.review_statistics || {
+      reviewed_targets: snapshot.reviewed_targets,
+      corrected_targets: snapshot.corrected_targets || snapshot.corrected_labels,
+      correction_rate: snapshot.reviewed_targets ? Number(snapshot.corrected_targets || snapshot.corrected_labels || 0) / Number(snapshot.reviewed_targets || 1) : 0,
+      human_to_ai_corrections: snapshot.human_to_ai_corrections,
+      ai_to_human_corrections: snapshot.ai_to_human_corrections
+    };
+    const baselineMatrix = matrixCounts(baseline);
+    const enhancedMatrix = matrixCounts(enhanced);
+    const impactRows = (snapshot.examiner_impact || []).map(item => `
+      <tr><td>${esc(item.examiner_name || item.examiner_uid || 'Examiner')}</td><td>${intValue(item.reviewed_count)}</td><td>${intValue(item.corrected_count)}</td><td>${pct(item.correction_rate)}</td></tr>
+    `).join('');
+    const type = snapshot.project_type || pageData.result_type || '';
+    const dualLevel = type === 'news'
+      ? renderMetricPair('Chunk-level metrics', snapshot.chunk_level_metrics, '') + renderMetricPair('Article-level metrics', snapshot.article_level_metrics, 'Article-level metrics are derived from chunk-level rows.')
+      : renderMetricPair('Turn-level metrics', snapshot.turn_level_metrics, '') + renderMetricPair('Dialogue-level metrics', snapshot.dialogue_level_metrics, 'Dialogue-level metrics are derived from turn-level rows.');
+    document.getElementById('performance').innerHTML = `
+      ${!isLogistic() ? `<div class="notice notice-info">Feedback review and evaluation are available for this model. Reopen/retraining cycles are currently supported for Logistic Regression only.</div>` : ''}
+      <h3 style="margin:0 0 10px">Overall Evaluation Summary</h3>
+      <div class="cards-grid">
+        ${metricCard('Model', esc(snapshot.model_name || pageData?.selected_model?.name || '-'))}
+        ${metricCard('Version', esc(snapshot.version_id || currentVersionId || 'v1'))}
+        ${metricCard('Project Type', esc(labelize(type)))}
+        ${metricCard('Reviewed Targets', intValue(review.reviewed_targets))}
+        ${metricCard('Correction Rate', pct(review.correction_rate))}
+        ${metricCard('Evaluation Status', snapshot.enhanced_metrics?.available ? 'Available' : 'Limited')}
+      </div>
+      <h3 style="margin:22px 0 10px">Baseline vs Enhanced</h3>
+      <div class="table-wrap"><table><thead><tr><th>Metric</th><th>Baseline</th><th>Enhanced</th><th>Change</th></tr></thead><tbody>
+        ${metricComparisonRow('Accuracy','accuracy',snapshot)}
+        ${metricComparisonRow('Macro F1','macro_f1',snapshot)}
+        ${metricComparisonRow('AI F1','ai_f1',snapshot)}
+        ${metricComparisonRow('Precision Macro','macro_precision',snapshot)}
+        ${metricComparisonRow('Recall Macro','macro_recall',snapshot)}
+        ${metricComparisonRow('False Positive Rate','false_positive_rate',snapshot,true)}
+        ${metricComparisonRow('False Negative Rate','false_negative_rate',snapshot,true)}
+        ${metricComparisonRow('Error Rate','error_rate',snapshot,true)}
+      </tbody></table></div>
+      <h3 style="margin:22px 0 10px">Simple Visual Comparison</h3>
+      <div class="cards-grid">
+        ${comparisonBar('Macro F1', metricValue(baseline,'macro_f1'), metricValue(enhanced,'macro_f1'))}
+        ${comparisonBar('False Positive Rate', metricValue(baseline,'false_positive_rate'), metricValue(enhanced,'false_positive_rate'), true)}
+        ${comparisonBar('Error Rate', metricValue(baseline,'error_rate'), metricValue(enhanced,'error_rate'), true)}
+      </div>
+      <h3 style="margin:22px 0 10px">Error Analysis</h3>
+      <div class="cards-grid">
+        ${metricCard('Total Errors Baseline', intValue(baseline.error_count))}
+        ${metricCard('Total Errors Enhanced', intValue(enhanced.error_count))}
+        ${metricCard('False Positives', `${baselineMatrix.fp} → ${enhancedMatrix.fp}`)}
+        ${metricCard('False Negatives', `${baselineMatrix.fn} → ${enhancedMatrix.fn}`)}
+        ${metricCard('Corrected Targets', intValue(review.corrected_targets))}
+        ${metricCard('Human to AI Corrections', intValue(review.human_to_ai_corrections))}
+        ${metricCard('AI to Human Corrections', intValue(review.ai_to_human_corrections))}
+      </div>
+      <h3 style="margin:22px 0 10px">Examiner Impact</h3>
+      ${impactRows ? `<div class="table-wrap"><table><thead><tr><th>Examiner</th><th>Reviewed Count</th><th>Corrected Count</th><th>Correction Rate</th></tr></thead><tbody>${impactRows}</tbody></table></div>` : empty('No examiner impact is available yet.')}
+      <h3 style="margin:22px 0 10px">Dual-level Metrics</h3>
+      ${dualLevel}
+    `;
+  }
   function recommendation(){
     const s = pageData.summary || {};
     const metrics = pageData.metrics || {};
@@ -522,89 +740,136 @@
     if (reviewed < targets) return 'More examiner feedback is recommended before stopping.';
     return 'Review the reported F1, support, and confusion matrix before making a final owner decision.';
   }
-  function renderPerformance(){
-    const metrics = pageData.metrics || {};
-    const hasMetrics = metrics.available === true || (
-      metrics.available === undefined &&
-      ['accuracy','precision_macro','recall_macro','f1_macro'].some(key => metrics[key] !== null && metrics[key] !== undefined)
-    );
-    const details = performanceDetails(metrics);
-    const matrix = details.matrix;
-    const support = metrics.support || {};
-    const metricContent = hasMetrics ? `
-      <div class="metric-list">
-        ${metricCard('Accuracy', pct(metrics.accuracy))}
-        ${metricCard('Precision Macro', pct(metrics.precision_macro))}
-        ${metricCard('Recall Macro', pct(metrics.recall_macro))}
-        ${metricCard('F1 Macro', pct(metrics.f1_macro))}
-        ${metrics.f1_ai !== undefined && metrics.f1_ai !== null ? metricCard('AI F1', pct(metrics.f1_ai)) : ''}
-        ${metricCard('False Positive Rate', pct(details.fpr))}
-        ${metricCard('False Negative Rate', pct(details.fnr))}
-      </div>
-      <div class="notice notice-info" style="margin-top:16px">Support: labeled ${intValue(support.total_labeled)} | Human ${intValue(support.human)} | AI ${intValue(support.ai)}.</div>
-      ${matrix ? `<h3 style="margin:20px 0 10px">Confusion Matrix</h3><div class="matrix">
-        <div class="matrix-cell"><div class="matrix-label">TN: Human → Human</div><div class="matrix-value">${matrix.tn}</div></div>
-        <div class="matrix-cell"><div class="matrix-label">FP: Human → AI</div><div class="matrix-value">${matrix.fp}</div></div>
-        <div class="matrix-cell"><div class="matrix-label">FN: AI → Human</div><div class="matrix-value">${matrix.fn}</div></div>
-        <div class="matrix-cell"><div class="matrix-label">TP: AI → AI</div><div class="matrix-value">${matrix.tp}</div></div>
-      </div>
-      <h3 style="margin:20px 0 10px">Error Analysis</h3>
-      <div class="cards-grid">
-        ${metricCard('True Positives', matrix.tp)}
-        ${metricCard('True Negatives', matrix.tn)}
-        ${metricCard('False Positives', matrix.fp)}
-        ${metricCard('False Negatives', matrix.fn)}
-        ${metricCard('Total Errors', details.totalErrors)}
-        ${metricCard('Correct Predictions', details.correctPredictions)}
-      </div>
-      <div class="notice notice-info" style="margin-top:16px">False Positive means human text incorrectly predicted as AI/Machine-generated. False Negative means AI/Machine-generated text incorrectly predicted as Human. This follows the stored confusion matrix order [[TN, FP], [FN, TP]].</div>` : ''}` : empty(metrics.reason || 'Performance metrics are unavailable because ground truth labels are missing or invalid.');
-    const s = pageData.summary || {};
-    const learningPanel = isLogistic() ? `
-      <div class="notice notice-info" style="margin-top:18px">
-        <strong>Feedback Readiness</strong><br>
-        Current Version: v1<br>
-        Feedback targets: ${intValue(s.review_targets)} | Reviewed targets: ${intValue(s.reviewed_targets)} | Corrected labels: ${intValue(s.corrected_labels)}<br>
-        Average uncertainty: ${pct(s.avg_uncertainty)} | F1 Macro: ${pct(metrics.f1_macro)}<br>
-        Recommendation: ${recommendation()}
-      </div>` : `<div class="notice notice-info" style="margin-top:18px">This model shows standard detection and feedback results.</div>`;
-    const recommendationPanel = `<div class="notice ${isLogistic() ? 'notice-warn' : 'notice-info'}" style="margin-top:18px"><strong>Owner Recommendation</strong><br>${recommendation()}</div>`;
-    document.getElementById('performance').innerHTML = metricContent + learningPanel + recommendationPanel;
+  async function renderPerformance(){
+    const panel = document.getElementById('performance');
+    panel.innerHTML = `<div class="empty-state">Loading evaluation performance...</div>`;
+    try {
+      const snapshot = await fetchEvaluationSnapshot(false);
+      renderPerformanceSnapshot(snapshot);
+    } catch (err) {
+      renderEvaluationEmpty(err.message || 'Evaluation snapshot is not available yet. Run evaluation after feedback is completed.');
+    }
   }
 
   function renderDownloads(){
     document.getElementById('downloads').innerHTML = `
       <div class="button-row" style="margin-bottom:16px">
-        <button class="action-btn action-secondary" onclick="downloadExport('csv','detection')">Download Detection Dataset CSV</button>
-        <button class="action-btn action-secondary" onclick="openJsonExport('detection')">Download Detection Dataset JSON</button>
-        <button class="action-btn action-primary" onclick="downloadExport('csv','feedback')">Download Final Enriched Dataset CSV</button>
-        <button class="action-btn action-primary" onclick="openJsonExport('feedback')">Download Final Enriched Dataset JSON</button>
+        <button class="action-btn action-secondary" onclick="downloadExport('csv')">Download Detection Dataset CSV</button>
+        <button class="action-btn action-secondary" onclick="openJsonExport()">Download Detection Dataset JSON</button>
+        <button class="action-btn action-primary" onclick="downloadExport('csv')">Download Final Enriched Dataset CSV</button>
+        <button class="action-btn action-primary" onclick="openJsonExport()">Download Final Enriched Dataset JSON</button>
         <button class="action-btn action-primary" onclick="window.location.href='/api/project/${encodeURIComponent(PROJECT_ID)}/report.pdf'">Download PDF Report</button>
       </div>
       <div class="download-grid">
-        <div class="download-card"><h3>Detection Dataset</h3><p>Original rows enriched with stored model predictions, confidence, and uncertainty.</p><button class="action-btn action-secondary" onclick="downloadExport('csv','detection')">CSV</button></div>
-        <div class="download-card"><h3>Final Enriched Dataset</h3><p>Detection output plus examiner feedback and corrected labels when available.</p><button class="action-btn action-primary" onclick="downloadExport('csv','feedback')">CSV</button></div>
+        <div class="download-card"><h3>Detection Dataset</h3><p>Original rows enriched with stored model predictions, confidence, and distance from 50/50.</p><button class="action-btn action-secondary" onclick="downloadExport('csv')">CSV</button></div>
+        <div class="download-card"><h3>Final Enriched Dataset</h3><p>Detection output plus examiner feedback and corrected labels when available.</p><button class="action-btn action-primary" onclick="downloadExport('csv')">CSV</button></div>
         <div class="download-card"><h3>Professional PDF Report</h3><p>Owner-only summary covering detection, metrics, Active Learning status, examiners, and recommendation.</p><button class="action-btn action-primary" onclick="window.location.href='/api/project/${encodeURIComponent(PROJECT_ID)}/report.pdf'">Download PDF</button></div>
         <div class="download-card"><h3>Original Dataset</h3><p>Original dataset direct download is still reserved for a later phase.</p><button class="action-btn action-secondary action-disabled" onclick="placeholder('Original dataset download will be connected next.')">Original Dataset</button></div>
       </div>
     `;
   }
 
-  function renderIterations(){
+  function versionStatusBadge(status){
+    const normalized = String(status || '').toLowerCase();
+    const cls = normalized === 'evaluation_closed' ? 'badge-green'
+      : normalized === 'evaluation_ready' ? 'badge-blue'
+      : normalized === 'feedback_completed' ? 'badge-cyan'
+      : normalized === 'feedback_in_progress' ? 'badge-orange'
+      : 'badge-gray';
+    return badge(labelize(status || 'pending'), cls);
+  }
+  async function closeCurrentEvaluation(versionId){
+    if (!confirm(`Close evaluation for ${versionId}?`)) return;
+    const res = await fetch(`/api/project/${encodeURIComponent(PROJECT_ID)}/versions/${encodeURIComponent(versionId)}/close`, {method:'POST'});
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.error || 'Unable to close this evaluation.');
+      return;
+    }
+    await renderIterations();
+    await renderPerformance();
+  }
+  async function reopenEvaluationCycle(versionId){
+    if (!confirm(`Create a new evaluation cycle from ${versionId}?`)) return;
+    const res = await fetch(`/api/project/${encodeURIComponent(PROJECT_ID)}/versions/${encodeURIComponent(versionId)}/reopen`, {method:'POST'});
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.error || 'Unable to reopen this evaluation cycle.');
+      return;
+    }
+    currentVersionId = data.current_version || data.new_version || currentVersionId;
+    await renderIterations();
+    await renderPerformance();
+  }
+  async function saveOwnerNotes(versionId){
+    const input = document.getElementById('ownerNotesInput');
+    const text = input ? input.value : '';
+    const res = await fetch(`/api/project/${encodeURIComponent(PROJECT_ID)}/version/${encodeURIComponent(versionId)}/owner_notes`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text})
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.error || 'Unable to save owner notes.');
+      return;
+    }
+    alert('Owner notes saved.');
+  }
+  async function loadOwnerNotesForVersion(versionId){
+    try {
+      const res = await fetch(`/api/project/${encodeURIComponent(PROJECT_ID)}/version/${encodeURIComponent(versionId)}/owner_notes`);
+      const data = await res.json().catch(() => ({}));
+      return data?.notes?.text || '';
+    } catch (err) {
+      return '';
+    }
+  }
+  async function renderIterations(){
     if (!isLogistic()) return;
-    const s = pageData.summary || {};
-    document.getElementById('iterations').innerHTML = `
-      <div class="notice notice-info">Reopening will create a new evaluation cycle using examiner-corrected labels and uncertain samples to improve Logistic Regression.</div>
-      <div class="cards-grid">
-        ${metricCard('Current Iteration', 'Version 1')}
-        ${metricCard('Active Learning Strategy', 'Least Confident')}
-        ${metricCard('Selected Feedback Targets', intValue(s.review_targets))}
-        ${metricCard('Reviewed Targets', intValue(s.reviewed_targets))}
-        ${metricCard('Corrected Labels', intValue(s.corrected_labels))}
-      </div>
-      <h3 style="margin:20px 0 10px">Version Comparison</h3>
-      <div class="table-wrap"><table><thead><tr><th>Version</th><th>Model</th><th>Feedback Targets</th><th>Reviewed</th><th>Corrected</th><th>Status</th></tr></thead><tbody><tr><td>Version 1</td><td>Logistic Regression</td><td>${intValue(s.review_targets)}</td><td>${intValue(s.reviewed_targets)}</td><td>${intValue(s.corrected_labels)}</td><td>${badge('Current','badge-blue')}</td></tr></tbody></table></div>
-      <div class="button-row"><button class="action-btn action-primary action-disabled" onclick="placeholder('Reopen workflow will be implemented after final export and feedback normalization.')">Reopen Evaluation Cycle</button></div>
-    `;
+    const panel = document.getElementById('iterations');
+    panel.innerHTML = `<div class="empty-state">Loading version history...</div>`;
+    try {
+      const registry = await fetchVersionRegistry();
+      const versions = versionList(registry);
+      const current = versions.find(item => item.version_id === registry.current_version) || versions[versions.length - 1] || {};
+      const currentStatus = String(current.status || '').toLowerCase();
+      const hasSnapshot = !!current.metrics_available;
+      const canClose = hasSnapshot && currentStatus === 'evaluation_ready';
+      const canReopen = hasSnapshot && currentStatus === 'evaluation_closed' && isLogistic();
+      const ownerNotes = await loadOwnerNotesForVersion(current.version_id || registry.current_version || 'v1');
+      const rows = versions.map(item => `
+        <tr>
+          <td>${esc(item.version_id || '-')}</td>
+          <td>${esc(item.model_name || pageData?.selected_model?.name || '-')}</td>
+          <td>${intValue(item.review_target_count)}</td>
+          <td>${intValue(item.reviewed_targets)}</td>
+          <td>${intValue(item.corrected_targets)}</td>
+          <td>${versionStatusBadge(item.status)}</td>
+        </tr>
+      `).join('');
+      panel.innerHTML = `
+        <div class="notice notice-info">Reopening creates a new evaluation cycle from the enhanced dataset while older versions remain preserved for comparison.</div>
+        <div class="cards-grid">
+          ${metricCard('Current Iteration', esc(registry.current_version || current.version_id || 'v1'))}
+          ${metricCard('Previous Version', esc(registry.previous_version || '-'))}
+          ${metricCard('Selected Feedback Targets', intValue(current.review_target_count))}
+          ${metricCard('Reviewed Targets', intValue(current.reviewed_targets))}
+          ${metricCard('Corrected Labels', intValue(current.corrected_targets))}
+        </div>
+        <h3 style="margin:20px 0 10px">Version Comparison</h3>
+        <div class="table-wrap"><table><thead><tr><th>Version</th><th>Model</th><th>Feedback Targets</th><th>Reviewed</th><th>Corrected</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No versions are available yet.</td></tr>`}</tbody></table></div>
+        <h3 style="margin:20px 0 10px">Owner Notes</h3>
+        <textarea id="ownerNotesInput" style="width:100%;min-height:90px;border:1px solid #d8e0ec;border-radius:8px;padding:12px;font-family:inherit" placeholder="Write review instructions for examiners...">${esc(ownerNotes)}</textarea>
+        <div class="button-row">
+          <button class="action-btn action-secondary" onclick="saveOwnerNotes('${esc(current.version_id || registry.current_version || 'v1')}')">Save Owner Notes</button>
+          <button class="action-btn action-secondary ${canClose ? '' : 'action-disabled'}" ${canClose ? '' : 'disabled'} onclick="closeCurrentEvaluation('${esc(current.version_id || registry.current_version || 'v1')}')">Close Evaluation</button>
+          <button class="action-btn action-primary ${canReopen ? '' : 'action-disabled'}" ${canReopen ? '' : 'disabled'} onclick="reopenEvaluationCycle('${esc(current.version_id || registry.current_version || 'v1')}')">Reopen Evaluation Cycle</button>
+        </div>
+      `;
+    } catch (err) {
+      panel.innerHTML = `<div class="notice notice-warn">${esc(err.message || 'Unable to load version history.')}</div>`;
+    }
   }
 
   function renderAll(){

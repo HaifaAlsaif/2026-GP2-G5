@@ -2175,14 +2175,19 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
     <div class="fb-progress-text" id="fbProgressText">0 / 0 conversations reviewed</div>
   </div>
 
+  <div class="fb-progress-card">
+    <div class="fb-progress-title">Owner Notes</div>
+    <div class="fb-progress-text" id="fbOwnerNotesText">Loading notes...</div>
+  </div>
+
   <div class="fb-sort-card">
     <div class="fb-sort-row">
       <div class="fb-sort-left">
-        <span>📊 Sort Conversations:</span>
+        <span>Samples are ordered by review priority: lowest distance from 50/50 and lowest confidence first. Lower distance means higher review priority.</span>
         <select id="fbSortSelect" class="select">
-          <option value="default">Default Order</option>
-          <option value="most_uncertain">Lowest Uncertainty First</option>
-          <option value="least_uncertain">Least Uncertain First</option>
+          <option value="default">Highest Review Priority First</option>
+          <option value="most_uncertain">Lowest Distance from 50/50 First</option>
+          <option value="least_uncertain">Least Review Priority First</option>
           <option value="most_pending">Most Pending Targets</option>
         </select>
       </div>
@@ -2198,7 +2203,8 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
           <option value="all">All dialogues</option>
           <option value="targets">With review targets</option>
           <option value="pending">Pending targets</option>
-          <option value="reviewed">Reviewed targets</option>
+          <option value="reviewed">Draft/submitted targets</option>
+          <option value="submitted">Submitted targets</option>
         </select>
       </div>
       <div class="fb-filter-field">
@@ -2208,15 +2214,22 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
           <option value="targets">Review targets only</option>
           <option value="context">Context only</option>
           <option value="pending">Pending targets</option>
-          <option value="reviewed">Reviewed targets</option>
+          <option value="reviewed">Draft/submitted targets</option>
+          <option value="submitted">Submitted targets</option>
         </select>
       </div>
     </div>
-    <div class="fb-filter-note">Lower value means closer to 50/50 and higher review priority. Review targets are used for Active Learning; context turns are shown only to help judgment.</div>
+    <div class="fb-filter-note">Lower distance means the sample is closer to 50/50, so it has higher review priority. Review targets are used for Active Learning; context turns are shown only to help judgment.</div>
 
   </div>
 
   <div id="fbCards"></div>
+  <div class="fb-progress-card">
+    <div class="fb-progress-title">Final Submission</div>
+    <div class="fb-progress-text">Drafts remain editable until you submit this feedback task. Submitted turns become locked for evaluation.</div>
+    <div class="fb-progress-text" id="fbFinalSubmitReason"></div>
+    <div class="fb-submit-wrap"><button class="btn primary" type="button" id="fbFinalSubmitBtn" disabled>Submit Feedback Task</button></div>
+  </div>
 </div>
   
     <div class="stats-grid">  
@@ -2269,14 +2282,14 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
           <small>Frozen after Submit Results</small>
         </div>
         <div class="insight-tile">
-          <span>Lowest Uncertainty</span>
+          <span>Lowest Distance from 50/50</span>
           <b id="generatedLowestMargin">—</b>
-          <small>Lower value means closer to 50/50 and higher review priority.</small>
+          <small>Lower distance means the sample is closer to 50/50, so it has higher review priority.</small>
         </div>
         <div class="insight-tile">
           <span>Why Selected</span>
-          <b>Model uncertainty</b>
-          <small>Lower value means closer to 50/50 and higher review priority.</small>
+          <b>Review priority</b>
+          <small>Closest to 50/50 and lowest confidence first.</small>
         </div>
       </div>
     </div>
@@ -2427,6 +2440,9 @@ const fbSortSelect = document.getElementById("fbSortSelect");
 const fbDialogueFilter = document.getElementById("fbDialogueFilter");
 const fbTurnFilter = document.getElementById("fbTurnFilter");
 const fbCardsEl = document.getElementById("fbCards");
+const fbOwnerNotesText = document.getElementById("fbOwnerNotesText");
+const fbFinalSubmitBtn = document.getElementById("fbFinalSubmitBtn");
+const fbFinalSubmitReason = document.getElementById("fbFinalSubmitReason");
 const currentExaminerUid = cleanParam("{{ user_uid or user_id or '' }}");
 const currentExaminerName = cleanParam("{{ user_name or '' }}") || "Examiner";
 
@@ -2437,6 +2453,7 @@ let feedbackSortMode = "default";
 let feedbackDialogueFilter = "all";
 let feedbackTurnFilter = "all";
 let feedbackTaskCompleted = false;
+let feedbackVersionId = "v1";
 const feedbackDraft = {};
 
 let activeModel = "";
@@ -2462,27 +2479,6 @@ function modelLabel(key){
   if (key === "rnn") return "RNN";
   if (key === "logreg") return "Baseline TF-IDF + Logistic Regression";
   return "—";
-}
-function exportModelName(value){
-  const raw = String(value || "").toLowerCase();
-  if (raw.includes("rnn")) return "RNN";
-  if (raw.includes("sota")) return "SOTA Model";
-  if (raw.includes("logistic") || raw.includes("logreg") || raw.includes("tf-idf") || raw.includes("tfidf") || raw.includes("baseline")) return "Logistic Regression";
-  return value ? String(value) : "";
-}
-function exportActiveLearningState(turn){
-  const hasState = turn?.active_learning_selected !== undefined || turn?.review_target !== undefined || turn?.selected_for_review !== undefined;
-  const selected = Boolean(turn?.active_learning_selected ?? turn?.review_target ?? turn?.selected_for_review);
-  const feedback = turn?.feedback_label ?? turn?.corrected_label;
-  if (selected && feedback !== undefined && feedback !== null && String(feedback).trim() !== "") return "reviewed";
-  if (selected) return "pending";
-  if (!hasState) return "unavailable";
-  return "not_selected_for_review";
-}
-function csvCell(value){
-  let text = String(value ?? "");
-  if (/^[=+\-@]/.test(text)) text = `'${text}`;
-  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 function modelKeyFromName(name){
   const n = String(name || "").toLowerCase().trim();
@@ -2915,7 +2911,7 @@ function showToast(message) {
 
               
               <div class="details-row">
-                <strong>#</strong><strong>${i18n[currentLang].sender}</strong><strong>${i18n[currentLang].text}</strong><strong>${i18n[currentLang].prev}</strong><strong>${i18n[currentLang].prediction}</strong><strong>${i18n[currentLang].gt}</strong><strong>${i18n[currentLang].confidence}</strong><strong>Uncertainty</strong>
+                <strong>#</strong><strong>${i18n[currentLang].sender}</strong><strong>${i18n[currentLang].text}</strong><strong>${i18n[currentLang].prev}</strong><strong>${i18n[currentLang].prediction}</strong><strong>${i18n[currentLang].gt}</strong><strong>${i18n[currentLang].confidence}</strong><strong>Distance from 50/50</strong>
               </div>
 
               <div class="details-list">
@@ -3047,7 +3043,7 @@ function renderGeneratedDetailsTable() {
                   <span><em>Prediction</em>${esc(predLabel)}</span>
                   <span><em>Ground Truth</em>${esc(gtLabel)}</span>
                   <span><em>Confidence</em>${esc(conf)}</span>
-                  <span><em>Uncertainty</em>${esc(margin)}</span>
+                  <span><em>Distance from 50/50</em>${esc(margin)}</span>
                 </div>
               </div>
             `;
@@ -3280,7 +3276,47 @@ renderDistribution();
 function renderFeedbackProgress(done, total, unit = "conversations") {
   const pct = total ? (done / total) * 100 : 0;
   if (fbProgressFill) fbProgressFill.style.width = `${pct}%`;
-  if (fbProgressText) fbProgressText.textContent = `${done} / ${total} ${unit} reviewed`;
+  if (fbProgressText) fbProgressText.textContent = `${done} / ${total} ${unit} submitted`;
+  updateConversationFinalSubmitState();
+}
+
+function feedbackTargetTurns() {
+  return feedbackItems.flatMap(item => (item.turns || []).filter(isReviewTargetTurn));
+}
+
+function isMyReviewedTurn(turn) {
+  const fb = getTurnSharedFeedback(turn);
+  if (!fb) return false;
+  return String(fb.examiner_uid || "") === String(currentExaminerUid || "");
+}
+
+function updateConversationFinalSubmitState() {
+  if (!fbFinalSubmitBtn || !fbFinalSubmitReason) return;
+  const targets = feedbackTargetTurns();
+  const draftCount = targets.filter(t => isMyReviewedTurn(t) && !isSubmittedTurn(t)).length;
+  const submittedCount = targets.filter(t => isMyReviewedTurn(t) && isSubmittedTurn(t)).length;
+  const remaining = Math.max(targets.length - draftCount - submittedCount, 0);
+  const alreadySubmitted = targets.length > 0 && submittedCount >= targets.length;
+  fbFinalSubmitBtn.disabled = remaining > 0 || alreadySubmitted;
+  fbFinalSubmitBtn.style.display = alreadySubmitted ? "none" : "";
+  if (alreadySubmitted) {
+    fbFinalSubmitReason.textContent = "Feedback task has already been submitted and locked.";
+  } else if (remaining > 0) {
+    fbFinalSubmitReason.textContent = `Complete ${remaining} remaining review targets before final submission.`;
+  } else {
+    fbFinalSubmitReason.textContent = "All required targets have saved drafts. You can submit the feedback task.";
+  }
+}
+
+async function loadFeedbackOwnerNotes() {
+  if (!projectId || !feedbackVersionId || !fbOwnerNotesText) return;
+  try {
+    const res = await fetch(`/api/project/${encodeURIComponent(projectId)}/version/${encodeURIComponent(feedbackVersionId)}/owner_notes`);
+    const data = await res.json().catch(() => ({}));
+    fbOwnerNotesText.textContent = data?.notes?.text || "No owner notes for this version yet.";
+  } catch (err) {
+    fbOwnerNotesText.textContent = "Owner notes are unavailable.";
+  }
 }
 
 function getConversationConfidence(item) {
@@ -3331,7 +3367,11 @@ function isReviewTargetTurn(turn) {
 }
 
 function isReviewedTurn(turn) {
-  return Boolean(getTurnSharedFeedback(turn) || turn?.turn_locked || turn?.target_status === "reviewed" || turn?.reviewed_by);
+  return Boolean(getTurnSharedFeedback(turn) || turn?.turn_locked || turn?.target_status === "reviewed" || turn?.target_status === "draft_saved" || turn?.target_status === "submitted" || turn?.reviewed_by);
+}
+
+function isSubmittedTurn(turn) {
+  return Boolean(turn?.turn_locked || turn?.target_status === "submitted" || turn?.target_status === "locked" || getTurnSharedFeedback(turn)?.locked || getTurnSharedFeedback(turn)?.status === "submitted");
 }
 
 function getPendingTargetCount(item) {
@@ -3341,22 +3381,22 @@ function getPendingTargetCount(item) {
 function dialogueMatchesFilter(item) {
   const targets = (item.turns || []).filter(isReviewTargetTurn);
   const pending = targets.filter(t => !isReviewedTurn(t));
+  const submitted = targets.filter(isSubmittedTurn);
   if (feedbackDialogueFilter === "targets") return targets.length > 0;
   if (feedbackDialogueFilter === "pending") return pending.length > 0;
   if (feedbackDialogueFilter === "reviewed") return targets.length > 0 && pending.length === 0;
+  if (feedbackDialogueFilter === "submitted") return submitted.length > 0;
   return true;
 }
 
 function sortedFeedbackItems() {
   const arr = feedbackItems.filter(dialogueMatchesFilter);
-  if (feedbackSortMode === "most_uncertain" || feedbackSortMode === "confidence_low") {
+  if (feedbackSortMode === "most_uncertain" || feedbackSortMode === "confidence_low" || feedbackSortMode === "default") {
     arr.sort((a, b) => getConversationUncertainty(a) - getConversationUncertainty(b));
   } else if (feedbackSortMode === "least_uncertain" || feedbackSortMode === "confidence_high") {
     arr.sort((a, b) => getConversationUncertainty(b) - getConversationUncertainty(a));
   } else if (feedbackSortMode === "most_pending") {
     arr.sort((a, b) => getPendingTargetCount(b) - getPendingTargetCount(a));
-  } else {
-    arr.sort((a, b) => (a.order_index || 999999) - (b.order_index || 999999));
   }
   return arr;
 }
@@ -3406,25 +3446,33 @@ function renderTurnSubmittedBox(t) {
   const fb = getTurnSharedFeedback(t);
   if (!fb) return "";
 
-  const label = (fb.label || "Human").toUpperCase() === "AI" ? "AI" : "Human";
+  const label = (fb.corrected_label || fb.corrected_label_text || fb.label || "Human").toUpperCase() === "AI" ? "AI" : "Human";
   const cls = label === "AI" ? "ai" : "human";
+  const owner = esc(fb.examiner_name || "Examiner");
+  const when = fb.finalized_at || fb.submitted_at || fb.draft_updated_at || fb.updated_at || "";
+  const locked = isSubmittedTurn(t);
+  const status = String(fb.status || fb.lifecycle_status || t.target_status || "").toLowerCase();
+  const title = status === "locked" || t.target_status === "locked" ? "Locked Feedback" : (locked ? "Submitted Feedback" : "Draft Feedback Saved");
+  const outcome = fb.agreed_with_model ? "Agreed with Model" : "Corrected Model";
 
   if (fb.agreed_with_model) {
     return `
       <div class="fb-turn-submitted fb-turn-submitted-agree">
-        <div class="fb-sub-title">✔ Agreement saved successfully!</div>
-        <div class="fb-sub-note">You agreed with model prediction (${label}).</div>
+        <div class="fb-sub-title">✔ ${title}</div>
+        <div class="fb-sub-note">${owner} · ${outcome} · reviewed label ${label}. ${esc(when)}</div>
       </div>
     `;
   }
 
   return `
     <div class="fb-turn-submitted">
-      <div class="fb-sub-title">Feedback Saved</div>
+      <div class="fb-sub-title">${title}</div>
       <div class="fb-sub-row">
         <span class="fb-pill ${cls}">${label}</span>
       </div>
+      <div class="fb-sub-note">${outcome}</div>
       <div class="fb-sub-note">${esc(fb.explanation || "-")}</div>
+      <div class="fb-sub-note">${owner}${when ? " · " + esc(when) : ""}</div>
     </div>
   `;
 }
@@ -3473,6 +3521,7 @@ function sortTurnsForView(turns) {
     if (feedbackTurnFilter === "context") return !isTarget;
     if (feedbackTurnFilter === "pending") return isTarget && !isReviewed;
     if (feedbackTurnFilter === "reviewed") return isTarget && isReviewed;
+    if (feedbackTurnFilter === "submitted") return isTarget && isSubmittedTurn(turn);
     return true;
   });
 
@@ -3493,8 +3542,8 @@ function sortTurnsForView(turns) {
 
 function updateTurnSortBtnLabel() {
   if (!fbTurnSortBtn) return;
-  if (turnSortMode === "least_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Least Uncertain";
-  else if (turnSortMode === "most_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Lowest Uncertainty";
+  if (turnSortMode === "least_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Least Review Priority";
+  else if (turnSortMode === "most_uncertain") fbTurnSortBtn.textContent = "Turn Sort: Highest Review Priority";
   else fbTurnSortBtn.textContent = "Turn Sort: Default";
 }
 
@@ -3556,7 +3605,7 @@ if (!feedbackDraft[key]) {
   };
 }
 const draft = feedbackDraft[key];
-const canEdit = isActiveTarget && (!sharedFb || (ownedByMe && !feedbackTaskCompleted));
+const canEdit = isActiveTarget && !isSubmittedTurn(t) && (!sharedFb || (ownedByMe && !feedbackTaskCompleted));
 const predictedLabel = ((pred || "").toUpperCase() === "AI") ? "AI" : "Human";
 
 const agreeBar = `
@@ -3581,7 +3630,7 @@ const manualEditor = `
     </div>
     <textarea class="fb-turn-note" data-ft-text="${esc(id)}" data-ft-turn="${turnIdx}" placeholder="Turn explanation...">${esc(draft.explanation || "")}</textarea>
     <button class="btn primary fb-save-btn" data-ft-submit="${esc(id)}" data-ft-turn="${turnIdx}">
-      Save Feedback
+      Save Draft
     </button>
   </div>
 `;
@@ -3590,7 +3639,7 @@ const agreeConfirm = `
   <div class="agree-confirm-note">✔ You're agreeing with the model. Click "Confirm Agreement" below to save.</div>
   <div class="agree-confirm-actions">
     <button class="btn primary agree-confirm-btn" data-ft-submit="${esc(id)}" data-ft-turn="${turnIdx}">
-      ✔ Confirm Agreement
+      Save Agreement Draft
     </button>
   </div>
 `;
@@ -3600,7 +3649,7 @@ const lockText = sharedFb?.agreed_with_model
   : `Feedback already submitted by ${esc(sharedFb?.examiner_name || "Examiner")}.`;
 
 const feedbackCell = canEdit
-  ? `${ownedByMe ? '<div class="fb-turn-lock">Reviewed by you. You can edit this feedback until the task is completed.</div>' : ''}${agreeBar}${draft.agree ? agreeConfirm : manualEditor}`
+  ? `${ownedByMe ? '<div class="fb-turn-lock">Draft by you. You can edit this feedback until final submission.</div>' : ''}${agreeBar}${draft.agree ? agreeConfirm : manualEditor}`
   : (isActiveTarget ? `<div class="fb-turn-lock">${lockText}</div>` : `<div class="fb-turn-lock">Context only. No feedback required for this turn.</div>`);
 
 const submittedBox = renderTurnSubmittedBox(t);
@@ -3617,7 +3666,7 @@ return `
   <div>
     ${isActiveTarget ? `<span class="fb-badge pending" style="display:inline-block;margin-bottom:6px;">Review target</span>` : `<span class="fb-badge context" style="display:inline-block;margin-bottom:6px;">Context</span>`}
     <div>${esc(t.text || "")}</div>
-    <div style="margin-top:6px;color:#6b7280;font-size:12px;">Uncertainty: ${esc(uncertainty)}</div>
+    <div style="margin-top:6px;color:#6b7280;font-size:12px;">Distance from 50/50: ${esc(uncertainty)}</div>
   </div>
   <div><span class="fb-pred ${predCls}">${pred}</span></div>
   <div>${esc(conf)}</div>
@@ -3675,8 +3724,8 @@ const myBox = isLocked ? `
       <span style="font-size:12px;font-weight:700;color:#5b657a;">Turn Sort:</span>
       <select class="select fb-turn-sort-select" data-turn-sort="${esc(id)}">
         <option value="default" ${turnSortMode === "default" ? "selected" : ""}>Default</option>
-        <option value="most_uncertain" ${turnSortMode === "most_uncertain" ? "selected" : ""}>Lowest Uncertainty</option>
-        <option value="least_uncertain" ${turnSortMode === "least_uncertain" ? "selected" : ""}>Least Uncertain</option>
+        <option value="most_uncertain" ${turnSortMode === "most_uncertain" ? "selected" : ""}>Highest Review Priority</option>
+        <option value="least_uncertain" ${turnSortMode === "least_uncertain" ? "selected" : ""}>Least Review Priority</option>
       </select>
     </div>
   </div>
@@ -3739,6 +3788,8 @@ async function loadConversationFeedbackList() {
 
     const prevOpenId = feedbackOpenId;
 feedbackItems = data.items || [];
+feedbackVersionId = data?.active_learning?.model_version || feedbackVersionId;
+loadFeedbackOwnerNotes();
 
 // خليه يظل فاتح نفس المحادثة بعد التحديث
 if (prevOpenId && feedbackItems.some(x => String(x.conversation_id) === String(prevOpenId))) {
@@ -3751,7 +3802,7 @@ const reviewed = (data.progress && data.progress.reviewed) || 0;
 
     const total = (data.progress && data.progress.total) || 0;
     const unit = (data.progress && data.progress.unit) || "conversations";
-    feedbackTaskCompleted = Boolean(data.feedback_locked || data.task_status === "completed" || (total > 0 && Number(reviewed) >= Number(total)));
+    feedbackTaskCompleted = Boolean(data.feedback_locked || data.task_status === "completed");
     renderFeedbackProgress(reviewed, total, unit);
 
     // نعرض اسم الموديل المختار للفيدباك
@@ -3836,9 +3887,7 @@ fbCardsEl?.addEventListener("change", (e) => {
     const t = (item?.turns || []).find(tt => Number(tt.turn_index) === Number(turn));
     const predicted = normalizeTurnPrediction(t?.prediction);
     feedbackDraft[key].label = predicted;
-    if (!feedbackDraft[key].explanation) {
-      feedbackDraft[key].explanation = "Agreed with model prediction.";
-    }
+    feedbackDraft[key].explanation = "";
   }
 
   renderFeedbackCards();
@@ -3965,6 +4014,7 @@ themeToggle.addEventListener("click", () => {
     ".stats-grid",
     "#miniLine",
     ".eval-row",
+    ".metrics-row",
     "#evalNote",
     "#activeLearningLine",
     "#generatedActiveLearningPanel",
@@ -4061,94 +4111,40 @@ async function ensureDialoguesForExport() {
   await loadSummary(picked);
   return dialogues.length > 0;
 }
-function buildTurnExportRows() {
-  const out = [];
-  const timestamp = new Date().toISOString();
-  const modelUsed = exportModelName(modelSelectEl?.value || activeModel || previewGeneratedModelKey || "logreg");
-  dialogues.forEach((d) => {
-    (d.turns || []).forEach((t, idx) => {
-      const prediction = normalizeTurnPrediction(t.prediction);
-      const gtRaw = t.gt ?? t.ground_truth ?? "";
-      const gt = gtRaw === "" || gtRaw === null || gtRaw === undefined ? "" : normalizeTurnPrediction(gtRaw);
-      const feedbackLabelRaw = t.feedback_label ?? t.corrected_label ?? "";
-      const feedbackLabel = feedbackLabelRaw ? normalizeTurnPrediction(feedbackLabelRaw) : "";
-      out.push({
-        dialogue_id: d.id ?? "",
-        turn_index: Number(t.turn_index || (idx + 1)),
-        sender: t.sender || (prediction === "AI" ? "AI" : "Human"),
-        text: t.text || "",
-        previous_turn: t.prev_text || t.prev || "",
-        ground_truth: gt,
-        prediction,
-        confidence: t.confidence ?? "",
-        uncertainty: t.uncertainty ?? "",
-        review_target: Boolean(t.active_learning_selected ?? t.review_target ?? t.selected_for_review ?? false),
-        feedback_label: feedbackLabel,
-        final_label: feedbackLabel || prediction,
-        model_used: modelUsed,
-        active_learning_state: exportActiveLearningState(t),
-        timestamp
-      });
-
-    });
-  });
-  return out;
+let currentExportVersionId = "v1";
+async function getCurrentExportVersionId() {
+  try {
+    const res = await fetch(`/api/project/${encodeURIComponent(projectId)}/current_version`);
+    const data = await res.json();
+    if (res.ok && data.current_version) currentExportVersionId = data.current_version;
+    return data;
+  } catch (err) {
+    console.warn("Current version lookup failed", err);
+  }
+  return { current_version: currentExportVersionId || "v1", detection_ready: false };
 }
-
-async function downloadDialoguesCsv() {
-  const ok = await ensureDialoguesForExport();
-  if (!ok) {
-    alert("Run Detection first (or select model) to export.");
+async function downloadEnhancedConversationDataset(format) {
+  if (!projectId) {
+    alert("Missing projectId in URL.");
     return;
   }
-
-  const turnRows = buildTurnExportRows();
-  const headers = Object.keys(turnRows[0]);
-const rows = turnRows.map(r => headers.map(h => r[h]));
-
-
-  const csv = [headers, ...rows].map(r => r.map(csvCell).join(",")).join("\n");
-
-  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `conversation_analysis_${projectId || "project"}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-
+  const versionInfo = await getCurrentExportVersionId();
+  if (!versionInfo.detection_ready) {
+    alert(versionInfo.message || "Submit detection results before exporting enhanced dataset.");
+    return;
+  }
+  const versionId = versionInfo.current_version || currentExportVersionId || "v1";
+  const url = `/api/project/${encodeURIComponent(projectId)}/version/${encodeURIComponent(versionId)}/enhanced_dataset?format=${encodeURIComponent(format)}`;
+  if (format === "json") window.open(url, "_blank");
+  else window.location.href = url;
+}
+async function downloadDialoguesCsv() {
+  await downloadEnhancedConversationDataset("csv");
   document.getElementById("downloadCsvBtn")?.closest("details")?.removeAttribute("open");
 }
 
 async function downloadDialoguesJson() {
-  const ok = await ensureDialoguesForExport();
-  if (!ok) {
-    alert("Run Detection first (or select model) to export.");
-    return;
-  }
-
-  const turnRows = buildTurnExportRows();
-
-  const payload = {
-    projectId: projectId || null,
-    model: modelSelectEl?.value || activeModel || null,
-    exportedAt: new Date().toISOString(),
-    total_rows: turnRows.length,
-    rows: turnRows
-  };
-
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `conversation_analysis_${projectId || "project"}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-
+  await downloadEnhancedConversationDataset("json");
   document.getElementById("downloadJsonBtn")?.closest("details")?.removeAttribute("open");
 }
 
@@ -4404,11 +4400,11 @@ async function submitTurnFeedback(conversationId, turnIndex) {
 
   if (agreeWithModel) {
     label = predictedLabel;
-    if (!explanation) explanation = "Agreed with model prediction.";
+    explanation = "";
   }
 
   if (!label) return alert("Select turn label first.");
-  if (!agreeWithModel && !explanation) return alert("Write turn explanation first.");
+  if (!agreeWithModel && label !== predictedLabel && !explanation) return alert("Write turn explanation when correcting the model.");
 
   const payload = {
     label,
@@ -4440,10 +4436,33 @@ async function submitTurnFeedback(conversationId, turnIndex) {
     return;
   }
 
-  showToast(agreeWithModel ? "✔ Agreement saved successfully!" : "✔ Feedback submitted successfully!");
+  showToast(agreeWithModel ? "Agreement draft saved." : "Feedback draft saved.");
   await loadConversationFeedbackList();
 }
 
+async function submitFeedbackTaskFinal() {
+  if (!projectId || !feedbackVersionId) return;
+  const remaining = feedbackTargetTurns().filter(t => !isMyReviewedTurn(t)).length;
+  if (remaining > 0) {
+    alert(`Complete ${remaining} remaining review targets before final submission.`);
+    return;
+  }
+  const res = await fetch(`/api/project/${encodeURIComponent(projectId)}/version/${encodeURIComponent(feedbackVersionId)}/submit_feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.error) {
+    alert(data.error || "Failed to submit feedback task.");
+    return;
+  }
+  showToast("Feedback task submitted and locked for evaluation.");
+  setTimeout(() => {
+    window.location.href = `/projectdetailsexaminer/${encodeURIComponent(projectId)}`;
+  }, 900);
+}
+
+fbFinalSubmitBtn?.addEventListener("click", submitFeedbackTaskFinal);
 
 </script>
 </body>

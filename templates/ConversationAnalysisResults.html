@@ -1453,135 +1453,39 @@ a{color:inherit}
     }
   });
 
-  // ---------- Export ordering ----------
-  const EXPORT_COL_ORDER = [
-    "dialogue_id",
-    "turn_index",
-    "sender",
-    "text",
-    "previous_turn",
-    "ground_truth",
-    "prediction",
-    "confidence",
-    "uncertainty",
-    "review_target",
-    "feedback_label",
-    "final_label",
-    "model_used",
-    "active_learning_state",
-    "timestamp",
-  ];
-
-  function pickCol(row, key){
-    if(key === "dialogue_id") return row.dialogue_id ?? row.dialogueId ?? row.dialogue ?? "";
-    if(key === "turn_index") return row.turn_index ?? row.turnIndex ?? row.index ?? "";
-    if(key === "previous_turn") return row.previous_turn ?? row.previous_text ?? row.prev_text ?? row.previousText ?? row.context ?? "";
-    if(key === "ground_truth") return row.ground_truth ?? row.gt ?? row.label ?? row.y_true ?? "";
-    if(key === "review_target") return row.review_target ?? row.active_learning_selected ?? row.selected_for_review ?? "";
-    if(key === "feedback_label") return row.feedback_label ?? row.corrected_label ?? "";
-    if(key === "final_label") return row.final_label ?? row.corrected_label ?? row.prediction ?? "";
-    if(key === "model_used") return row.model_used ?? row.selected_model ?? lastSummary?.model_key ?? getSelectedModel();
-    if(key === "active_learning_state") return exportActiveLearningState(row);
-    if(key === "timestamp") return row.timestamp ?? row.analyzed_at ?? lastSummary?.analyzed_at ?? new Date().toISOString();
-    return row[key] ?? "";
-  }
-
   // ✅ Excel-safe for source_row_id to prevent #NAME?
-  function excelSafeText(value){
-    const s = String(value ?? "");
-    if(!s) return "";
-    // safest for Excel: ="value"
-    return `="${s.replaceAll('"','""')}"`;
-  }
-
-  function exportModelName(value){
-    const raw = String(value || "").toLowerCase();
-    if(raw.includes("rnn")) return "RNN";
-    if(raw.includes("sota")) return "SOTA Model";
-    if(raw.includes("logistic") || raw.includes("logreg") || raw.includes("tf-idf") || raw.includes("tfidf") || raw.includes("baseline")) return "Logistic Regression";
-    return value ? String(value) : "";
-  }
-
-  function exportActiveLearningState(row){
-    const hasState = row?.review_target !== undefined || row?.active_learning_selected !== undefined || row?.selected_for_review !== undefined;
-    const selected = Boolean(row?.review_target ?? row?.active_learning_selected ?? row?.selected_for_review);
-    const feedback = row?.feedback_label ?? row?.corrected_label;
-    if(selected && feedback !== undefined && feedback !== null && String(feedback).trim() !== "") return "reviewed";
-    if(selected) return "pending";
-    if(!hasState) return "unavailable";
-    return "not_selected_for_review";
-  }
-
-  function csvCell(value){
-    let s = String(value ?? "");
-    if(/^[=+\-@]/.test(s)) s = `'${s}`;
-    if(/[",\n\r]/.test(s)) return `"${s.replaceAll('"','""')}"`;
-    return s;
-  }
-
   // ✅ confidence fallback from p_machine if empty
-  function confidenceFromAIProbability(value){
-    const pmNum = Number(value);
-    if(!Number.isFinite(pmNum)) return "";
-    return Math.max(pmNum, 1 - pmNum);
-  }
-
-  function uncertaintyFromAIProbability(value){
-    const pmNum = Number(value);
-    if(!Number.isFinite(pmNum)) return "";
-    return Math.abs(pmNum - 0.5);
-  }
-
-  function normalizeExportRow(row){
-    const out = {};
-    EXPORT_COL_ORDER.forEach(k=>{
-      out[k] = pickCol(row, k);
-    });
-
-    out.prediction = normalizeDisplayLabel(out.prediction, "");
-    out.ground_truth = normalizeDisplayLabel(out.ground_truth, "");
-    out.feedback_label = normalizeDisplayLabel(out.feedback_label, "");
-    out.final_label = normalizeDisplayLabel(out.final_label, out.prediction);
-    out.model_used = exportModelName(out.model_used);
-    out.active_learning_state = exportActiveLearningState(row);
-
-    return out;
-  }
-
   // ---------- Export ----------
-  async function fetchNormalizedExportRows(){
-    const model_key = getSelectedModel();
-    const qs = new URLSearchParams({ model_key });
-    const res = await fetch(`/api/project/${PROJECT_ID}/conversation_export?${qs.toString()}`);
-    if(!res.ok) throw new Error(await res.text() || "Export fetch failed");
-    const data = await res.json();
-    const rawRows = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : []);
-    return { model_key, rows: rawRows.map(normalizeExportRow) };
+  let currentVersionId = "v1";
+  async function getCurrentVersionId(){
+    try{
+      const res = await fetch(`/api/project/${encodeURIComponent(PROJECT_ID)}/current_version`);
+      const data = await res.json();
+      if(res.ok && data.current_version) currentVersionId = data.current_version;
+      return data;
+    }catch(e){
+      console.warn("Current version lookup failed", e);
+    }
+    return { current_version: currentVersionId || "v1", detection_ready: false };
+  }
+
+  async function downloadEnhancedDataset(format){
+    if(!PROJECT_ID){ toast("Missing project ID"); return; }
+    const versionInfo = await getCurrentVersionId();
+    if(!versionInfo.detection_ready){
+      toast(versionInfo.message || "Submit detection results before exporting enhanced dataset.");
+      return;
+    }
+    const versionId = versionInfo.current_version || currentVersionId || "v1";
+    const url = `/api/project/${encodeURIComponent(PROJECT_ID)}/version/${encodeURIComponent(versionId)}/enhanced_dataset?format=${encodeURIComponent(format)}`;
+    if(format === "json") window.open(url, "_blank");
+    else window.location.href = url;
+    exportMenu?.classList.remove("show");
   }
 
   async function downloadExportCsv(){
     try{
-      const { model_key, rows } = await fetchNormalizedExportRows();
-      if(rows.length === 0){ toast("No rows to export"); return; }
-
-      const headers = Object.keys(rows[0]);
-
-      const csv = [
-        headers.join(","),
-        ...rows.map(r=> headers.map(h=> csvCell(r[h])).join(","))
-      ].join("\n");
-
-      const blob = new Blob(["\ufeff" + csv], { type:"text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `trustlens_conversation_export_${model_key}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-
-      toast("CSV downloaded");
+      await downloadEnhancedDataset("csv");
     }catch(e){
       toast("CSV export failed");
       console.error(e);
@@ -1590,18 +1494,7 @@ a{color:inherit}
 
   async function downloadExportJson(){
     try{
-      const { model_key, rows } = await fetchNormalizedExportRows();
-      if(rows.length === 0){ toast("No rows to export"); return; }
-      const blob = new Blob([JSON.stringify({ rows }, null, 2)], { type:"application/json;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `trustlens_conversation_export_${model_key}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast("JSON downloaded");
+      await downloadEnhancedDataset("json");
     }catch(e){
       toast("JSON export failed");
       console.error(e);
