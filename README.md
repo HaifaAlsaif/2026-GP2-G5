@@ -63,7 +63,6 @@ python app.py
 Default: http://127.0.0.1:5000/
 
 
-Note: For additional setup details and testing information, please refer to the Executable file included in this submission (G5_TrustLens_Executable).
 ---
 ## 👥 Project Team (G5)
 #### Haifa Alsaif – 443202006
