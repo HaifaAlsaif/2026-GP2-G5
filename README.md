@@ -41,8 +41,8 @@ Follow these steps to install and run the project locally:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/HaifaAlsaif/2025-GP1-G5.git
-cd 2025-GP1-G5
+git clone https://github.com/HaifaAlsaif/2026-GP2-G5.git
+cd 2026-GP2-G5
 ```
 ### 2.Open in VS Code
 code .
