@@ -1,5 +1,9 @@
 # TrustLens Website Setup Guide
 
+## 🌐 Hosted Version
+
+🔗 **[https://trusrlens.onrender.com](https://trusrlens.onrender.com)**
+
 ## Overview
 
 TrustLens is a Flask-based web platform for detecting text authenticity. It supports news article analysis, conversation analysis, model selection, examiner feedback, Active Learning review targets, and owner result exports.
