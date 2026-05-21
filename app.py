@@ -2377,15 +2377,24 @@ def api_update_project(project_id):
     if proj_doc.to_dict().get("owner_id") != uid:
         return jsonify({"error": "Forbidden"}), 403
 
-    data = request.form
+    # يدعم form-data أو JSON
+    data = request.form if request.form else (request.get_json(silent=True) or {})
 
-    name = data.get("project_name", "").strip()
-    desc = data.get("description", "").strip()
-    category = data.get("category")
-    domains = data.getlist("domain")
+    name = (data.get("project_name") or "").strip()
+    desc = (data.get("description") or "").strip()
+    category = (data.get("category") or "").strip()
 
-    if task_data.get("task_type") == "model_selection" and len(new_examiners) != 1:
-        return jsonify({"error": "Model Selection task requires exactly 1 examiner"}), 400
+    if hasattr(data, "getlist"):
+        domains = data.getlist("domain")
+    else:
+        domains = data.get("domain", [])
+        if isinstance(domains, str):
+            domains = [domains]
+        elif not isinstance(domains, list):
+            domains = []
+
+    if not name or not desc or not category:
+        return jsonify({"error": "Missing required fields"}), 400
 
     update_data = {
         "project_name": name,
@@ -2398,6 +2407,7 @@ def api_update_project(project_id):
     proj_ref.update(update_data)
 
     return jsonify({"message": "Project updated successfully"}), 200
+
 
 # ------------------ حذف مشروع ------------------
 @app.route("/api/delete_project/<project_id>", methods=["DELETE"])
