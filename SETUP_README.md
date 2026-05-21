@@ -4,15 +4,6 @@
 
 🔗 **[https://trusrlens.onrender.com](https://trusrlens.onrender.com)**
 
-## 🔐 Login Credentials
-
-Use the following test accounts to explore the system:
-
-| Role | Email | Password |
-|------|-------|----------|
-| Project Owner | noufsult9@gmail.com | Nouf.12345 |
-| Examiner | Noufalmuhana9@gmail.com | Nouf.12345 |
-| Admin | haifasns@gmail.com | Haifa@2026 |
 
 
 ## Overview
