@@ -61,6 +61,8 @@ pip install -r requirements.txt
 python app.py
 ### 6. Open in Browser
 Default: http://127.0.0.1:5000/
+
+
 Note: For additional setup details and testing information, please refer to the Executable file included in this submission (G5_TrustLens_Executable).
 ---
 ## 👥 Project Team (G5)
