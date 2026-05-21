@@ -4,6 +4,17 @@
 
 🔗 **[https://trusrlens.onrender.com](https://trusrlens.onrender.com)**
 
+## 🔐 Login Credentials
+
+Use the following test accounts to explore the system:
+
+| Role | Email | Password |
+|------|-------|----------|
+| Project Owner | noufsult9@gmail.com | Nouf.12345 |
+| Examiner | Noufalmuhana9@gmail.com | Nouf.12345 |
+| Admin | haifasns@gmail.com | Haifa@2026 |
+
+
 ## Overview
 
 TrustLens is a Flask-based web platform for detecting text authenticity. It supports news article analysis, conversation analysis, model selection, examiner feedback, Active Learning review targets, and owner result exports.
