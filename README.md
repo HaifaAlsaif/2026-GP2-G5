@@ -9,7 +9,7 @@ In today’s digital world, AI-generated content is increasingly common, raising
 TrustLens provides a solution by acting as a **collaborative environment** where:
 
 - **Project Owners** create and manage projects, upload or generate datasets, and track evaluations.  
-- **Examiners**participate in structured tasks including , human–human and human–AI conversations, and detection tasks where they select the most suitable model and verify its result, in addition to providing feedback and contributing to dataset labeling.
+- **Examiners** participate in structured tasks including , human–human and human–AI conversations, and detection tasks where they select the most suitable model and verify its result, in addition to providing feedback and contributing to dataset labeling.
 - **Admins** initialize the system with seed datasets, AI models, and manging users.
 
 This interaction builds a **crowdsourced, evolving dataset**, enabling better AI evaluation and more trustworthy results.
