@@ -76,7 +76,7 @@ Dr. Abeer Aldayel
 ## 📌 Project Resources  
 - **GitHub Repository:**
  (https://github.com/HaifaAlsaif/2026-GP2-G5.git) 
-- **Jira Board:** [[TrustLens-Jira]([https://afnanalzakary0-1764491560304.atlassian.net/jira/software/projects/GP/pages?atlOrigin=eyJpIjoiMmUxYmVkYzgzMzdmNDI4NGJiNzNkNjAzNzg4NWRhODIiLCJwIjoiaiJ9])]  
+- **Jira Board:** [TrustLens-Jira](https://afnanalzakary0-1764491560304.atlassian.net/jira/software/projects/GP/pages?atlOrigin=eyJpIjoiMmUxYmVkYzgzMzdmNDI4NGJiNzNkNjAzNzg4NWRhODIiLCJwIjoiaiJ9) 
 - **University:** King Saud University – IT497 Graduation Project
 - Department of Information Technology
 - Semester: 2, 1447H (Spring 2026)
