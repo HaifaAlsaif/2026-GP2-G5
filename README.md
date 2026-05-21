@@ -9,8 +9,8 @@ In today’s digital world, AI-generated content is increasingly common, raising
 TrustLens provides a solution by acting as a **collaborative environment** where:
 
 - **Project Owners** create and manage projects, upload or generate datasets, and track evaluations.  
-- **Examiners** participate in structured tasks (news reviews or human–human / human–AI conversations) and provide feedback.  
-- **Admins** initialize the system with seed datasets, AI models, and volunteer examiners.
+- **Examiners**participate in structured tasks including , human–human and human–AI conversations, and detection tasks where they select the most suitable model and verify its result, in addition to providing feedback and contributing to dataset labeling.
+- **Admins** initialize the system with seed datasets, AI models, and manging users.
 
 This interaction builds a **crowdsourced, evolving dataset**, enabling better AI evaluation and more trustworthy results.
 
@@ -18,13 +18,13 @@ This interaction builds a **crowdsourced, evolving dataset**, enabling better AI
 
 TrustLens supports a complete workflow including:
 
-- **Role-Based Dashboards** for Admins, Owners, and Examiners  
+- **Role-Based Dashboards** for Admins, Project Owners, and Examiners  
 - **Project Lifecycle Management** (create, edit, delete)  
 - **Dataset Upload & Generation** (CSV + conversation generation)  
-- **Task Assignment & Tracking**  
+- **Task Assignment & Tracking**  Define and assign tasks (News or Conversations).
 - **AI Evaluation with Explainability** (Human vs AI with confidence score)  
-- **Feedback Integration** from examiners  
-- **System Administration** (models, datasets, volunteers)
+- **Feedback Integration** from examiners Feedback Integration → Examiners enrich datasets by submitting Label&Explainbilty 
+- **System Administration** (models, datasets)
 
 ## 🏗️ System Architecture
 
@@ -62,6 +62,7 @@ python app.py
 ### 6. Open in Browser
 Default: http://127.0.0.1:5000/
 
+Note: For additional setup details and testing information, please refer to the Executable file included in this submission (G5_TrustLens_Executable).
 ---
 ## 👥 Project Team (G5)
 #### Haifa Alsaif – 443202006
@@ -75,7 +76,7 @@ Dr. Abeer Aldayel
 ## 📌 Project Resources  
 - **GitHub Repository:**
   (https://github.com/HaifaAlsaif/2025-GP1-G5.git)  
-- **Jira Board:** [[TrustLens-Jira](https://afnanalzakary.atlassian.net/jira/software/projects/WL2025/boards/3/backlog?atlOrigin=eyJpIjoiZTQ0ZGUzMGM0M2Q2NDBlM2I1MDJkZjY2NDI1OGZmZDciLCJwIjoiaiJ9)]  
-- **University:** King Saud University – IT496 Graduation Project
+- **Jira Board:** [[TrustLens-Jira]([https://afnanalzakary.atlassian.net/jira/software/projects/WL2025/boards/3/backlog?atlOrigin=eyJpIjoiZTQ0ZGUzMGM0M2Q2NDBlM2I1MDJkZjY2NDI1OGZmZDciLCJwIjoiaiJ9](https://afnanalzakary0-1764491560304.atlassian.net/jira/software/projects/GP)]  
+- **University:** King Saud University – IT497 Graduation Project
 - Department of Information Technology
-- Semester-1, 1447H (Fall 2025)
+- Semester: 2, 1447H (Spring 2026)
