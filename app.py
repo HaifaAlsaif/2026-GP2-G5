@@ -6526,6 +6526,65 @@ def _prediction_int_from_label(label):
     return 1 if _is_ai_label(label) else 0
 
 
+def _model_version_label(model_key, dataset_version):
+    key = _safe_str(model_key).strip().lower()
+    version = _safe_str(dataset_version or "v1").strip() or "v1"
+    if key in ("rnn", CONV_RNN_KEY, "baseline_rnn", "conv_rnn"):
+        prefix = "rnn"
+    else:
+        prefix = "logistic"
+    return f"{prefix}_{version}"
+
+
+def _clean_review_state(target, feedback):
+    if not isinstance(target, dict) or not target:
+        return "not_selected_for_review"
+
+    if _feedback_is_final(feedback) or _target_feedback_finalized(target):
+        return "locked" if bool((feedback or {}).get("locked") or target.get("locked")) else "submitted"
+
+    if isinstance(feedback, dict) and feedback:
+        return "draft_saved"
+
+    status = _safe_str(target.get("target_status")).strip().lower()
+    if status in ("pending", "draft_saved", "submitted", "locked"):
+        return status
+    if status in ("reviewed", "accepted", "selected_for_review"):
+        return "draft_saved"
+    return "pending"
+
+
+def _feedback_label_from_record(feedback, prediction):
+    if not isinstance(feedback, dict) or not feedback:
+        return ""
+    label = _label_text_only(
+        feedback.get("corrected_label_text")
+        or feedback.get("corrected_label")
+        or feedback.get("label")
+    )
+    if label:
+        return label
+    if feedback.get("agreed_with_model") is True:
+        return _label_text_only(prediction) or ""
+    return ""
+
+
+def _reviewed_by_from_feedback(feedback, target):
+    if isinstance(feedback, dict) and feedback:
+        return _safe_str(feedback.get("reviewed_by") or feedback.get("examiner_uid") or feedback.get("uid") or feedback.get("examiner_id")) or None
+    if isinstance(target, dict) and target:
+        return _safe_str(target.get("reviewed_by") or target.get("submitted_by") or target.get("draft_by")) or None
+    return None
+
+
+def _reviewed_at_from_feedback(feedback, target):
+    if isinstance(feedback, dict) and feedback:
+        return _safe_str(feedback.get("reviewed_at") or feedback.get("submitted_at") or feedback.get("updated_at") or feedback.get("draft_updated_at")) or None
+    if isinstance(target, dict) and target:
+        return _safe_str(target.get("reviewed_at") or target.get("submitted_at") or target.get("draft_saved_at")) or None
+    return None
+
+
 def _snapshot_row_key(sample_id):
     return _safe_target_key(sample_id)
 
@@ -6823,7 +6882,7 @@ def _create_detection_version_snapshot(project_id, task_id, model_key, model_nam
         "retraining_supported": _active_learning_retraining_supported(model_key),
         "target_unit": target_unit,
         "row_count": len(rows),
-        "final_label_policy": "Rows without feedback keep the model prediction as final_label."
+        "final_label_policy": "Rows without submitted or locked feedback keep the model prediction as final_label."
     }
     snapshot = {
         "metadata": metadata,
@@ -7296,15 +7355,23 @@ def _build_enhanced_dataset(project_id, version_id):
     if rows or metadata or version_record:
         metadata, rows = _ensure_detection_rows_for_evaluation(project_id, version_id, metadata, rows)
     feedback_map = _load_version_feedback(project_id, version_id)
+    targets = _row_review_targets(project_id, version_id)
+    dataset_version = _safe_str(metadata.get("version_id") or version_id or "v1") or "v1"
+    model_key = metadata.get("model_key")
+    model_used = metadata.get("model_name") or _official_model_name(model_key)
+    model_version = _model_version_label(model_key, dataset_version)
+    created_at = _safe_str(metadata.get("created_at")) or _now_utc_iso()
     enhanced = []
     article_display = {}
     for row in rows:
         item = dict(row)
         sample_id = _safe_str(item.get("sample_id"))
+        target = targets.get(sample_id) or {}
         feedback = _feedback_from_map_or_active(project_id, feedback_map, sample_id, version_id)
-        feedback_final = isinstance(feedback, dict) and _feedback_is_final(feedback)
-        corrected = _label_text_only(feedback.get("corrected_label_text") or feedback.get("corrected_label") or feedback.get("label")) if feedback_final else None
-        prediction = _label_text_only(item.get("prediction"))
+        feedback_label = _feedback_label_from_record(feedback, item.get("prediction"))
+        feedback_final = isinstance(feedback, dict) and _feedback_is_final(feedback) and bool(feedback_label)
+        prediction = _label_text_only(item.get("prediction")) or _label_text_only(item.get("prediction_label")) or ""
+        final_label = feedback_label if feedback_final else prediction
 
         if metadata.get("project_type") == "news":
             source_article_id = _safe_str(item.get("source_id") or item.get("article_id"))
@@ -7314,33 +7381,75 @@ def _build_enhanced_dataset(project_id, version_id):
             chunk_index = item.get("chunk_index")
             if chunk_index is None:
                 chunk_index = 1
-            item["source_id"] = source_article_id
-            item["article_id"] = f"article_{article_number:03d}"
-            item["chunk_id"] = f"chunk_{article_number:03d}_{chunk_index}"
-
-        item["uncertainty_distance"] = item.get("uncertainty")
-        if corrected:
-            item["feedback_label"] = corrected
-            item["final_label"] = corrected
-            item["active_learning_state"] = "reviewed"
-            item["feedback_explanation"] = feedback.get("feedback_explanation")
-            item["examiner_uid"] = feedback.get("examiner_uid")
-            item["examiner_name"] = feedback.get("examiner_name")
-            item["feedback_submitted_at"] = feedback.get("submitted_at")
+            clean_row = {
+                "article_id": f"article_{article_number:03d}",
+                "chunk_id": f"chunk_{article_number:03d}_{chunk_index}",
+                "chunk_index": int(chunk_index or 1),
+                "title": item.get("title") or "",
+                "text": item.get("text") or "",
+                "ground_truth": _label_text_only(item.get("ground_truth")),
+                "prediction_label": prediction,
+                "prediction_int": _first_present(item.get("prediction_int"), _prediction_int_from_label(prediction)),
+                "uncertainty": _owner_decimal(item.get("uncertainty")),
+                "review_target": bool(target),
+                "review_priority_rank": target.get("selection_rank") if target else None,
+                "active_learning_state": _clean_review_state(target, feedback),
+                "feedback_label": feedback_label,
+                "feedback_explanation": _safe_str((feedback or {}).get("feedback_explanation") or (feedback or {}).get("explanation")),
+                "reviewed_by": _reviewed_by_from_feedback(feedback, target),
+                "reviewed_at": _reviewed_at_from_feedback(feedback, target),
+                "final_label": final_label,
+                "model_used": model_used,
+                "model_version": model_version,
+                "sample_id": sample_id,
+                "source_id": source_article_id,
+                "dataset_version": dataset_version,
+                "created_at": _safe_str(item.get("created_at") or item.get("timestamp")) or created_at,
+                "updated_at": _safe_str((feedback or {}).get("updated_at") or (feedback or {}).get("submitted_at") or item.get("updated_at") or item.get("timestamp")) or created_at
+            }
         else:
-            item["feedback_label"] = ""
-            item["final_label"] = prediction
-            item["active_learning_state"] = "selected_for_review" if item.get("review_target") else "not_selected_for_review"
-        item["prediction"] = prediction
-        item["ground_truth"] = _label_text_only(item.get("ground_truth"))
-        enhanced.append(item)
+            clean_row = {
+                "dialogue_id": _safe_str(item.get("dialogue_id") or item.get("source_id")),
+                "turn_index": int(item.get("turn_index") or 0),
+                "sender": item.get("sender") or "",
+                "text": item.get("text") or "",
+                "previous_turn": _first_present(item.get("previous_turn"), item.get("previous_text"), item.get("prev_text")) or "",
+                "ground_truth": _label_text_only(item.get("ground_truth")),
+                "prediction_label": prediction,
+                "prediction_int": _first_present(item.get("prediction_int"), _prediction_int_from_label(prediction)),
+                "uncertainty": _owner_decimal(item.get("uncertainty")),
+                "review_target": bool(target),
+                "review_priority_rank": target.get("selection_rank") if target else None,
+                "active_learning_state": _clean_review_state(target, feedback),
+                "feedback_label": feedback_label,
+                "feedback_explanation": _safe_str((feedback or {}).get("feedback_explanation") or (feedback or {}).get("explanation")),
+                "reviewed_by": _reviewed_by_from_feedback(feedback, target),
+                "reviewed_at": _reviewed_at_from_feedback(feedback, target),
+                "final_label": final_label,
+                "model_used": model_used,
+                "model_version": model_version,
+                "sample_id": sample_id,
+                "source_id": _safe_str(item.get("source_id") or item.get("row_id") or item.get("conversation_id") or item.get("dialogue_id")),
+                "dataset_version": dataset_version,
+                "created_at": _safe_str(item.get("created_at") or item.get("timestamp")) or created_at,
+                "updated_at": _safe_str((feedback or {}).get("updated_at") or (feedback or {}).get("submitted_at") or item.get("updated_at") or item.get("timestamp")) or created_at
+            }
+        enhanced.append(clean_row)
+
+    enhanced.sort(key=lambda row: (
+        row.get("review_priority_rank") is None,
+        int(row.get("review_priority_rank") or 0),
+        _owner_decimal(row.get("uncertainty")) is None,
+        _owner_decimal(row.get("uncertainty")) if _owner_decimal(row.get("uncertainty")) is not None else 1.0,
+        _safe_str(row.get("sample_id"))
+    ))
     return {
         "ok": True,
         "project_id": project_id,
         "version_id": version_id,
         "metadata": metadata,
         "row_count": len(enhanced),
-        "final_label_policy": "Rows without feedback keep the model prediction as final_label.",
+        "final_label_policy": "Rows without submitted or locked feedback keep the model prediction as final_label.",
         "rows": enhanced
     }
 
@@ -7349,17 +7458,19 @@ def _enhanced_dataset_columns(project_type):
     if project_type == "news":
         return [
             "article_id", "chunk_id", "chunk_index", "title", "text",
-            "ground_truth", "prediction", "prediction_int", "confidence",
-            "uncertainty_distance", "review_target", "active_learning_state",
-            "feedback_label", "final_label", "model_used", "sample_id",
-            "source_id", "timestamp"
+            "ground_truth", "prediction_label", "prediction_int", "uncertainty",
+            "review_target", "review_priority_rank", "active_learning_state",
+            "feedback_label", "feedback_explanation", "reviewed_by", "reviewed_at",
+            "final_label", "model_used", "model_version", "sample_id", "source_id",
+            "dataset_version", "created_at", "updated_at"
         ]
     return [
         "dialogue_id", "turn_index", "sender", "text", "previous_turn",
-        "ground_truth", "prediction", "prediction_int", "confidence",
-        "uncertainty_distance", "review_target", "active_learning_state",
-        "feedback_label", "final_label", "model_used", "sample_id",
-        "source_id", "timestamp"
+        "ground_truth", "prediction_label", "prediction_int", "uncertainty",
+        "review_target", "review_priority_rank", "active_learning_state",
+        "feedback_label", "feedback_explanation", "reviewed_by", "reviewed_at",
+        "final_label", "model_used", "model_version", "sample_id", "source_id",
+        "dataset_version", "created_at", "updated_at"
     ]
 
 
@@ -7369,18 +7480,18 @@ def _reopened_rows_from_enhanced(enhanced_rows, new_version_id, created_at):
         if not isinstance(row, dict):
             continue
         item = dict(row)
-        final_label = _label_text_only(item.get("final_label") or item.get("prediction") or item.get("ground_truth"))
+        final_label = _label_text_only(item.get("final_label") or item.get("prediction_label") or item.get("ground_truth"))
         item["ground_truth"] = final_label
-        item["prediction"] = ""
+        item["prediction_label"] = ""
         item["prediction_int"] = None
-        item["confidence"] = None
         item["feedback_label"] = None
         item["final_label"] = ""
         item["review_target"] = False
         item["active_learning_state"] = "pending"
-        item["version_id"] = new_version_id
-        item["timestamp"] = created_at
-        for key in ("feedback_explanation", "examiner_uid", "examiner_name", "feedback_submitted_at"):
+        item["dataset_version"] = new_version_id
+        item["created_at"] = created_at
+        item["updated_at"] = created_at
+        for key in ("feedback_explanation", "reviewed_by", "reviewed_at"):
             item.pop(key, None)
         rows.append(item)
     return rows
@@ -7399,7 +7510,7 @@ def _review_candidates_from_rows(rows, project_type):
             "sample_id": sample_id,
             "source_id": row.get("source_id") or row.get("article_id") or row.get("dialogue_id") or sample_id,
             "target_unit": target_unit,
-            "prediction": row.get("prediction"),
+            "prediction": row.get("prediction_label") or row.get("prediction"),
             "prediction_int": row.get("prediction_int"),
             "ground_truth": row.get("ground_truth"),
             "confidence": row.get("confidence"),
@@ -7606,13 +7717,13 @@ def _derive_evaluation_group_rows(rows, group_key):
 
     derived = []
     for key, items in groups.items():
-        baseline_scores = [_ai_score_from_row(item, "prediction") for item in items]
+        baseline_scores = [_ai_score_from_row(item, "prediction_label") for item in items]
         enhanced_scores = [_ai_score_from_row(item, "final_label") for item in items]
         truth_scores = [_ai_score_from_row({"ground_truth": item.get("ground_truth")}, "ground_truth") for item in items]
         derived.append({
             group_key: key,
             "ground_truth": _label_from_average_score(truth_scores),
-            "prediction": _label_from_average_score(baseline_scores),
+            "prediction_label": _label_from_average_score(baseline_scores),
             "final_label": _label_from_average_score(enhanced_scores),
             "row_count": len(items)
         })
@@ -7620,7 +7731,7 @@ def _derive_evaluation_group_rows(rows, group_key):
 
 
 def _evaluation_pair(rows, level_name, evaluation_level):
-    baseline = _evaluation_metrics_for_label(rows, "prediction", level_name, evaluation_level)
+    baseline = _evaluation_metrics_for_label(rows, "prediction_label", level_name, evaluation_level)
     enhanced = _evaluation_metrics_for_label(rows, "final_label", level_name, evaluation_level)
     return {
         "evaluation_level": evaluation_level,
@@ -7632,10 +7743,13 @@ def _evaluation_pair(rows, level_name, evaluation_level):
 
 def _review_statistics(enhanced_rows):
     review_rows = [row for row in enhanced_rows or [] if row.get("review_target")]
-    feedback_rows = [row for row in enhanced_rows or [] if _label_text_only(row.get("feedback_label"))]
+    feedback_rows = [
+        row for row in enhanced_rows or []
+        if row.get("active_learning_state") in ("submitted", "locked") and _label_text_only(row.get("feedback_label"))
+    ]
     corrected_rows = [
         row for row in feedback_rows
-        if _label_text_only(row.get("feedback_label")) != _label_text_only(row.get("prediction"))
+        if _label_text_only(row.get("feedback_label")) != _label_text_only(row.get("prediction_label"))
     ]
     reviewed_targets = len(feedback_rows)
     corrected_targets = len(corrected_rows)
@@ -7645,8 +7759,8 @@ def _review_statistics(enhanced_rows):
         "pending_targets": max(len(review_rows) - reviewed_targets, 0),
         "corrected_targets": corrected_targets,
         "correction_rate": (float(corrected_targets) / reviewed_targets) if reviewed_targets else 0.0,
-        "human_to_ai_corrections": sum(1 for row in corrected_rows if _label_text_only(row.get("prediction")) == "Human" and _label_text_only(row.get("feedback_label")) == "AI"),
-        "ai_to_human_corrections": sum(1 for row in corrected_rows if _label_text_only(row.get("prediction")) == "AI" and _label_text_only(row.get("feedback_label")) == "Human")
+        "human_to_ai_corrections": sum(1 for row in corrected_rows if _label_text_only(row.get("prediction_label")) == "Human" and _label_text_only(row.get("feedback_label")) == "AI"),
+        "ai_to_human_corrections": sum(1 for row in corrected_rows if _label_text_only(row.get("prediction_label")) == "AI" and _label_text_only(row.get("feedback_label")) == "Human")
     }
 
 
@@ -7672,7 +7786,7 @@ def _examiner_impact_from_feedback(project_id, version_id, detection_rows):
             "correction_rate": 0.0
         })
         examiner["reviewed_count"] += 1
-        prediction = _label_text_only((row_map.get(key) or {}).get("prediction"))
+        prediction = _label_text_only((row_map.get(key) or {}).get("prediction_label") or (row_map.get(key) or {}).get("prediction"))
         if prediction and prediction != corrected_label:
             examiner["corrected_count"] += 1
 
@@ -9225,6 +9339,88 @@ def build_owner_examiners_summary(project_id, project, tasks, summary, result_ty
     ))
 
 
+def _owner_summary_from_enhanced(rows, result_type):
+    summary = _owner_empty_summary()
+    final_labels = [_label_text_only(row.get("final_label")) for row in rows or [] if isinstance(row, dict)]
+    summary["human_count"] = sum(1 for label in final_labels if label == "Human")
+    summary["ai_count"] = sum(1 for label in final_labels if label == "AI")
+    summary["review_targets"] = sum(1 for row in rows or [] if isinstance(row, dict) and row.get("review_target"))
+    summary["reviewed_targets"] = sum(1 for row in rows or [] if isinstance(row, dict) and row.get("active_learning_state") in ("submitted", "locked"))
+    summary["corrected_labels"] = sum(
+        1 for row in rows or []
+        if isinstance(row, dict)
+        and row.get("active_learning_state") in ("submitted", "locked")
+        and _label_text_only(row.get("feedback_label"))
+        and _label_text_only(row.get("feedback_label")) != _label_text_only(row.get("prediction_label"))
+    )
+    uncertainty_values = [
+        _owner_decimal(row.get("uncertainty"))
+        for row in rows or []
+        if isinstance(row, dict) and _owner_decimal(row.get("uncertainty")) is not None
+    ]
+    summary["avg_uncertainty"] = round(sum(uncertainty_values) / len(uncertainty_values), 4) if uncertainty_values else 0
+    if result_type == "news":
+        summary["total_items"] = len({row.get("article_id") for row in rows or [] if isinstance(row, dict) and row.get("article_id")})
+    else:
+        summary["total_turns"] = len(rows or [])
+        summary["total_items"] = len({row.get("dialogue_id") for row in rows or [] if isinstance(row, dict) and row.get("dialogue_id")})
+    return summary
+
+
+def _owner_samples_from_enhanced(rows, limit=10):
+    samples = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        samples.append({
+            "id": _safe_str(row.get("sample_id")),
+            "title": _safe_str(row.get("title") or row.get("dialogue_id")),
+            "text": _safe_str(row.get("text"))[:220],
+            "prediction": _safe_str(row.get("prediction_label")),
+            "confidence": None,
+            "uncertainty": _owner_decimal(row.get("uncertainty")),
+            "review_target": bool(row.get("review_target"))
+        })
+    samples.sort(key=lambda item: (
+        not item.get("review_target"),
+        item.get("uncertainty") is None,
+        item.get("uncertainty") if item.get("uncertainty") is not None else 1.0,
+        item.get("id")
+    ))
+    return samples[:limit]
+
+
+def _owner_feedback_from_enhanced(rows, limit=20):
+    items = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        if row.get("active_learning_state") not in ("submitted", "locked"):
+            continue
+        explanation = _safe_str(row.get("feedback_explanation"))
+        if not explanation:
+            continue
+        reviewer = _safe_str(row.get("reviewed_by")) or "unknown"
+        items.append({
+            "sample_id": _safe_str(row.get("sample_id")),
+            "project_type": "",
+            "title": _safe_str(row.get("title") or row.get("dialogue_id")),
+            "text_preview": _safe_str(row.get("text"))[:220],
+            "prediction": _safe_str(row.get("prediction_label")),
+            "corrected_label": _safe_str(row.get("feedback_label")),
+            "examiner_uid": reviewer,
+            "examiner_name": _reviewer_display_name(reviewer),
+            "feedback_explanation": explanation,
+            "submitted_at": _safe_str(row.get("reviewed_at")),
+            "confidence": None,
+            "uncertainty": _owner_decimal(row.get("uncertainty")),
+            "agreed_with_model": _label_text_only(row.get("feedback_label")) == _label_text_only(row.get("prediction_label")),
+            "correction_changed_prediction": _label_text_only(row.get("feedback_label")) != _label_text_only(row.get("prediction_label"))
+        })
+    items.sort(key=lambda item: item.get("submitted_at", ""), reverse=True)
+    return items[:limit]
+
+
 def build_owner_results_summary(project_id):
     project = get_project_basic_info(project_id)
     if not project:
@@ -9259,8 +9455,19 @@ def build_owner_results_summary(project_id):
     if not normalized.get("selected_model", {}).get("key"):
         warnings.append("Selected model is missing.")
 
+    enhanced_rows = []
+    enhanced_metadata = {}
+    try:
+        current_version, _, detection_ready = _current_version_with_rows(project_id)
+        if detection_ready:
+            enhanced_payload = _build_enhanced_dataset(project_id, current_version)
+            enhanced_rows = enhanced_payload.get("rows") or []
+            enhanced_metadata = enhanced_payload.get("metadata") or {}
+    except Exception as e:
+        app.logger.warning("Owner Results used legacy summary fallback because enhanced dataset was unavailable: %s", e)
+
     tasks = get_project_tasks(project_id)
-    summary_data = normalized.get("summary", _owner_empty_summary())
+    summary_data = _owner_summary_from_enhanced(enhanced_rows, result_type) if enhanced_rows else normalized.get("summary", _owner_empty_summary())
     counts = _owner_counts_from_summary(result_type, summary_data)
     examiners = build_owner_examiners_summary(project_id, project, tasks, summary_data, result_type)
 
@@ -9268,7 +9475,7 @@ def build_owner_results_summary(project_id):
         warnings.append("Feedback targets are shared across assigned labeling examiners; pending count is an estimate.")
 
     examiner_lookup = {item.get("examiner_id"): item for item in examiners if item.get("examiner_id")}
-    feedback_explanations = _owner_feedback_explanations(project_id, project, result_type)
+    feedback_explanations = _owner_feedback_from_enhanced(enhanced_rows) if enhanced_rows else _owner_feedback_explanations(project_id, project, result_type)
     for item in feedback_explanations:
         examiner = examiner_lookup.get(item.get("examiner_uid")) or {}
         item["participation_status"] = item.get("participation_status") or examiner.get("participation_status", "unknown")
@@ -9287,6 +9494,13 @@ def build_owner_results_summary(project_id):
         "status": project.get("status", "")
     }
     selected_model_payload = normalized.get("selected_model") or {}
+    if enhanced_metadata:
+        selected_model_payload = {
+            **selected_model_payload,
+            "key": enhanced_metadata.get("model_key") or selected_model_payload.get("key"),
+            "name": enhanced_metadata.get("model_name") or selected_model_payload.get("name"),
+            "version": enhanced_metadata.get("version_id") or selected_model_payload.get("version") or "v1"
+        }
     selected_model_key = selected_model_payload.get("key") or selected_model_payload.get("name")
     review_workflow = {
         "review_targets_enabled": _uses_frozen_active_learning(selected_model_key),
@@ -9305,7 +9519,7 @@ def build_owner_results_summary(project_id):
         "metrics": normalized.get("metrics", _owner_empty_metrics()),
         "examiners": examiners,
         "tasks": tasks,
-        "most_uncertain_samples": normalized.get("most_uncertain_samples", []),
+        "most_uncertain_samples": _owner_samples_from_enhanced(enhanced_rows) if enhanced_rows else normalized.get("most_uncertain_samples", []),
         "feedback_explanations": feedback_explanations,
         "warnings": list(dict.fromkeys(warnings))
     }
@@ -10487,32 +10701,31 @@ def api_project_final_dataset_export(project_id):
     if stage not in ("detection", "feedback"):
         return jsonify({"error": "Invalid stage. Use detection or feedback."}), 400
 
-    result_type = detect_project_result_type(project)
     try:
-        if result_type == "news":
-            rows, columns = _export_news_dataset(project_id, project, stage)
-        elif result_type == "uploaded_conversation":
-            rows, columns = _export_uploaded_conversation_dataset(project_id, project, stage)
-        elif result_type == "generated_conversation":
-            rows, columns = _export_generated_conversation_dataset(project_id, project, stage)
-        else:
-            return jsonify({"error": "Unsupported project type"}), 400
+        current_version, _, detection_ready = _current_version_with_rows(project_id)
+        if not detection_ready:
+            return jsonify({"ok": False, "error": "No detection results found"}), 404
 
-        if not rows or not _has_detection_results(rows):
+        payload = _build_enhanced_dataset(project_id, current_version)
+        rows = payload.get("rows") or []
+        columns = _enhanced_dataset_columns((payload.get("metadata") or {}).get("project_type"))
+        if not rows:
             return jsonify({"ok": False, "error": "No detection results found"}), 404
 
         if fmt == "csv":
-            return _safe_csv_response(rows, _owner_export_filename(project, stage, "csv"), columns)
+            return _safe_csv_response(rows, _owner_export_filename(project, "enhanced_dataset", "csv"), columns)
 
-        payload = {
+        response_payload = {
             "ok": True,
             "project_id": project_id,
-            "stage": stage,
+            "stage": "enhanced_dataset",
             "format": "json",
+            "version_id": current_version,
+            "metadata": payload.get("metadata") or {},
             "row_count": len(rows),
             "rows": rows
         }
-        return _safe_json_export_response(payload, _owner_export_filename(project, stage, "json"))
+        return _safe_json_export_response(response_payload, _owner_export_filename(project, "enhanced_dataset", "json"))
     except Exception as e:
         app.logger.exception("Final dataset export failed: %s", e)
         return jsonify({"error": "Failed to export final dataset"}), 500
@@ -10850,27 +11063,26 @@ def api_project_active_learning_export(project_id):
     if err:
         return err
 
-    proj_data = ctx["proj_data"]
-    category = (proj_data.get("category") or "").strip().lower()
-    is_conversation = category in ("conversation", "conversations", "chat", "chats")
+    current_version, _, detection_ready = _current_version_with_rows(project_id)
+    if not detection_ready:
+        return jsonify({
+            "ok": False,
+            "project_id": project_id,
+            "error": "Submit detection results before exporting enhanced dataset.",
+            "rows": [],
+            "total_rows": 0
+        }), 404
 
-    if not is_conversation:
-        project_type = "news"
-        selected_export_model = _owner_selected_model_for_read(project_id, project_type)
-        rows = _export_news_active_learning_rows(project_id, proj_data) if _uses_frozen_active_learning(selected_export_model) else []
-    elif bool(proj_data.get("generated_from_scratch", False)):
-        project_type = "generated_conversation"
-        selected_export_model = _owner_selected_model_for_read(project_id, project_type)
-        rows = _export_generated_conversation_active_learning_rows(project_id, selected_export_model) if _uses_frozen_active_learning(selected_export_model) else []
-    else:
-        project_type = "uploaded_conversation"
-        selected_export_model = _owner_selected_model_for_read(project_id, project_type)
-        rows = _export_uploaded_conversation_active_learning_rows(project_id, selected_export_model) if _uses_frozen_active_learning(selected_export_model) else []
+    payload = _build_enhanced_dataset(project_id, current_version)
+    rows = payload.get("rows") or []
+    metadata = payload.get("metadata") or {}
 
     return jsonify({
+        "ok": True,
         "project_id": project_id,
-        "project_type": project_type,
-        "model_key": selected_export_model,
+        "version_id": current_version,
+        "project_type": metadata.get("project_type"),
+        "model_key": metadata.get("model_key"),
         "exported_at": _now_utc_iso(),
         "rows": rows,
         "total_rows": len(rows)

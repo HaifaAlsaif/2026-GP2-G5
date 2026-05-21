@@ -2183,7 +2183,7 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
   <div class="fb-sort-card">
     <div class="fb-sort-row">
       <div class="fb-sort-left">
-        <span>Samples are ordered by review priority: lowest distance from 50/50 and lowest confidence first. Lower distance means higher review priority.</span>
+        <span>Samples are ordered by review priority: lowest distance from 50/50 first. Lower distance means higher review priority.</span>
         <select id="fbSortSelect" class="select">
           <option value="default">Highest Review Priority First</option>
           <option value="most_uncertain">Lowest Distance from 50/50 First</option>
@@ -2289,7 +2289,7 @@ body.dark .details-turn-card{background:rgba(255,255,255,.04)}
         <div class="insight-tile">
           <span>Why Selected</span>
           <b>Review priority</b>
-          <small>Closest to 50/50 and lowest confidence first.</small>
+          <small>Closest to 50/50 first.</small>
         </div>
       </div>
     </div>
@@ -3391,9 +3391,9 @@ function dialogueMatchesFilter(item) {
 
 function sortedFeedbackItems() {
   const arr = feedbackItems.filter(dialogueMatchesFilter);
-  if (feedbackSortMode === "most_uncertain" || feedbackSortMode === "confidence_low" || feedbackSortMode === "default") {
+  if (feedbackSortMode === "most_uncertain" || feedbackSortMode === "default") {
     arr.sort((a, b) => getConversationUncertainty(a) - getConversationUncertainty(b));
-  } else if (feedbackSortMode === "least_uncertain" || feedbackSortMode === "confidence_high") {
+  } else if (feedbackSortMode === "least_uncertain") {
     arr.sort((a, b) => getConversationUncertainty(b) - getConversationUncertainty(a));
   } else if (feedbackSortMode === "most_pending") {
     arr.sort((a, b) => getPendingTargetCount(b) - getPendingTargetCount(a));
@@ -3525,11 +3525,11 @@ function sortTurnsForView(turns) {
     return true;
   });
 
-  if (turnSortMode === "least_uncertain" || turnSortMode === "confidence_high") {
+  if (turnSortMode === "least_uncertain") {
     arr.sort((a, b) => {
       return getTurnUncertainty(b) - getTurnUncertainty(a);
     });
-  } else if (turnSortMode === "most_uncertain" || turnSortMode === "confidence_low") {
+  } else if (turnSortMode === "most_uncertain") {
     arr.sort((a, b) => {
       return getTurnUncertainty(a) - getTurnUncertainty(b);
     });

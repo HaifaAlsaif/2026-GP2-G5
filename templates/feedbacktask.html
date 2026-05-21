@@ -512,12 +512,11 @@
     </div>
 
     <div class="filter-section" id="filterSection" style="display: none;">
-      <span class="filter-label">Samples are ordered by review priority: lowest distance from 50/50 and lowest confidence first. Lower distance means higher review priority.</span>
+      <span class="filter-label">Samples are ordered by review priority: lowest distance from 50/50 first. Lower distance means higher review priority.</span>
       <select class="filter-select" id="confidenceFilter" onchange="applySorting()">
         <option value="default">Highest Review Priority First</option>
         <option value="most-uncertain">Lowest Distance from 50/50 First</option>
         <option value="least-uncertain">Least Review Priority First</option>
-        <option value="lowest-confidence">Lowest Confidence First</option>
       </select>
       <select class="filter-select" id="articleViewFilter" onchange="applyArticleFilters()">
         <option value="all">All shown samples</option>
@@ -713,20 +712,6 @@
 
     function applySorting() {
       applyArticleFilters();
-      return;
-      const v = document.getElementById('confidenceFilter').value;
-      if (v === 'most-uncertain') {
-        articles.sort(function(a, b){ return getUncertainty(a) - getUncertainty(b); });
-      } else if (v === 'least-uncertain') {
-        articles.sort(function(a, b){ return getUncertainty(b) - getUncertainty(a); });
-      } else if (v === 'lowest-confidence') {
-        articles.sort(function(a, b){ return getConfidence(a) - getConfidence(b); });
-      } else if (v === 'highest-confidence') {
-        articles.sort(function(a, b){ return getConfidence(b) - getConfidence(a); });
-      } else {
-        articles = JSON.parse(JSON.stringify(originalArticles));
-      }
-      renderArticles();
     }
 
     function articleMatchesFilter(article, filterValue) {
@@ -752,10 +737,6 @@
         articles.sort(function(a, b){ return getUncertainty(a) - getUncertainty(b); });
       } else if (sortValue === 'least-uncertain') {
         articles.sort(function(a, b){ return getUncertainty(b) - getUncertainty(a); });
-      } else if (sortValue === 'lowest-confidence') {
-        articles.sort(function(a, b){ return getConfidence(a) - getConfidence(b); });
-      } else if (sortValue === 'highest-confidence') {
-        articles.sort(function(a, b){ return getConfidence(b) - getConfidence(a); });
       }
 
       reviewedCount = articles.filter(function(a){ return isTargetStarted(a); }).length;
@@ -833,11 +814,8 @@
         const predClass  = displayPrediction === 'Human' ? 'human' : 'ai';
         const percentage = displayPrediction === 'Human' ? article.human_percentage : article.ai_percentage;
         detectionBadge   = '<span class="accordion-badge ' + predClass + '">' + displayPrediction + ' ' + percentage + '%</span>';
-
-        const conf = getConfidence(article);
-        if (conf > 0) {
-          detectionBadge += '<span class="accordion-badge confidence">📊 Confidence: ' + conf + '%</span>';
-        }
+        detectionBadge += '<span class="accordion-badge confidence">Uncertainty: ' + formatUncertainty(getUncertainty(article)) + '</span>';
+        detectionBadge += '<span class="accordion-badge confidence">Review target</span>';
       }
 
       function highlightChunks(content, chunks) {
