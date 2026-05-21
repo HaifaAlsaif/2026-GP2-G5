@@ -33,6 +33,7 @@ TrustLens supports a complete workflow including:
 - **Database / Authentication:** Firebase Authentication, Firestore, Realtime DB  
 - **AI Integration:** Hugging Face API (baseline & fine-tuned LLMs)
 
+Note: For additional setup details and testing information, please refer to the Executable file included in this submission (G5_TrustLens_Executable).
 ---
 
 ## 🛠️ Installation & Setup
